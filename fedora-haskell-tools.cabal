@@ -1,0 +1,34 @@
+Name:                fedora-haskell-tools
+Version:             0.1
+Synopsis:            Building and tracking tools for Fedora Haskell
+Description:
+    Tools for recursive building of Fedora Haskell packages.
+Homepage:            https://github.com/fedora-haskell/fedora-haskell-tools
+Bug-reports:         https://github.com/fedora-haskell/fedora-haskell-tools/issues
+License:             GPL-3
+License-file:        COPYING
+Author:              Jens Petersen <juhp@community.haskell.org>
+Maintainer:          Jens Petersen <petersen@fedoraproject.org>
+Copyright:           2014 Jens Petersen <petersen@fedoraproject.org>
+Category:            Distribution
+Build-type:          Simple
+Extra-source-files:  README.md ChangeLog
+Cabal-version:       >=1.6
+
+source-repository head
+  type:     git
+  location: https://github.com/fedora-haskell/fedora-haskell-tools
+
+Executable fhbuild
+    Main-is:       FHBuild.hs
+    Build-depends: base < 5,
+                   Cabal > 1.10,
+                   directory,
+                   filepath,
+                   shelly,
+                   text,
+                   unix
+--    Other-modules:
+--    Hs-Source-Dirs:     src
+    GHC-options:        -fwarn-missing-signatures -Wall
+--    Extensions:         CPP

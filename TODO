@@ -10,6 +10,7 @@ Porting haskell-sig.git scripts:
 - rebuilding
   - what can be built next
 - copr support
+- build package locally in $PWD
 
 # Data generation and updating
 - packages and Hackage 
