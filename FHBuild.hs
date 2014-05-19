@@ -46,7 +46,7 @@ main = do
 help :: Handle -> IO ()
 help h = do
   progName <- getProgName
-  hPutStrLn h $ "Usage: " ++ progName ++ " CMD dist pkg ..."
+  hPutStrLn h $ "Usage: " ++ progName ++ " CMD dist pkg ...\n"
     ++ "\n"
     ++ "Commands:\n"
     ++ "  local\t\t- build locally\n"
@@ -61,7 +61,7 @@ buildLocal dist pkg = sub $ do
   d <- test_d $ fromText pkg
   let brnch = fromText $ branch dist
   unless d $
-    cmd "fedpkg" "clone" brnch pkg
+    cmd "fedpkg" "clone" "-b" brnch pkg
   cd $ fromText pkg
   whenM (test_d brnch) $ cd brnch
   echo $ "== " <> pkg <> ":" <> branch dist <> " =="
@@ -71,7 +71,7 @@ buildLocal dist pkg = sub $ do
   nvr <- cmd "fedpkg" "verrel"
   installed <- cmd "rpm" "-q" "--qf" "%{name}-%{version}-%{release}" pkg
   when (nvr == installed) $ do
-    echo $ nvr <> " already installed!"
+    echo $ T.stripEnd nvr <> " already installed!"
     exit 0
   echo $ installed <> " -> " <> nvr
   run_ "git" ["log", "-2"]

@@ -1,6 +1,6 @@
 Porting haskell-sig.git scripts:
 
-# Building
+# Building: rebuild*
 - recursive building
 - koji building
 - mockchain
@@ -11,6 +11,9 @@ Porting haskell-sig.git scripts:
   - what can be built next
 - copr support
 - build package locally in $PWD
+
+# fedora-haskell-packages.sh
+- clone
 
 # Data generation and updating
 - packages and Hackage 
