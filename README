@@ -1,0 +1,6 @@
+WIP: currently doesn't do much
+
+# Fedora Haskell Tools
+
+## fhbuild
+Builds packages in order locally or in Koji.
