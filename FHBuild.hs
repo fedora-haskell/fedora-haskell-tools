@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ExtendedDefaultRules #-}
-{-# OPTIONS_GHC -fno-warn-type-defaults #-}
-
 -- |
 -- Module      :  Main
 -- Copyright   :  (C) 2014  Jens Petersen
@@ -19,25 +15,19 @@
 
 module Main where
 
-import Control.Monad (void)
-import Data.Monoid ((<>))
-import Prelude hiding (FilePath)
-import Shelly
-import qualified Data.Text as T
+import HSH
 
-import System.Directory (getCurrentDirectory)
+import Control.Monad (when, unless)
+import System.Directory (doesDirectoryExist)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
-import System.FilePath (takeBaseName, takeDirectory)
+import System.FilePath ((</>), takeBaseName, takeDirectory)
 import System.IO (hPutStrLn, stderr)
-
-default (T.Text)
 
 main :: IO ()
 main = do
   (com:dist:pkgs) <- getArgs >>= parseArgs
-  shelly $
-    mapM_ (command' com (T.pack dist) . T.pack) pkgs
+  mapM_ (command' com dist) pkgs
   where
     command' "local" = buildLocal
 --    command' "koji" = buildKoji
@@ -49,10 +39,10 @@ commands = ["local" {-, "koji"-}]
 parseArgs :: [String] -> IO [String]
 parseArgs [] = help >> return []
 parseArgs [com] | com `elem` commands = do
-  dir <- getCurrentDirectory
+  dir <- pwd
   (pkg, branch) <- determinePkgBranch dir
   return [com, branch, pkg]
-parseArgs args | (head args `elem` commands && length args >= 3) =
+parseArgs args | head args `elem` commands && length args >= 3 =
   return args
 parseArgs _ = help >> return []
 
@@ -75,35 +65,49 @@ help = do
     ++ "  koji\t\t- build in Koji\n"
   exitWith (ExitFailure 1)
 
-dist2branch :: T.Text -> T.Text
+dist2branch :: String -> String
 dist2branch "f21" = "master"
 dist2branch d = d
 
-buildLocal :: T.Text -> T.Text -> Sh ()
-buildLocal dist pkg = sub $ do
-  d <- test_d $ fromText pkg
-  let branch = fromText $ dist2branch dist
+cmd :: String -> [String] -> IO String
+cmd c as = run (c, as)
+
+cmd_ :: String -> [String] -> IO ()
+cmd_ c as = runIO (c, as)
+
+cmdSL :: String -> [String] -> IO String
+cmdSL c as = runSL (c, as)
+
+sudo :: String -> [String] -> IO ()
+sudo c as = do
+  putStrLn $ c ++ unwords as
+  runIO ("sudo", c:as)
+
+buildLocal :: String -> String -> IO ()
+buildLocal dist pkg = do
+  d <- doesDirectoryExist pkg
+  let branch = dist2branch dist
   unless d $
-    cmd "fedpkg" "clone" "-b" branch pkg
-  cd $ fromText pkg
-  whenM (test_d branch) $ cd branch
-  echo $ "== " <> pkg <> ":" <> dist2branch dist <> " =="
+    cmd_ "fedpkg" ["clone", "-b", branch, pkg]
+  cd pkg
+  b <- doesDirectoryExist branch
+  when b $ cd branch
+  putStrLn $ "== " ++ pkg ++ ":" ++ dist2branch dist ++ " =="
   when d $
     -- todo check(out) correct branch
-    cmd "git" "pull"
-  nvr <- cmd "fedpkg" "verrel"
-  installed <- cmd "rpm" "-q" "--qf" "%{name}-%{version}-%{release}" pkg
-  when (nvr == installed) $ do
-    echo $ T.stripEnd nvr <> " already installed!"
-    exit 0
-  echo $ installed <> " -> " <> nvr
-  run_ "git" ["log", "-2"]
-  void $ cmd "sudo" "yum-builddep" "-y" $ pkg <.> "spec"
-  run_ "fedpkg" ["local"]
-  void $ cmd "sudo" "yum" "remove" pkg
-  void $ cmd "sudo" "yum" "localinstall" $ "x86_64" </> "*"
-  exit 0
+    cmd_ "git" ["pull"]
+  nvr <- cmdSL "fedpkg" ["verrel"]
+  installed <- cmd "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
+  if nvr == installed
+    then putStrLn $ nvr ++ " already installed!"
+    else do
+    putStrLn $ installed ++ " -> " ++ nvr
+    cmd_ "git" ["log", "-2"]
+    sudo "yum-builddep" ["-y", pkg ++ ".spec"]
+    cmd_ "fedpkg" ["local"]
+    sudo "yum" ["remove", pkg]
+    sudo "yum" ["localinstall", "x86_64" </> "*"]
 
 -- FIXME
-gitBranch :: IO (String)
+gitBranch :: IO String
 gitBranch = return "f20"
