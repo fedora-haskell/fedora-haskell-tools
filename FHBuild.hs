@@ -18,51 +18,63 @@ module Main where
 import HSH
 
 import Control.Monad (when, unless)
+import Data.Maybe (fromMaybe, isJust)
+import Data.List (stripPrefix)
 import System.Directory (doesDirectoryExist)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), takeBaseName, takeDirectory)
 import System.IO (hPutStrLn, stderr)
 
+data BuildMode = Local | Mock | Koji
+
 main :: IO ()
 main = do
-  (com:dist:pkgs) <- getArgs >>= parseArgs
-  mapM_ (command' com dist) pkgs
+  (com:args) <- getArgs >>= parseArgs
+  -- allow "fhbuild CMD" or "fhbuild CMD DIST PKG..."
+  (dist:pkgs, mdir) <- if null args then determinePkgBranch
+                        else return (args, Nothing)
+  mapM_ (build (mode com) dist mdir) pkgs
   where
-    command' "local" = buildLocal
---    command' "koji" = buildKoji
-    command' _ = undefined
+    mode "local" = Local
+    mode "mock" = Mock
+    mode "koji" = Koji
+    mode _ = undefined
+
 
 commands :: [String]
-commands = ["local" {-, "koji"-}]
+commands = ["local", "mock" {-, "koji"-}]
 
 parseArgs :: [String] -> IO [String]
-parseArgs [] = help >> return []
-parseArgs [com] | com `elem` commands = do
-  dir <- pwd
-  (pkg, branch) <- determinePkgBranch dir
-  return [com, branch, pkg]
-parseArgs args | head args `elem` commands && length args >= 3 =
+parseArgs args | (length args == 1 || length args >= 3)
+                 && head args `elem` commands =
   return args
 parseArgs _ = help >> return []
 
-determinePkgBranch :: String -> IO (String, String)
-determinePkgBranch dir = do
+determinePkgBranch :: IO ([String], Maybe FilePath) -- (branch:pkgs, dir)
+determinePkgBranch = do
+  dir <- pwd
   let base = takeBaseName dir
   if base `elem` ["master", "f20", "f19"]
-    then return (takeBaseName $ takeDirectory dir, base)
+    then return ([base, takeBaseName $ takeDirectory dir], Just dir)
     else do
-    branch <- gitBranch
-    return (base, branch)
+    git <- doesDirectoryExist (dir </> ".git")
+    if git
+      then do
+      branch <- gitBranch
+      return ([branch, base], Just dir)
+      else
+      error "Not a git repo: cannot determine branch"
 
 help :: IO ()
 help = do
   progName <- getProgName
-  hPutStrLn stderr $ "Usage: " ++ progName ++ " CMD dist pkg ...\n"
+  hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [dist pkg ...]\n"
     ++ "\n"
     ++ "Commands:\n"
     ++ "  local\t\t- build locally\n"
-    ++ "  koji\t\t- build in Koji\n"
+    ++ "  mock\t\t- build in mock\n"
+--    ++ "  koji\t\t- build in Koji\n"
   exitWith (ExitFailure 1)
 
 dist2branch :: String -> String
@@ -80,34 +92,56 @@ cmdSL c as = runSL (c, as)
 
 sudo :: String -> [String] -> IO ()
 sudo c as = do
-  putStrLn $ c ++ unwords as
+  putStrLn $ "sudo" +-+ c +-+ unwords as
   runIO ("sudo", c:as)
 
-buildLocal :: String -> String -> IO ()
-buildLocal dist pkg = do
-  d <- doesDirectoryExist pkg
-  let branch = dist2branch dist
+(+-+) :: String -> String -> String
+"" +-+ s = s
+s +-+ "" = s
+s +-+ t = s ++ " " ++ t
+
+build :: BuildMode -> String -> Maybe FilePath -> String -> IO ()
+build mode dist mdir pkg = do
+  let dir = fromMaybe pkg mdir
+      branch = dist2branch dist
+  d <- if isJust mdir then return True else doesDirectoryExist dir
   unless d $
     cmd_ "fedpkg" ["clone", "-b", branch, pkg]
-  cd pkg
-  b <- doesDirectoryExist branch
-  when b $ cd branch
-  putStrLn $ "== " ++ pkg ++ ":" ++ dist2branch dist ++ " =="
+  b <- doesDirectoryExist $ dir </> branch
+  putStrLn $ "==" +-+ pkg ++ ":" ++ dist2branch dist +-+ "=="
+  let wd = dir </> if b then branch else ""
   when d $
-    -- todo check(out) correct branch
-    cmd_ "git" ["pull"]
-  nvr <- cmdSL "fedpkg" ["verrel"]
-  installed <- cmd "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
-  if nvr == installed
-    then putStrLn $ nvr ++ " already installed!"
-    else do
-    putStrLn $ installed ++ " -> " ++ nvr
-    cmd_ "git" ["log", "-2"]
-    sudo "yum-builddep" ["-y", pkg ++ ".spec"]
-    cmd_ "fedpkg" ["local"]
-    sudo "yum" ["remove", pkg]
-    sudo "yum" ["localinstall", "x86_64" </> "*"]
+    -- FIXME check correct branch
+    cmd_ "git" ["-C", wd, "pull"]
+  nvr <- cmdSL "fedpkg" ["--path", wd, "verrel"]
+  let verrel = removePrefix (pkg ++ "-") nvr
+  case mode of
+    Local -> do
+      installed <- cmd "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
+      if nvr == installed
+        then putStrLn $ nvr +-+ "already installed!"
+        else do
+        putStrLn $ installed +-+ "->" +-+ nvr
+        cmd_ "git" ["-C", wd, "log", "-2"]
+        -- FIXME: only if missing deps
+        sudo "yum-builddep" ["-y", wd </> pkg ++ ".spec"]
+        putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
+        cmd_ "fedpkg" ["--path", wd, "local"]
+        sudo "yum" ["remove", pkg]
+        arch <- run "arch"
+        rpms <- glob $ wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm"
+        sudo "yum" $ "localinstall":rpms
+    Mock -> do
+      putStrLn $ "Mock building" +-+ nvr
+      cmd_ "fedpkg" ["--path", wd, "mockbuild"]
+    Koji -> putStrLn "FIXME"
 
--- FIXME
+removePrefix :: String -> String -> String
+removePrefix prefix orig =
+  fromMaybe (error prefix +-+ "is not prefix of" +-+ orig) $ stripPrefix prefix orig
+
 gitBranch :: IO String
-gitBranch = return "f20"
+gitBranch = do
+  out <- runSL ("git", ["branch"])
+  return $ removePrefix "* " out
+
