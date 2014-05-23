@@ -87,13 +87,16 @@ cmd c as = run (c, as)
 cmd_ :: String -> [String] -> IO ()
 cmd_ c as = runIO (c, as)
 
+cmdput :: String -> [String] -> IO ()
+cmdput c as = do
+  putStrLn $ "Running:" +-+ c +-+ unwords as
+  runIO (c, as)
+
 cmdSL :: String -> [String] -> IO String
 cmdSL c as = runSL (c, as)
 
 sudo :: String -> [String] -> IO ()
-sudo c as = do
-  putStrLn $ "sudo" +-+ c +-+ unwords as
-  runIO ("sudo", c:as)
+sudo c as = cmdput "sudo" (c:as)
 
 (+-+) :: String -> String -> String
 "" +-+ s = s
@@ -126,14 +129,14 @@ build mode dist mdir pkg = do
         -- FIXME: only if missing deps
         sudo "yum-builddep" ["-y", wd </> pkg ++ ".spec"]
         putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
-        cmd_ "fedpkg" ["--path", wd, "local"]
+        cmdput "fedpkg" ["--path", wd, "local"]
         sudo "yum" ["remove", pkg]
         arch <- run "arch"
         rpms <- glob $ wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm"
         sudo "yum" $ "localinstall":rpms
     Mock -> do
       putStrLn $ "Mock building" +-+ nvr
-      cmd_ "fedpkg" ["--path", wd, "mockbuild"]
+      cmdput "fedpkg" ["--path", wd, "mockbuild"]
     Koji -> putStrLn "FIXME"
 
 removePrefix :: String -> String -> String
