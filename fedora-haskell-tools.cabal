@@ -9,7 +9,7 @@ License:             GPL-3
 License-file:        COPYING
 Author:              Jens Petersen <juhp@community.haskell.org>
 Maintainer:          Jens Petersen <petersen@fedoraproject.org>
-Copyright:           2014 Jens Petersen <petersen@fedoraproject.org>, 2014 Ricky Elrod <relrod@redhat.com>
+Copyright:           2014 Jens Petersen <petersen@fedoraproject.org>
 Category:            Distribution
 Build-type:          Simple
 Extra-source-files:  README.md ChangeLog
@@ -26,7 +26,6 @@ Executable fhbuild
                    directory,
                    filepath,
                    HSH,
-                   optparse-applicative >= 0.8,
                    text,
                    unix
 --    Other-modules:

@@ -20,61 +20,27 @@ import HSH
 import Control.Monad (when, unless)
 import Data.Maybe (fromMaybe, isJust)
 import Data.List (stripPrefix)
-import Options.Applicative
 import System.Directory (doesDirectoryExist)
-import System.Environment (getProgName)
+import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), takeBaseName, takeDirectory)
 import System.IO (hPutStrLn, stderr)
 
-type Dist = String -- TODO: This should really be a sum type instead.
-type Pkgs = [String]
-
-data BuildMode = Local Dist (Maybe FilePath) Pkgs
-               | Mock Dist (Maybe FilePath) Pkgs
-               | Koji Dist (Maybe FilePath) Pkgs
-
-genOptions :: (Dist -> Maybe FilePath -> Pkgs -> BuildMode) -> Parser BuildMode
-genOptions x =
-  x <$> strOption (long "dist"
-                   <> short 'd'
-                   <> metavar "DIST"
-                   <> help "Fedora/RHEL version to build for, e.g. f20 or EL-6")
-    <*> option (long "directory"
-                   <> short 'o'
-                   <> metavar "DIRECTORY"
-                   <> help "The working directory to house the build")
-    <*> many (argument str (metavar "PKGS"))
-
-localOptions :: Parser BuildMode
-localOptions = genOptions Local
-
-mockOptions :: Parser BuildMode
-mockOptions = genOptions Mock
-
-kojiOptions :: Parser BuildMode
-kojiOptions = genOptions Koji
-
-parseOptions :: Parser BuildMode
-parseOptions = subparser
-               (command "local" (info localOptions (
-                                    progDesc "Build locally"))
-                <> command "mock" (info mockOptions (
-                                    progDesc "Build in mock"))
-                <> command "koji" (info kojiOptions (
-                                    progDesc "Build in koji"))
-               )
-
-opts :: ParserInfo BuildMode
-opts = info (parseOptions <**> helper) idm
+data BuildMode = Local | Mock | Koji
 
 main :: IO ()
-main = execParser opts >>= runBuild
+main = do
+  (com:args) <- getArgs >>= parseArgs
+  -- allow "fhbuild CMD" or "fhbuild CMD DIST PKG..."
+  (dist:pkgs, mdir) <- if null args then determinePkgBranch
+                        else return (args, Nothing)
+  mapM_ (build (mode com) dist mdir) pkgs
+  where
+    mode "local" = Local
+    mode "mock" = Mock
+    mode "koji" = Koji
+    mode _ = undefined
 
-runBuild :: BuildMode -> IO ()
-runBuild mode@(Local dist mdir pkgs) = mapM_ (build mode dist mdir) pkgs
-runBuild mode@(Mock dist mdir pkgs) = mapM_ (build mode dist mdir) pkgs
-runBuild mode@(Koji dist mdir pkgs) = mapM_ (build mode dist mdir) pkgs
 
 commands :: [String]
 commands = ["local", "mock" {-, "koji"-}]
@@ -83,7 +49,7 @@ parseArgs :: [String] -> IO [String]
 parseArgs args | (length args == 1 || length args >= 3)
                  && head args `elem` commands =
   return args
-parseArgs _ = help' >> return []
+parseArgs _ = help >> return []
 
 determinePkgBranch :: IO ([String], Maybe FilePath) -- (branch:pkgs, dir)
 determinePkgBranch = do
@@ -100,8 +66,8 @@ determinePkgBranch = do
       else
       error "Not a git repo: cannot determine branch"
 
-help' :: IO ()
-help' = do
+help :: IO ()
+help = do
   progName <- getProgName
   hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [dist pkg ...]\n"
     ++ "\n"
@@ -153,7 +119,7 @@ build mode dist mdir pkg = do
   nvr <- cmdSL "fedpkg" ["--path", wd, "verrel"]
   let verrel = removePrefix (pkg ++ "-") nvr
   case mode of
-    Local _ _ _ -> do
+    Local -> do
       installed <- cmd "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
       if nvr == installed
         then putStrLn $ nvr +-+ "already installed!"
@@ -168,10 +134,10 @@ build mode dist mdir pkg = do
         arch <- run "arch"
         rpms <- glob $ wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm"
         sudo "yum" $ "localinstall":rpms
-    Mock _ _ _ -> do
+    Mock -> do
       putStrLn $ "Mock building" +-+ nvr
       cmdput "fedpkg" ["--path", wd, "mockbuild"]
-    Koji _ _ _ -> putStrLn "FIXME"
+    Koji -> putStrLn "FIXME"
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =
