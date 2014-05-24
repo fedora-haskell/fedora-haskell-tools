@@ -15,16 +15,16 @@
 
 module Main where
 
-import HSH
-
 import Control.Monad (when, unless)
 import Data.Maybe (fromMaybe, isJust)
 import Data.List (stripPrefix)
-import System.Directory (doesDirectoryExist)
+
+import System.Directory (doesDirectoryExist, getCurrentDirectory)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), takeBaseName, takeDirectory)
 import System.IO (hPutStrLn, stderr)
+import System.Process (readProcess, rawSystem)
 
 data BuildMode = Local | Mock | Koji
 
@@ -41,7 +41,6 @@ main = do
     mode "koji" = Koji
     mode _ = undefined
 
-
 commands :: [String]
 commands = ["local", "mock" {-, "koji"-}]
 
@@ -53,7 +52,7 @@ parseArgs _ = help >> return []
 
 determinePkgBranch :: IO ([String], Maybe FilePath) -- (branch:pkgs, dir)
 determinePkgBranch = do
-  dir <- pwd
+  dir <- getCurrentDirectory
   let base = takeBaseName dir
   if base `elem` ["master", "f20", "f19"]
     then return ([base, takeBaseName $ takeDirectory dir], Just dir)
@@ -82,18 +81,19 @@ dist2branch "f21" = "master"
 dist2branch d = d
 
 cmd :: String -> [String] -> IO String
-cmd c as = run (c, as)
+cmd c as = readProcess c as ""
 
 cmd_ :: String -> [String] -> IO ()
-cmd_ c as = runIO (c, as)
+cmd_ c as = do
+  ret <- rawSystem c as
+  case ret of
+    ExitSuccess -> return ()
+    ExitFailure n -> error $ show n
 
 cmdput :: String -> [String] -> IO ()
 cmdput c as = do
   putStrLn $ "Running:" +-+ c +-+ unwords as
-  runIO (c, as)
-
-cmdSL :: String -> [String] -> IO String
-cmdSL c as = runSL (c, as)
+  cmd_ c as
 
 sudo :: String -> [String] -> IO ()
 sudo c as = cmdput "sudo" (c:as)
@@ -116,7 +116,7 @@ build mode dist mdir pkg = do
   when d $
     -- FIXME check correct branch
     cmd_ "git" ["-C", wd, "pull"]
-  nvr <- cmdSL "fedpkg" ["--path", wd, "verrel"]
+  nvr <- cmd "fedpkg" ["--path", wd, "verrel"]
   let verrel = removePrefix (pkg ++ "-") nvr
   case mode of
     Local -> do
@@ -131,9 +131,9 @@ build mode dist mdir pkg = do
         putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
         cmdput "fedpkg" ["--path", wd, "local"]
         sudo "yum" ["remove", pkg]
-        arch <- run "arch"
-        rpms <- glob $ wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm"
-        sudo "yum" $ "localinstall":rpms
+        arch <- cmd "arch" []
+        let rpms = wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm"
+        sudo "yum" ["localinstall", rpms]
     Mock -> do
       putStrLn $ "Mock building" +-+ nvr
       cmdput "fedpkg" ["--path", wd, "mockbuild"]
@@ -145,6 +145,6 @@ removePrefix prefix orig =
 
 gitBranch :: IO String
 gitBranch = do
-  out <- runSL ("git", ["branch"])
-  return $ removePrefix "* " out
+  out <- cmd "git" ["branch"]
+  return $ removePrefix "* " $ (head . lines) out
 
