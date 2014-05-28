@@ -15,6 +15,7 @@
 
 module Main where
 
+import Control.Applicative ((<$>))
 import Control.Monad (when, unless)
 import Data.Maybe (fromMaybe, isJust)
 import Data.List (stripPrefix)
@@ -42,12 +43,17 @@ main = do
     mode _ = undefined
 
 commands :: [String]
-commands = ["local", "mock" {-, "koji"-}]
+commands = ["local", "mock" , "koji"]
+
+dists :: [String]
+dists = ["f21", "f20", "f19"]
 
 parseArgs :: [String] -> IO [String]
-parseArgs args | (length args == 1 || length args >= 3)
-                 && head args `elem` commands =
-  return args
+parseArgs [c] | c `elem` commands = return [c]
+parseArgs (c:dist:pkgs) |  c `elem` commands
+                           && dist `elem` dists
+                           && length pkgs > 0 =
+                             return (c:dist:pkgs)
 parseArgs _ = help >> return []
 
 determinePkgBranch :: IO ([String], Maybe FilePath) -- (branch:pkgs, dir)
@@ -73,7 +79,7 @@ help = do
     ++ "Commands:\n"
     ++ "  local\t\t- build locally\n"
     ++ "  mock\t\t- build in mock\n"
---    ++ "  koji\t\t- build in Koji\n"
+    ++ "  koji\t\t- build in Koji\n"
   exitWith (ExitFailure 1)
 
 dist2branch :: String -> String
@@ -97,6 +103,9 @@ cmdput c as = do
 
 sudo :: String -> [String] -> IO ()
 sudo c as = cmdput "sudo" (c:as)
+
+shell :: String -> IO String
+shell c = cmd "sh" ["-c", c]
 
 (+-+) :: String -> String -> String
 "" +-+ s = s
@@ -137,7 +146,23 @@ build mode dist mdir pkg = do
     Mock -> do
       putStrLn $ "Mock building" +-+ nvr
       cmdput "fedpkg" ["--path", wd, "mockbuild"]
-    Koji -> putStrLn "FIXME"
+    Koji -> do
+      cmd_ "git" ["-C", wd, "log", "-1"]
+      let target = dist ++ "-build"
+      -- FIXME: handle case of no build
+      latest <- (head . words) <$> cmd "koji" ["latest-pkg", "--quiet", target, pkg]
+      if nvr == latest
+        then error $ nvr +-+ "already built!"
+        else do
+        putStrLn $ latest +-+ "->" +-+ nvr
+--        deps <- cmd "rpmspec" ["-q", "--buildrequires", wd </> pkg ++ ".spec"]
+        cmd_ "date" ["+%T"]
+        cmd_ "fedpkg" ["--path", wd, "build"]
+        when (dist /= "f21") $ do
+          user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
+          cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "build stack"]
+        cmd_ "date" ["+%T"]
+        cmd_ "koji" ["wait-repo", target, "--build=" ++ nvr]
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =

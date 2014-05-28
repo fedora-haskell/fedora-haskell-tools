@@ -1,8 +1,10 @@
 Porting haskell-sig.git scripts:
 
+# git
+- stack branch merging
+
 # Building: rebuild*
 - recursive building
-- koji building
 - mockchain
 - fedpkg git integration
 - package sorting
@@ -10,7 +12,8 @@ Porting haskell-sig.git scripts:
 - rebuilding
   - what can be built next
 - copr support
-- build package locally in $PWD
+- parallel/async building
+- cache passwd for bodhi
 
 # fedora-haskell-packages.sh
 - clone
