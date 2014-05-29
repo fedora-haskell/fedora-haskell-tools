@@ -101,13 +101,21 @@ cmd_ c as = do
     ExitSuccess -> return ()
     ExitFailure n -> error $ show n
 
-cmdput :: String -> [String] -> IO ()
-cmdput c as = do
-  putStrLn $ "Running:" +-+ c +-+ unwords as
+cmdAssert :: String -> String -> [String] -> IO ()
+cmdAssert msg c as = do
+  ret <- rawSystem c as
+  case ret of
+    ExitSuccess -> return ()
+    ExitFailure _ -> error msg
+
+cmdlog :: String -> [String] -> IO ()
+cmdlog c as = do
+  date <- cmdSL "date" ["+%T"]
+  putStrLn $ date +-+ c +-+ unwords as
   cmd_ c as
 
 sudo :: String -> [String] -> IO ()
-sudo c as = cmdput "sudo" (c:as)
+sudo c as = cmdlog "sudo" (c:as)
 
 -- single-line of shell output
 shellSL :: String -> IO String
@@ -128,6 +136,7 @@ build mode dist mdir pkg = do
   b <- doesDirectoryExist $ dir </> branch
   putStrLn $ "==" +-+ pkg ++ ":" ++ dist2branch dist +-+ "=="
   let wd = dir </> if b then branch else ""
+  cmdAssert "not a Fedora pkg git dir!" "grep" ["-q", "pkgs.fedoraproject.org", wd </> ".git/config"]
   when d $
     -- FIXME check correct branch
     cmd_ "git" ["-C", wd, "pull"]
@@ -144,14 +153,14 @@ build mode dist mdir pkg = do
         -- FIXME: only if missing deps
         sudo "yum-builddep" ["-y", wd </> pkg ++ ".spec"]
         putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
-        cmdput "fedpkg" ["--path", wd, "local"]
+        cmdlog "fedpkg" ["--path", wd, "local"]
         sudo "yum" ["remove", pkg]
         arch <- cmdSL "arch" []
         let rpms = wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm"
         sudo "yum" ["localinstall", rpms]
     Mock -> do
       putStrLn $ "Mock building" +-+ nvr
-      cmdput "fedpkg" ["--path", wd, "mockbuild"]
+      cmdlog "fedpkg" ["--path", wd, "mockbuild"]
     Koji -> do
       cmd_ "git" ["-C", wd, "log", "-1"]
       let target = dist ++ "-build"
@@ -162,13 +171,11 @@ build mode dist mdir pkg = do
         else do
         putStrLn $ latest +-+ "->" +-+ nvr
 --        deps <- cmd "rpmspec" ["-q", "--buildrequires", wd </> pkg ++ ".spec"]
-        cmd_ "date" ["+%T"]
-        cmd_ "fedpkg" ["--path", wd, "build"]
+        cmdlog "fedpkg" ["--path", wd, "build"]
         when (dist /= "f21") $ do
           user <- shellSL "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
-          cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "build stack"]
-        cmd_ "date" ["+%T"]
-        cmd_ "koji" ["wait-repo", target, "--build=" ++ nvr]
+          cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", "build stack"]
+        cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =
