@@ -89,6 +89,11 @@ dist2branch d = d
 cmd :: String -> [String] -> IO String
 cmd c as = readProcess c as ""
 
+-- single line of output
+cmdSL :: String -> [String] -> IO String
+cmdSL c as =
+  (head . lines) <$> cmd c as
+
 cmd_ :: String -> [String] -> IO ()
 cmd_ c as = do
   ret <- rawSystem c as
@@ -104,8 +109,9 @@ cmdput c as = do
 sudo :: String -> [String] -> IO ()
 sudo c as = cmdput "sudo" (c:as)
 
-shell :: String -> IO String
-shell c = cmd "sh" ["-c", c]
+-- single-line of shell output
+shellSL :: String -> IO String
+shellSL c = cmdSL "sh" ["-c", c]
 
 (+-+) :: String -> String -> String
 "" +-+ s = s
@@ -125,11 +131,11 @@ build mode dist mdir pkg = do
   when d $
     -- FIXME check correct branch
     cmd_ "git" ["-C", wd, "pull"]
-  nvr <- cmd "fedpkg" ["--path", wd, "verrel"]
+  nvr <- cmdSL "fedpkg" ["--path", wd, "verrel"]
   let verrel = removePrefix (pkg ++ "-") nvr
   case mode of
     Local -> do
-      installed <- cmd "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
+      installed <- cmdSL "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
       if nvr == installed
         then putStrLn $ nvr +-+ "already installed!"
         else do
@@ -140,7 +146,7 @@ build mode dist mdir pkg = do
         putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
         cmdput "fedpkg" ["--path", wd, "local"]
         sudo "yum" ["remove", pkg]
-        arch <- cmd "arch" []
+        arch <- cmdSL "arch" []
         let rpms = wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm"
         sudo "yum" ["localinstall", rpms]
     Mock -> do
@@ -150,7 +156,7 @@ build mode dist mdir pkg = do
       cmd_ "git" ["-C", wd, "log", "-1"]
       let target = dist ++ "-build"
       -- FIXME: handle case of no build
-      latest <- (head . words) <$> cmd "koji" ["latest-pkg", "--quiet", target, pkg]
+      latest <- (head . words) <$> cmdSL "koji" ["latest-pkg", "--quiet", target, pkg]
       if nvr == latest
         then error $ nvr +-+ "already built!"
         else do
@@ -159,7 +165,7 @@ build mode dist mdir pkg = do
         cmd_ "date" ["+%T"]
         cmd_ "fedpkg" ["--path", wd, "build"]
         when (dist /= "f21") $ do
-          user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
+          user <- shellSL "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
           cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "build stack"]
         cmd_ "date" ["+%T"]
         cmd_ "koji" ["wait-repo", target, "--build=" ++ nvr]
@@ -169,7 +175,6 @@ removePrefix prefix orig =
   fromMaybe (error prefix +-+ "is not prefix of" +-+ orig) $ stripPrefix prefix orig
 
 gitBranch :: IO String
-gitBranch = do
-  out <- cmd "git" ["branch"]
-  return $ removePrefix "* " $ (head . lines) out
+gitBranch =
+  removePrefix "* " <$> cmdSL "git" ["branch"]
 
