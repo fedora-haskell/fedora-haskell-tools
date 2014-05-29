@@ -31,10 +31,7 @@ data BuildMode = Local | Mock | Koji
 
 main :: IO ()
 main = do
-  (com:args) <- getArgs >>= parseArgs
-  -- allow "fhbuild CMD" or "fhbuild CMD DIST PKG..."
-  (dist:pkgs, mdir) <- if null args then determinePkgBranch
-                        else return (args, Nothing)
+  (com:dist:pkgs, mdir) <- getArgs >>= parseArgs
   mapM_ (build (mode com) dist mdir) pkgs
   where
     mode "local" = Local
@@ -48,26 +45,29 @@ commands = ["local", "mock" , "koji"]
 dists :: [String]
 dists = ["f21", "f20", "f19"]
 
-parseArgs :: [String] -> IO [String]
-parseArgs [c] | c `elem` commands = return [c]
+-- allow "fhbuild CMD" or "fhbuild CMD DIST PKG..."
+parseArgs :: [String] -> IO ([String], Maybe FilePath)
+parseArgs [c] | c `elem` commands = do
+  (dist:pkgs, dir) <- determinePkgBranch
+  return (c:dist:pkgs, Just dir)
 parseArgs (c:dist:pkgs) |  c `elem` commands
                            && dist `elem` dists
                            && length pkgs > 0 =
-                             return (c:dist:pkgs)
-parseArgs _ = help >> return []
+                             return (c:dist:pkgs, Nothing)
+parseArgs _ = help >> return ([], Nothing)
 
-determinePkgBranch :: IO ([String], Maybe FilePath) -- (branch:pkgs, dir)
+determinePkgBranch :: IO ([String], FilePath) -- (branch:pkgs, dir)
 determinePkgBranch = do
   dir <- getCurrentDirectory
   let base = takeBaseName dir
   if base `elem` ["master", "f20", "f19"]
-    then return ([base, takeBaseName $ takeDirectory dir], Just dir)
+    then return ([base, takeBaseName $ takeDirectory dir], dir)
     else do
     git <- doesDirectoryExist (dir </> ".git")
     if git
       then do
       branch <- gitBranch
-      return ([branch, base], Just dir)
+      return ([branch, base], dir)
       else
       error "Not a git repo: cannot determine branch"
 
