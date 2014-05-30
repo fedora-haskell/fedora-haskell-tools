@@ -16,18 +16,18 @@
 module Main where
 
 import Control.Applicative ((<$>))
-import Control.Monad (when, unless)
+import Control.Monad (filterM, unless, when)
 import Data.Maybe (fromMaybe, isJust)
-import Data.List (stripPrefix)
+import Data.List (isPrefixOf, isSuffixOf, stripPrefix)
 
 import System.Directory (doesDirectoryExist, getCurrentDirectory)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), takeBaseName, takeDirectory)
 import System.IO (hPutStrLn, stderr)
-import System.Process (readProcess, rawSystem)
+import System.Process (readProcess, readProcessWithExitCode, rawSystem)
 
-data BuildMode = Local | Mock | Koji
+data BuildMode = Local | Mock | Koji deriving (Eq)
 
 main :: IO ()
 main = do
@@ -52,7 +52,7 @@ parseArgs [c] | c `elem` commands = do
   return (c:dist:pkgs, Just dir)
 parseArgs (c:dist:pkgs) |  c `elem` commands
                            && dist `elem` dists
-                           && length pkgs > 0 =
+                           && not (null pkgs) =
                              return (c:dist:pkgs, Nothing)
 parseArgs _ = help >> return ([], Nothing)
 
@@ -89,10 +89,15 @@ dist2branch d = d
 cmd :: String -> [String] -> IO String
 cmd c as = readProcess c as ""
 
--- single line of output
-cmdSL :: String -> [String] -> IO String
-cmdSL c as =
-  (head . lines) <$> cmd c as
+singleLine :: String -> String
+singleLine = head . lines
+
+cmdMaybe :: String -> [String] -> IO (Maybe String)
+cmdMaybe c as = do
+  (ret, out, _err) <- readProcessWithExitCode c as ""
+  case ret of
+    ExitSuccess -> return $ Just out
+    ExitFailure _ -> return Nothing
 
 cmd_ :: String -> [String] -> IO ()
 cmd_ c as = do
@@ -110,16 +115,22 @@ cmdAssert msg c as = do
 
 cmdlog :: String -> [String] -> IO ()
 cmdlog c as = do
-  date <- cmdSL "date" ["+%T"]
+  date <- singleLine <$> cmd "date" ["+%T"]
   putStrLn $ date +-+ c +-+ unwords as
   cmd_ c as
+
+cmdBool :: String -> [String] -> IO Bool
+cmdBool c as = do
+  ret <- rawSystem c as
+  case ret of
+    ExitSuccess -> return True
+    ExitFailure _ -> return False
 
 sudo :: String -> [String] -> IO ()
 sudo c as = cmdlog "sudo" (c:as)
 
--- single-line of shell output
-shellSL :: String -> IO String
-shellSL c = cmdSL "sh" ["-c", c]
+shell :: String -> IO String
+shell c = cmd "sh" ["-c", c]
 
 (+-+) :: String -> String -> String
 "" +-+ s = s
@@ -131,8 +142,9 @@ build mode dist mdir pkg = do
   let dir = fromMaybe pkg mdir
       branch = dist2branch dist
   d <- if isJust mdir then return True else doesDirectoryExist dir
-  unless d $
-    cmd_ "fedpkg" ["clone", "-b", branch, pkg]
+  unless d $ do
+    let anon = ["-a" | mode /= Koji]
+    cmd_ "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
   b <- doesDirectoryExist $ dir </> branch
   putStrLn $ "==" +-+ pkg ++ ":" ++ dist2branch dist +-+ "=="
   let wd = dir </> if b then branch else ""
@@ -140,24 +152,33 @@ build mode dist mdir pkg = do
   when d $
     -- FIXME check correct branch
     cmd_ "git" ["-C", wd, "pull"]
-  nvr <- cmdSL "fedpkg" ["--path", wd, "verrel"]
+  nvr <- singleLine <$> cmd "fedpkg" ["--path", wd, "verrel"]
   let verrel = removePrefix (pkg ++ "-") nvr
   case mode of
     Local -> do
-      installed <- cmdSL "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
-      if nvr == installed
+      installed <- fmap singleLine <$> cmdMaybe "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
+      if Just nvr == installed
         then putStrLn $ nvr +-+ "already installed!"
         else do
-        putStrLn $ installed +-+ "->" +-+ nvr
+        putStrLn $ fromMaybe "none" installed +-+ "->" +-+ nvr
         cmd_ "git" ["-C", wd, "log", "-2"]
-        -- FIXME: only if missing deps
-        sudo "yum-builddep" ["-y", wd </> pkg ++ ".spec"]
+        deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", wd </> pkg ++ ".spec"]
+        missing <- filterM notInstalled deps
+        let hmissing = filter (isPrefixOf "ghc-") $ filter (isSuffixOf "-devel") missing
+        unless (null hmissing) $ do
+          putStrLn $ "Missing:" +-+ unwords hmissing
+          mapM_ (\p -> cmd_ "fhbuild" ["local", dist, removeSuffix "-devel" p]) hmissing
+        stillMissing <- filterM notInstalled missing
+        unless (null stillMissing) $ do
+          putStrLn $ "Missing:" +-+ unwords stillMissing
+          sudo "yum-builddep" ["-y", wd </> pkg ++ ".spec"]
         putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
         cmdlog "fedpkg" ["--path", wd, "local"]
-        sudo "yum" ["remove", pkg]
-        arch <- cmdSL "arch" []
-        let rpms = wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm"
-        sudo "yum" ["localinstall", rpms]
+--        -- FIXME: drop this?
+--        sudo "yum" ["remove", pkg]
+        arch <- singleLine <$> cmd "arch" []
+        rpms <- lines <$> shell ("ls" +-+ wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm")
+        sudo "yum" $ "localinstall": rpms
     Mock -> do
       putStrLn $ "Mock building" +-+ nvr
       cmdlog "fedpkg" ["--path", wd, "mockbuild"]
@@ -165,23 +186,31 @@ build mode dist mdir pkg = do
       cmd_ "git" ["-C", wd, "log", "-1"]
       let target = dist ++ "-build"
       -- FIXME: handle case of no build
-      latest <- (head . words) <$> cmdSL "koji" ["latest-pkg", "--quiet", target, pkg]
+      latest <- (head . words . singleLine) <$> cmd "koji" ["latest-pkg", "--quiet", target, pkg]
       if nvr == latest
         then error $ nvr +-+ "already built!"
         else do
         putStrLn $ latest +-+ "->" +-+ nvr
---        deps <- cmd "rpmspec" ["-q", "--buildrequires", wd </> pkg ++ ".spec"]
         cmdlog "fedpkg" ["--path", wd, "build"]
         when (dist /= "f21") $ do
-          user <- shellSL "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
+          user <- singleLine <$> shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
           cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", "build stack"]
         cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
+
+notInstalled :: String -> IO Bool
+notInstalled pkg = not <$> cmdBool "rpm" ["--quiet", "-q", pkg]
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =
   fromMaybe (error prefix +-+ "is not prefix of" +-+ orig) $ stripPrefix prefix orig
 
+removeSuffix :: String -> String -> String
+removeSuffix suffix orig =
+  fromMaybe orig $ stripSuffix suffix orig
+  where
+    stripSuffix sf str = reverse <$> stripPrefix (reverse sf) (reverse str)
+
 gitBranch :: IO String
 gitBranch =
-  removePrefix "* " <$> cmdSL "git" ["branch"]
+  (removePrefix "* " . singleLine) <$> cmd "git" ["branch"]
 
