@@ -161,9 +161,10 @@ build mode dist mdir pkg = do
         then putStrLn $ nvr +-+ "already installed!"
         else do
         putStrLn $ fromMaybe "none" installed +-+ "->" +-+ nvr
-        cmd_ "git" ["-C", wd, "log", "-2"]
+        cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
         deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", wd </> pkg ++ ".spec"]
         missing <- filterM notInstalled deps
+        -- FIXME: determine src package properly
         let hmissing = filter (isPrefixOf "ghc-") $ filter (isSuffixOf "-devel") missing
         unless (null hmissing) $ do
           putStrLn $ "Missing:" +-+ unwords hmissing
@@ -178,12 +179,12 @@ build mode dist mdir pkg = do
 --        sudo "yum" ["remove", pkg]
         arch <- singleLine <$> cmd "arch" []
         rpms <- lines <$> shell ("ls" +-+ wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm")
-        sudo "yum" $ "localinstall": rpms
+        sudo "yum" $ ["-y", "localinstall"] ++ rpms
     Mock -> do
       putStrLn $ "Mock building" +-+ nvr
       cmdlog "fedpkg" ["--path", wd, "mockbuild"]
     Koji -> do
-      cmd_ "git" ["-C", wd, "log", "-1"]
+      cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
       let target = dist ++ "-build"
       -- FIXME: handle case of no build
       latest <- (head . words . singleLine) <$> cmd "koji" ["latest-pkg", "--quiet", target, pkg]
