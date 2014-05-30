@@ -4,7 +4,7 @@ Porting haskell-sig.git scripts:
 - stack branch merging
 
 # Building: rebuild*
-- recursive building
+- recursive building for koji and mock
 - mockchain
 - fedpkg git integration
 - package sorting

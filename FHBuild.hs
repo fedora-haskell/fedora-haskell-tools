@@ -164,11 +164,10 @@ build mode dist mdir pkg = do
         cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
         deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", wd </> pkg ++ ".spec"]
         missing <- filterM notInstalled deps
-        -- FIXME: determine src package properly
         let hmissing = filter (isPrefixOf "ghc-") $ filter (isSuffixOf "-devel") missing
         unless (null hmissing) $ do
           putStrLn $ "Missing:" +-+ unwords hmissing
-          mapM_ (\p -> cmd_ "fhbuild" ["local", dist, removeSuffix "-devel" p]) hmissing
+          mapM_ (fhbuildMissing dist) hmissing
         stillMissing <- filterM notInstalled missing
         unless (null stillMissing) $ do
           putStrLn $ "Missing:" +-+ unwords stillMissing
@@ -200,6 +199,11 @@ build mode dist mdir pkg = do
 
 notInstalled :: String -> IO Bool
 notInstalled pkg = not <$> cmdBool "rpm" ["--quiet", "-q", pkg]
+
+fhbuildMissing :: String -> String -> IO ()
+fhbuildMissing dist pkg = do
+  base <- singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", pkg]
+  cmd_ "fhbuild" ["local", dist, base]
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =
