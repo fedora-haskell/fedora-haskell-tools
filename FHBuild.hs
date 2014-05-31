@@ -18,7 +18,7 @@ module Main where
 import Control.Applicative ((<$>))
 import Control.Monad (filterM, unless, when)
 import Data.Maybe (fromMaybe, isJust)
-import Data.List (isPrefixOf, isSuffixOf, stripPrefix)
+import Data.List (intercalate, isPrefixOf, isSuffixOf, stripPrefix)
 
 import System.Directory (doesDirectoryExist, getCurrentDirectory)
 import System.Environment (getArgs, getProgName)
@@ -142,11 +142,11 @@ build mode dist mdir pkg = do
   let dir = fromMaybe pkg mdir
       branch = dist2branch dist
   d <- if isJust mdir then return True else doesDirectoryExist dir
+  putStrLn $ "==" +-+ pkg ++ ":" ++ dist2branch dist +-+ "=="
   unless d $ do
     let anon = ["-a" | mode /= Koji]
     cmd_ "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
   b <- doesDirectoryExist $ dir </> branch
-  putStrLn $ "==" +-+ pkg ++ ":" ++ dist2branch dist +-+ "=="
   let wd = dir </> if b then branch else ""
   cmdAssert "not a Fedora pkg git dir!" "grep" ["-q", "pkgs.fedoraproject.org", wd </> ".git/config"]
   when d $
@@ -160,17 +160,18 @@ build mode dist mdir pkg = do
       if Just nvr == installed
         then putStrLn $ nvr +-+ "already installed!"
         else do
-        putStrLn $ fromMaybe "none" installed +-+ "->" +-+ nvr
+        putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
         cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
+        putStrLn ""
         deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", wd </> pkg ++ ".spec"]
         missing <- filterM notInstalled deps
         let hmissing = filter (isPrefixOf "ghc-") $ filter (isSuffixOf "-devel") missing
         unless (null hmissing) $ do
-          putStrLn $ "Missing:" +-+ unwords hmissing
+          putStrLn $ "Missing:" +-+ intercalate ", " hmissing
           mapM_ (fhbuildMissing dist) hmissing
         stillMissing <- filterM notInstalled missing
         unless (null stillMissing) $ do
-          putStrLn $ "Missing:" +-+ unwords stillMissing
+          putStrLn $ "Missing:" +-+ intercalate ", " stillMissing
           sudo "yum-builddep" ["-y", wd </> pkg ++ ".spec"]
         putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
         cmdlog "fedpkg" ["--path", wd, "local"]

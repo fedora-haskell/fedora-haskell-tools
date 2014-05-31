@@ -3,6 +3,9 @@ Porting haskell-sig.git scripts:
 # git
 - stack branch merging
 
+# updating
+- port update-pkg-ver
+
 # Building: rebuild*
 - recursive building for koji and mock
 - mockchain
