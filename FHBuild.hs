@@ -18,7 +18,7 @@ module Main where
 import Control.Applicative ((<$>))
 import Control.Monad (filterM, unless, when)
 import Data.Maybe (fromMaybe, isJust)
-import Data.List (intercalate, isPrefixOf, isSuffixOf, stripPrefix)
+import Data.List (intercalate, isPrefixOf, stripPrefix)
 
 import System.Directory (doesDirectoryExist, getCurrentDirectory)
 import System.Environment (getArgs, getProgName)
@@ -31,7 +31,12 @@ data BuildMode = Local | Mock | Koji deriving (Eq)
 
 main :: IO ()
 main = do
-  (com:dist:pkgs, mdir) <- getArgs >>= parseArgs
+  args <- getArgs
+  runMain args
+
+runMain :: [String] -> IO ()
+runMain args = do
+  (com:dist:pkgs, mdir) <- parseArgs args
   mapM_ (build (mode com) dist mdir) pkgs
   where
     mode "local" = Local
@@ -206,7 +211,7 @@ notInstalled dep = do
 fhbuildMissing :: String -> String -> IO ()
 fhbuildMissing dist dep = do
   base <- singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", dep]
-  cmd_ "fhbuild" ["local", dist, base]
+  runMain ["local", dist, base]
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =
