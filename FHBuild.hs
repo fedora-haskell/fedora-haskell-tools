@@ -165,7 +165,7 @@ build mode dist mdir pkg = do
         putStrLn ""
         deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", wd </> pkg ++ ".spec"]
         missing <- filterM notInstalled deps
-        let hmissing = filter (isPrefixOf "ghc-") $ filter (isSuffixOf "-devel") missing
+        let hmissing = filter (isPrefixOf "ghc-") missing
         unless (null hmissing) $ do
           putStrLn $ "Missing:" +-+ intercalate ", " hmissing
           mapM_ (fhbuildMissing dist) hmissing
@@ -199,11 +199,13 @@ build mode dist mdir pkg = do
         cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
 
 notInstalled :: String -> IO Bool
-notInstalled pkg = not <$> cmdBool "rpm" ["--quiet", "-q", pkg]
+notInstalled dep = do
+  pkg <- singleLine <$> cmd "repoquery" ["--qf", "%{name}", "--whatprovides", dep]
+  not <$> cmdBool "rpm" ["--quiet", "-q", pkg]
 
 fhbuildMissing :: String -> String -> IO ()
-fhbuildMissing dist pkg = do
-  base <- singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", pkg]
+fhbuildMissing dist dep = do
+  base <- singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", dep]
   cmd_ "fhbuild" ["local", dist, base]
 
 removePrefix :: String -> String -> String
