@@ -195,7 +195,8 @@ build mode dist mdir pkg = do
         cmdlog "fedpkg" ["--path", wd, "build"]
         when (dist /= "f21") $ do
           user <- singleLine <$> shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
-          cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", "build stack"]
+          -- FIXME: improve Notes with recursive info
+          cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
         cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
 
 notInstalled :: String -> IO Bool
