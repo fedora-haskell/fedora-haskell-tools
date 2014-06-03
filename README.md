@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/fedora-haskell/fedora-haskell-tools.png)](https://travis-ci.org/fedora/fedora-haskell-tools)
+[![Build Status](https://travis-ci.org/fedora-haskell/fedora-haskell-tools.png)](https://travis-ci.org/fedora-haskell/fedora-haskell-tools)
 
 # Fedora Haskell Tools
 
