@@ -176,12 +176,13 @@ build mode dist mdir pkg = do
           sudo "yum-builddep" ["-y", spec]
         putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
         cmdlog "fedpkg" ["--path", wd, "local"]
-        opkgs <- lines <$> cmd "rpmspec" ["-q", spec]
-        rdeps <- lines <$> cmd "rpm" (["-q", "--whatrequires"] ++ opkgs)
-        unless (null rdeps) $
-          sudo "yum" ("remove":opkgs)
+        opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
+        ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
+        unless (null ipkgs) $
+          sudo "yum" ("remove":ipkgs)
         arch <- singleLine <$> cmd "arch" []
-        rpms <- lines <$> shell ("ls" +-+ wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm")
+        rpms <- (map (\ p -> wd </> arch </> p ++ ".rpm") . lines) <$>
+                cmd "rpmspec" ["-q", spec]
         sudo "yum" $ ["-y", "localinstall"] ++ rpms
     Mock -> do
       putStrLn $ "Mock building" +-+ nvr
