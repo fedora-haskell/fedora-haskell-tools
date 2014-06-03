@@ -163,7 +163,8 @@ build mode dist mdir pkg = do
         putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
         cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
         putStrLn ""
-        deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", wd </> pkg ++ ".spec"]
+        let spec = wd </> pkg ++ ".spec"
+        deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", spec]
         missing <- filterM notInstalled deps
         let hmissing = filter (isPrefixOf "ghc-") missing
         unless (null hmissing) $ do
@@ -172,11 +173,13 @@ build mode dist mdir pkg = do
         stillMissing <- filterM notInstalled missing
         unless (null stillMissing) $ do
           putStrLn $ "Missing:" +-+ intercalate ", " stillMissing
-          sudo "yum-builddep" ["-y", wd </> pkg ++ ".spec"]
+          sudo "yum-builddep" ["-y", spec]
         putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
         cmdlog "fedpkg" ["--path", wd, "local"]
---        -- FIXME: drop this?
---        sudo "yum" ["remove", pkg]
+        opkgs <- lines <$> cmd "rpmspec" ["-q", spec]
+        rdeps <- lines <$> cmd "rpm" (["-q", "--whatrequires"] ++ opkgs)
+        unless (null rdeps) $
+          sudo "yum" ("remove":opkgs)
         arch <- singleLine <$> cmd "arch" []
         rpms <- lines <$> shell ("ls" +-+ wd </> arch </> "*-" ++ verrel ++ "." ++ arch ++ "." ++ "rpm")
         sudo "yum" $ ["-y", "localinstall"] ++ rpms
