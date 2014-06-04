@@ -87,16 +87,24 @@ dist2branch "f21" = "master"
 dist2branch d = d
 
 cmd :: String -> [String] -> IO String
-cmd c as = readProcess c as ""
+cmd c as = removeTrailingNewline <$> readProcess c as ""
+
+removeTrailingNewline :: String -> String
+removeTrailingNewline "" = ""
+removeTrailingNewline str =
+  if last str == '\n'
+  then init str
+  else str
 
 singleLine :: String -> String
-singleLine = head . lines
+singleLine "" = ""
+singleLine s = (head . lines) s
 
 cmdMaybe :: String -> [String] -> IO (Maybe String)
 cmdMaybe c as = do
   (ret, out, _err) <- readProcessWithExitCode c as ""
   case ret of
-    ExitSuccess -> return $ Just out
+    ExitSuccess -> return $ Just $ removeTrailingNewline out
     ExitFailure _ -> return Nothing
 
 cmd_ :: String -> [String] -> IO ()
@@ -115,7 +123,7 @@ cmdAssert msg c as = do
 
 cmdlog :: String -> [String] -> IO ()
 cmdlog c as = do
-  date <- singleLine <$> cmd "date" ["+%T"]
+  date <- cmd "date" ["+%T"]
   putStrLn $ date +-+ c +-+ unwords as
   cmd_ c as
 
@@ -145,18 +153,18 @@ build mode dist mdir pkg = do
   putStrLn $ "==" +-+ pkg ++ ":" ++ dist2branch dist +-+ "=="
   unless d $ do
     let anon = ["-a" | mode /= Koji]
-    cmd_ "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
+    cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
   b <- doesDirectoryExist $ dir </> branch
   let wd = dir </> if b then branch else ""
   cmdAssert "not a Fedora pkg git dir!" "grep" ["-q", "pkgs.fedoraproject.org", wd </> ".git/config"]
   when d $
     -- FIXME check correct branch
     cmd_ "git" ["-C", wd, "pull"]
-  nvr <- singleLine <$> cmd "fedpkg" ["--path", wd, "verrel"]
+  nvr <- cmd "fedpkg" ["--path", wd, "verrel"]
   let verrel = removePrefix (pkg ++ "-") nvr
   case mode of
     Local -> do
-      installed <- fmap singleLine <$> cmdMaybe "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
+      installed <- cmdMaybe "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
       if Just nvr == installed
         then putStrLn $ nvr +-+ "already installed!"
         else do
@@ -164,11 +172,12 @@ build mode dist mdir pkg = do
         cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
         putStrLn ""
         let spec = wd </> pkg ++ ".spec"
-        deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", spec]
+        deps <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec]
         missing <- filterM notInstalled deps
         let hmissing = filter (isPrefixOf "ghc-") missing
         unless (null hmissing) $ do
-          putStrLn $ "Missing:" +-+ intercalate ", " hmissing
+          putStrLn "Missing:"
+          mapM_ putStrLn hmissing
           mapM_ (fhbuildMissing dist) hmissing
         stillMissing <- filterM notInstalled missing
         unless (null stillMissing) $ do
@@ -180,7 +189,7 @@ build mode dist mdir pkg = do
         ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
         unless (null ipkgs) $
           sudo "yum" ("remove":ipkgs)
-        arch <- singleLine <$> cmd "arch" []
+        arch <- cmd "arch" []
         rpms <- (map (\ p -> wd </> arch </> p ++ ".rpm") . lines) <$>
                 cmd "rpmspec" ["-q", spec]
         sudo "yum" $ ["-y", "localinstall"] ++ rpms
@@ -191,14 +200,14 @@ build mode dist mdir pkg = do
       cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
       let target = dist ++ "-build"
       -- FIXME: handle case of no build
-      latest <- (head . words . singleLine) <$> cmd "koji" ["latest-pkg", "--quiet", target, pkg]
+      latest <- (head . words) <$> cmd "koji" ["latest-pkg", "--quiet", target, pkg]
       if nvr == latest
         then error $ nvr +-+ "already built!"
         else do
         putStrLn $ latest +-+ "->" +-+ nvr
         cmdlog "fedpkg" ["--path", wd, "build"]
         when (dist /= "f21") $ do
-          user <- singleLine <$> shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
+          user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
           -- FIXME: improve Notes with recursive info
           cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
         cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
@@ -225,5 +234,5 @@ removeSuffix suffix orig =
 
 gitBranch :: IO String
 gitBranch =
-  (removePrefix "* " . singleLine) <$> cmd "git" ["branch"]
+  (removePrefix "* " . head . filter (isPrefixOf "* ") . lines) <$> cmd "git" ["branch"]
 
