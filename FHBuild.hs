@@ -176,6 +176,7 @@ build mode dist mdir pkg = do
         cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
         putStrLn ""
         let spec = wd </> pkg ++ ".spec"
+        -- FIXME someday: include version checking (Dependency?)
         -- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> "pkg"
         deps <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefPkg 
         missing <- filterM notInstalled deps
@@ -187,7 +188,7 @@ build mode dist mdir pkg = do
         stillMissing <- filterM notInstalled missing
         unless (null stillMissing) $ do
           putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
-          sudo "yum-builddep" ["-y", spec]
+          sudo "yum" $ ["install", "-y"] ++ stillMissing
         putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
         cmdlog "fedpkg" ["--path", wd, "local"]
         opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
