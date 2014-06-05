@@ -54,8 +54,8 @@ help = do
     ++ "  local\t\t- build locally\n"
     ++ "  mock\t\t- build in mock\n"
     ++ "  koji\t\t- build in Koji\n"
-    ++ "  pending\t\t- show planned changes\n"
-    ++ "  changed\t\t- show changed pkgs\n"
+    ++ "  pending\t- show planned changes\n"
+    ++ "  changed\t- show changed pkgs\n"
   exitWith (ExitFailure 1)
 
 dists :: [String]
