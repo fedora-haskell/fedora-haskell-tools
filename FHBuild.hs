@@ -20,7 +20,7 @@ import Control.Monad (filterM, unless, when)
 import Data.Maybe (fromMaybe, isJust)
 import Data.List (intercalate, isPrefixOf, stripPrefix)
 
-import System.Directory (doesDirectoryExist, getCurrentDirectory)
+import System.Directory (doesDirectoryExist, getCurrentDirectory, setCurrentDirectory)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), takeBaseName, takeDirectory)
@@ -45,9 +45,13 @@ commands = ["local", "mock" , "koji"]
 dists :: [String]
 dists = ["f21", "f20", "f19"]
 
--- allow "fhbuild CMD" or "fhbuild CMD DIST PKG..."
+-- allow "fhbuild CMD", "fhbuild CMD dir" or "fhbuild CMD DIST PKG..."
 parseArgs :: [String] -> IO ([String], Maybe FilePath)
 parseArgs [c] | c `elem` commands = do
+  (dist:pkgs, dir) <- determinePkgBranch
+  return (c:dist:pkgs, Just dir)
+parseArgs [c, pkg] | c `elem` commands = do
+  setCurrentDirectory pkg
   (dist:pkgs, dir) <- determinePkgBranch
   return (c:dist:pkgs, Just dir)
 parseArgs (c:dist:pkgs) |  c `elem` commands
@@ -74,7 +78,7 @@ determinePkgBranch = do
 help :: IO ()
 help = do
   progName <- getProgName
-  hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [dist pkg ...]\n"
+  hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [dist] [pkg] ...\n"
     ++ "\n"
     ++ "Commands:\n"
     ++ "  local\t\t- build locally\n"
