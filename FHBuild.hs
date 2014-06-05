@@ -176,16 +176,17 @@ build mode dist mdir pkg = do
         cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
         putStrLn ""
         let spec = wd </> pkg ++ ".spec"
-        deps <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec]
+        -- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> "pkg"
+        deps <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefPkg 
         missing <- filterM notInstalled deps
-        let hmissing = filter (isPrefixOf "ghc-") missing
+        let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
         unless (null hmissing) $ do
           putStrLn "Missing:"
           mapM_ putStrLn hmissing
           mapM_ (fhbuildMissing dist) hmissing
         stillMissing <- filterM notInstalled missing
         unless (null stillMissing) $ do
-          putStrLn $ "Missing:" +-+ intercalate ", " stillMissing
+          putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
           sudo "yum-builddep" ["-y", spec]
         putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
         cmdlog "fedpkg" ["--path", wd, "local"]
@@ -217,14 +218,19 @@ build mode dist mdir pkg = do
         cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
 
 notInstalled :: String -> IO Bool
-notInstalled dep = do
-  pkg <- singleLine <$> cmd "repoquery" ["--qf", "%{name}", "--whatprovides", dep]
+notInstalled pkg =
   not <$> cmdBool "rpm" ["--quiet", "-q", pkg]
 
 fhbuildMissing :: String -> String -> IO ()
 fhbuildMissing dist dep = do
-  base <- singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", dep]
+  base <- derefSrcPkg dep
   build Local dist Nothing base
+
+derefPkg :: String -> IO String
+derefPkg pkg = singleLine <$> cmd "repoquery" ["--qf", "%{name}", "--whatprovides", pkg]
+
+derefSrcPkg:: String -> IO String
+derefSrcPkg pkg = singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =
