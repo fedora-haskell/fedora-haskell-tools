@@ -187,16 +187,15 @@ build mode dist mdir mdep pkg = do
           cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
           putStrLn ""
           let spec = wd </> pkg ++ ".spec"
-          -- FIXME someday: include version checking (Dependency?)
           -- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> "pkg"
-          deps <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefPkg 
-          missing <- filterM notInstalled deps
-          let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
+          depvers <- (map (processDeps . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefPkg
+          missing <- filterM notInstalled depvers
+          let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (map fst missing)
           unless (null hmissing) $ do
             putStrLn "Missing:"
             mapM_ putStrLn hmissing
             mapM_ (fhbuildMissing dist) hmissing
-          stillMissing <- filterM notInstalled missing
+          stillMissing <- map (uncurry maybePkgVer) <$> filterM notInstalled missing
           unless (null stillMissing) $ do
             putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
             sudo "yum" $ ["install", "-y"] ++ stillMissing
@@ -241,17 +240,22 @@ build mode dist mdir mdep pkg = do
         unless (eqNVR nvr latest) $
           putStrLn pkg
 
-notInstalled :: String -> IO Bool
-notInstalled pkg =
-  not <$> cmdBool "rpm" ["--quiet", "-q", pkg]
+maybePkgVer :: String -> Maybe String -> String
+maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver
+
+notInstalled :: (String, Maybe String) -> IO Bool
+notInstalled (pkg, mver) =
+  not <$> cmdBool "rpm" ["--quiet", "-q", maybePkgVer pkg mver]
 
 fhbuildMissing :: String -> String -> IO ()
 fhbuildMissing dist dep = do
   base <- derefSrcPkg dep
   build Local dist Nothing (Just dep) base
 
-derefPkg :: String -> IO String
-derefPkg pkg = singleLine <$> cmd "repoquery" ["--qf", "%{name}", "--whatprovides", pkg]
+derefPkg :: (String, Maybe String) -> IO (String, Maybe String)
+derefPkg (pkg, mver) = do
+  res <- singleLine <$> cmd "repoquery" ["--qf", "%{name}", "--whatprovides", pkg]
+  return (res, mver)
 
 derefSrcPkg:: String -> IO String
 derefSrcPkg pkg = singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
@@ -273,3 +277,9 @@ gitBranch =
 eqNVR :: String -> String -> Bool
 eqNVR p1 p2 =
   dropExtension p1 == dropExtension p2
+
+processDeps :: [String] -> (String, Maybe String)
+processDeps [p, "=", v] = (p, Just v)
+processDeps (p:_) = (p, Nothing)
+processDeps [] = error "convEquals: empty string!"
+
