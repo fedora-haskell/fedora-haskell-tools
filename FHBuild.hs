@@ -59,7 +59,10 @@ help = do
   exitWith (ExitFailure 1)
 
 dists :: [String]
-dists = ["f21", "f20", "f19"]
+dists = [rawhide, "f20", "f19"]
+
+rawhide :: String
+rawhide = "f21"
 
 -- allow "fhbuild CMD", "fhbuild CMD dir" or "fhbuild CMD DIST PKG..."
 parseArgs :: [String] -> IO ([String], Maybe FilePath)
@@ -68,10 +71,13 @@ parseArgs [c] | c `elem` commands = do
   return (c:dist:pkgs, Just dir)
 parseArgs [c, pkg] | c `elem` commands = do
   cwd <- getCurrentDirectory
-  setCurrentDirectory pkg
-  (dist:pkgs, dir) <- determinePkgBranch
-  setCurrentDirectory cwd
-  return (c:dist:pkgs, Just dir)
+  exists <- doesDirectoryExist pkg
+  if exists then do
+    setCurrentDirectory pkg
+    (dist:pkgs, dir) <- determinePkgBranch
+    setCurrentDirectory cwd
+    return (c:dist:pkgs, Just dir)
+    else return ([c, rawhide, pkg], Nothing)
 parseArgs (c:dist:pkgs) |  c `elem` commands
                            && dist `elem` dists
                            && not (null pkgs) =
@@ -94,8 +100,8 @@ determinePkgBranch = do
       error "Not a git repo: cannot determine branch"
 
 dist2branch :: String -> String
-dist2branch "f21" = "master"
-dist2branch d = d
+dist2branch d | d == rawhide = "master"
+              | otherwise = d
 
 cmd :: String -> [String] -> IO String
 cmd c as = removeTrailingNewline <$> readProcess c as ""
@@ -123,7 +129,7 @@ cmd_ c as = do
   ret <- rawSystem c as
   case ret of
     ExitSuccess -> return ()
-    ExitFailure n -> error $ show n
+    ExitFailure n -> error $ "\"" ++ c +-+ unwords as ++ "\" failed with exit code" +-+ show n
 
 cmdAssert :: String -> String -> [String] -> IO ()
 cmdAssert msg c as = do
@@ -222,7 +228,7 @@ build mode dist mdir mdep pkg = do
           else do
           putStrLn $ latest +-+ "->" +-+ nvr
           cmdlog "fedpkg" ["--path", wd, "build"]
-          when (dist /= "f21") $ do
+          when (dist /= rawhide) $ do
             user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
             -- FIXME: improve Notes with recursive info
             cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
