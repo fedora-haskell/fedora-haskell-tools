@@ -33,7 +33,7 @@ data Command = Local | Mock | Koji | Pending | Changed deriving (Eq)
 main :: IO ()
 main = do
   (com:dist:pkgs, mdir) <- getArgs >>= parseArgs
-  mapM_ (build (mode com) dist mdir) pkgs
+  mapM_ (build (mode com) dist mdir Nothing) pkgs
   where
     mode "local" = Local
     mode "mock" = Mock
@@ -156,8 +156,8 @@ shell c = cmd "sh" ["-c", c]
 s +-+ "" = s
 s +-+ t = s ++ " " ++ t
 
-build :: Command -> String -> Maybe FilePath -> String -> IO ()
-build mode dist mdir pkg = do
+build :: Command -> String -> Maybe FilePath -> Maybe String -> String -> IO ()
+build mode dist mdir mdep pkg = do
   let dir = fromMaybe pkg mdir
       branch = dist2branch dist
   dirExists <- if isJust mdir then return True else doesDirectoryExist dir
@@ -178,8 +178,9 @@ build mode dist mdir pkg = do
     let verrel = removePrefix (pkg ++ "-") nvr
     case mode of
       Local -> do
-        installed <- cmdMaybe "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", pkg]
-        if Just nvr == installed
+        let req = fromMaybe pkg mdep
+        installed <- cmdMaybe "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", req]
+        if Just (req ++ verrel) == installed
           then putStrLn $ nvr +-+ "already installed!"
           else do
           putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
@@ -247,7 +248,7 @@ notInstalled pkg =
 fhbuildMissing :: String -> String -> IO ()
 fhbuildMissing dist dep = do
   base <- derefSrcPkg dep
-  build Local dist Nothing base
+  build Local dist Nothing (Just dep) base
 
 derefPkg :: String -> IO String
 derefPkg pkg = singleLine <$> cmd "repoquery" ["--qf", "%{name}", "--whatprovides", pkg]
