@@ -28,14 +28,14 @@ import System.FilePath ((</>), dropExtension, takeBaseName, takeDirectory)
 import System.IO (hPutStrLn, stderr)
 import System.Process (readProcess, readProcessWithExitCode, rawSystem)
 
-data Command = Local | Mock | Koji | Pending | Changed deriving (Eq)
+data Command = Install | Mock | Koji | Pending | Changed deriving (Eq)
 
 main :: IO ()
 main = do
   (com:dist:pkgs, mdir) <- getArgs >>= parseArgs
   mapM_ (build (mode com) dist mdir Nothing) pkgs
   where
-    mode "local" = Local
+    mode "install" = Install
     mode "mock" = Mock
     mode "koji" = Koji
     mode "pending" = Pending
@@ -43,7 +43,7 @@ main = do
     mode _ = undefined
 
 commands :: [String]
-commands = ["local", "mock" , "koji", "pending", "changed"]
+commands = ["install", "mock" , "koji", "pending", "changed"]
 
 help :: IO ()
 help = do
@@ -51,7 +51,7 @@ help = do
   hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [dist] [pkg] ...\n"
     ++ "\n"
     ++ "Commands:\n"
-    ++ "  local\t\t- build locally\n"
+    ++ "  install\t\t- build locally and install\n"
     ++ "  mock\t\t- build in mock\n"
     ++ "  koji\t\t- build in Koji\n"
     ++ "  pending\t- show planned changes\n"
@@ -183,7 +183,7 @@ build mode dist mdir mdep pkg = do
     nvr <- cmd "fedpkg" ["--path", wd, "verrel"]
     let verrel = removePrefix (pkg ++ "-") nvr
     case mode of
-      Local -> do
+      Install -> do
         let req = fromMaybe pkg mdep
         installed <- cmdMaybe "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", req]
         if Just (req ++ verrel) == installed
@@ -256,7 +256,7 @@ notInstalled (pkg, mver) =
 fhbuildMissing :: String -> String -> IO ()
 fhbuildMissing dist dep = do
   base <- derefSrcPkg dep
-  build Local dist Nothing (Just dep) base
+  build Install dist Nothing (Just dep) base
 
 derefPkg :: (String, Maybe String) -> IO (String, Maybe String)
 derefPkg (pkg, mver) = do
