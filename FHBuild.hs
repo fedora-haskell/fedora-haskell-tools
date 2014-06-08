@@ -197,6 +197,7 @@ build mode dist mdir mdep pkg = do
           -- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> "pkg"
           depvers <- (map (processDeps . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefPkg
           missing <- filterM notInstalled depvers
+          -- FIXME sort into build order
           let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (map fst missing)
           unless (null hmissing) $ do
             putStrLn "Missing:"

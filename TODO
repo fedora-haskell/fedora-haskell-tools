@@ -1,10 +1,11 @@
 Porting haskell-sig.git scripts:
 
 # git
-- stack branch merging
+- branch merging
 
-# updating
-- port update-pkg-ver
+# command options
+- debug output
+- dist option (assume rawhide)
 
 # Building: rebuild*
 - recursive building for koji and mock
@@ -18,8 +19,15 @@ Porting haskell-sig.git scripts:
 - parallel/async building
 - cache passwd for bodhi
 
+# updating
+- port update-pkg-ver
+
 # fedora-haskell-packages.sh
 - clone
+
+# checking
+- Fedora x < Fedora x+1
+- git out of sync with koji, updates
 
 # Data generation and updating
 - packages and Hackage 
