@@ -16,6 +16,7 @@
 module Main where
 
 import Control.Applicative ((<$>))
+import Control.Exception (bracket)
 import Control.Monad (filterM, unless, when)
 import Data.Maybe (fromMaybe, isJust)
 import Data.List (intercalate, isPrefixOf, stripPrefix)
@@ -206,7 +207,9 @@ build mode dist mdir mdep pkg = do
             putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
             sudo "yum" $ ["install", "-y"] ++ stillMissing
           putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
-          cmdlog "fedpkg" ["--path", wd, "local"]
+          -- fedpkg saves build.log to cwd!
+          withCurrentDirectory wd $
+            cmdlog "fedpkg" ["local"]
           opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
           ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
           unless (null ipkgs) $
@@ -245,6 +248,18 @@ build mode dist mdir mdep pkg = do
         latest <- (head . words) <$> cmd "koji" ["latest-pkg", "--quiet", target, pkg]
         unless (eqNVR nvr latest) $
           putStrLn pkg
+
+withCurrentDirectory :: FilePath -> IO a -> IO a
+withCurrentDirectory dir m =
+    bracket
+        (do cwd <- getCurrentDirectory
+            exists <- doesDirectoryExist dir
+            if exists
+              then setCurrentDirectory dir
+              else error $ "Cannot set non-existent directory" +-+ dir
+            return cwd)
+        setCurrentDirectory
+        (const m)
 
 maybePkgVer :: String -> Maybe String -> String
 maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver
