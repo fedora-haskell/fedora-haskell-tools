@@ -52,7 +52,7 @@ help = do
   hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [dist] [pkg] ...\n"
     ++ "\n"
     ++ "Commands:\n"
-    ++ "  install\t\t- build locally and install\n"
+    ++ "  install\t- build locally and install\n"
     ++ "  mock\t\t- build in mock\n"
     ++ "  koji\t\t- build in Koji\n"
     ++ "  pending\t- show planned changes\n"
@@ -169,7 +169,7 @@ build mode dist mdir mdep pkg = do
       branch = dist2branch dist
   dirExists <- if isJust mdir then return True else doesDirectoryExist dir
   unless (mode `elem` [Pending, Changed]) $
-    putStrLn $ "==" +-+ pkg ++ ":" ++ dist2branch dist +-+ "=="
+    putStrLn $ "\n==" +-+ pkg ++ ":" ++ dist2branch dist +-+ "=="
   unless dirExists $ do
     let anon = ["-a" | mode /= Koji]
     cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
@@ -187,8 +187,8 @@ build mode dist mdir mdep pkg = do
       Install -> do
         let req = fromMaybe pkg mdep
         installed <- cmdMaybe "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", req]
-        if Just (req ++ verrel) == installed
-          then putStrLn $ nvr +-+ "already installed!"
+        if Just (req ++ "-" ++ verrel) == installed
+          then putStrLn $ nvr +-+ "already installed!\n"
           else do
           putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
           cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
@@ -206,10 +206,11 @@ build mode dist mdir mdep pkg = do
           unless (null stillMissing) $ do
             putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
             sudo "yum" $ ["install", "-y"] ++ stillMissing
-          putStrLn $ "Building" +-+ nvr +-+ "(see" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
-          -- fedpkg saves build.log to cwd!
+          putStrLn $ "Building" +-+ nvr +-+ "(buildlog:" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
+          -- workaround "fedpkg --path dir local" saving .build.log in cwd
           withCurrentDirectory wd $
-            cmdlog "fedpkg" ["local"]
+            cmdlog "fedpkg" ["-q", "local"]
+          putStrLn $ nvr +-+ "built\n"
           opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
           ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
           unless (null ipkgs) $
