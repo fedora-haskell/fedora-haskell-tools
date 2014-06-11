@@ -77,3 +77,7 @@ sudo c as = cmdlog "sudo" (c:as)
 
 shell :: String -> IO String
 shell c = cmd "sh" ["-c", c]
+
+kojiLatestPkg :: String -> String -> IO String
+kojiLatestPkg dist pkg =
+  (head . words) <$> cmd "koji" ["latest-pkg", "--quiet", dist, pkg]

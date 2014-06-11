@@ -169,7 +169,7 @@ build mode dist mdir mdep pkg = do
         cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
         let target = dist ++ "-build"
         -- FIXME: handle case of no build
-        latest <- (head . words) <$> cmd "koji" ["latest-pkg", "--quiet", target, pkg]
+        latest <- kojiLatestPkg target pkg
         if nvr == latest
           then error $ nvr +-+ "already built!"
           else do
@@ -183,13 +183,13 @@ build mode dist mdir mdep pkg = do
       Pending -> do
         let target = dist ++ "-build"
         -- FIXME: handle case of no build
-        latest <- (head . words) <$> cmd "koji" ["latest-pkg", "--quiet", target, pkg]
+        latest <- kojiLatestPkg target pkg
         unless (eqNVR nvr latest) $
           putStrLn $ latest +-+ "->" +-+ nvr
       Changed -> do
         let target = dist ++ "-build"
         -- FIXME: handle case of no build
-        latest <- (head . words) <$> cmd "koji" ["latest-pkg", "--quiet", target, pkg]
+        latest <- kojiLatestPkg target pkg
         unless (eqNVR nvr latest) $
           putStrLn pkg
 
@@ -246,5 +246,5 @@ eqNVR p1 p2 =
 processDeps :: [String] -> (String, Maybe String)
 processDeps [p, "=", v] = (p, Just v)
 processDeps (p:_) = (p, Nothing)
-processDeps [] = error "convEquals: empty string!"
+processDeps [] = error "processDeps: empty string!"
 

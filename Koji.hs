@@ -16,16 +16,14 @@
 module Main where
 
 import Control.Applicative ((<$>))
-import Control.Exception (bracket)
 import Control.Monad (unless, when)
 import Data.Maybe (fromMaybe)
-import Data.List (isPrefixOf, stripPrefix)
+import Data.List (isPrefixOf, stripPrefix, (\\))
 
-import System.Directory (doesDirectoryExist, doesFileExist,
-                         getCurrentDirectory, setCurrentDirectory)
+import System.Directory (doesDirectoryExist, doesFileExist)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
-import System.FilePath ((</>), dropExtension)
+import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 
 import Utils
@@ -34,8 +32,10 @@ main :: IO ()
 main = do
   (dist, pkgs) <- getArgs >>= parseArgs
   -- sort pkgs
-  mapM (prepPkg dist) pkgs >>= buildDriver dist 
---  buildKoji plan
+  plan <- mapM (prepPkg dist) pkgs
+  -- currently need packagedb-cli.git
+  hsPkgs <- lines <$> cmd "pkgdb-cli" ["list", "--branch", dist2branch dist, "--user", "haskell-sig", "--nameonly"]
+  buildDriver dist (hsPkgs \\ ["ghc"]) plan
 
 help :: IO ()
 help = do
@@ -63,7 +63,7 @@ prepPkg dist pkg = do
   let branch = dist2branch dist
       dir = pkg
   dirExists <- doesDirectoryExist dir
-  putStrLn $ "\n==" +-+ pkg ++ ":" ++ dist2branch dist +-+ "=="
+  putStrLn $ "\nPrep =" +-+ pkg ++ ":" ++ dist2branch dist +-+ "="
   unless dirExists $ do
     let anon = ["-a"]
     cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
@@ -102,33 +102,10 @@ buildKoji dist pkg nvr wd = do
     when (dist /= rawhide) $ do
       user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
       -- FIXME: improve Notes with recursive info
+      -- check if any rdeps need this build
       cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
-      cmdlog "koji" ["wait-repo", dist ++ "-build", "--build=" ++ nvr]
 
-withCurrentDirectory :: FilePath -> IO a -> IO a
-withCurrentDirectory dir m =
-    bracket
-        (do cwd <- getCurrentDirectory
-            exists <- doesDirectoryExist dir
-            if exists
-              then setCurrentDirectory dir
-              else error $ "Cannot set non-existent directory" +-+ dir
-            return cwd)
-        setCurrentDirectory
-        (const m)
-
-maybePkgVer :: String -> Maybe String -> String
-maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver
-
-notInstalled :: (String, Maybe String) -> IO Bool
-notInstalled (pkg, mver) =
-  not <$> cmdBool "rpm" ["--quiet", "-q", maybePkgVer pkg mver]
-
-derefPkg :: (String, Maybe String) -> IO (String, Maybe String)
-derefPkg (pkg, mver) = do
-  res <- singleLine <$> cmd "repoquery" ["--qf", "%{name}", "--whatprovides", pkg]
-  return (res, mver)
-
+-- FIXME: need --repoid=$REPOID --releasever=$RELEASEVER
 derefSrcPkg:: String -> IO String
 derefSrcPkg pkg = singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
 
@@ -136,24 +113,26 @@ removePrefix :: String -> String -> String
 removePrefix prefix orig =
   fromMaybe (error prefix +-+ "is not prefix of" +-+ orig) $ stripPrefix prefix orig
 
-removeSuffix :: String -> String -> String
-removeSuffix suffix orig =
-  fromMaybe orig $ stripSuffix suffix orig
-  where
-    stripSuffix sf str = reverse <$> stripPrefix (reverse sf) (reverse str)
-
 gitBranch :: IO String
 gitBranch =
   (removePrefix "* " . head . filter (isPrefixOf "* ") . lines) <$> cmd "git" ["branch"]
 
-eqNVR :: String -> String -> Bool
-eqNVR p1 p2 =
-  dropExtension p1 == dropExtension p2
+buildDriver :: String -> [String] -> [(String, String, FilePath)] -> IO ()
+buildDriver _ _ [] = return ()
+buildDriver dist hspkgs ((pkg, nvr, wd):rest) = do
+  let spec = wd </> pkg ++ ".spec"
+  deps <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefSrcPkg
+  let hdeps = filter (`elem` hspkgs) deps
+  unless (null hdeps) $
+    -- should cache and include buildPlan data
+    mapM_ (latestInBuildRoot dist) hdeps
+  buildKoji dist pkg nvr wd
+  buildDriver dist hspkgs rest
 
-processDeps :: [String] -> (String, Maybe String)
-processDeps [p, "=", v] = (p, Just v)
-processDeps (p:_) = (p, Nothing)
-processDeps [] = error "convEquals: empty string!"
-
-buildDriver :: String -> [(String, String, FilePath)] -> IO ()
-buildDriver dist plan = return ()
+latestInBuildRoot :: String -> String -> IO ()
+latestInBuildRoot dist pkg = do
+  buildroot <- kojiLatestPkg (dist ++ "-build") pkg
+  latest <- kojiLatestPkg dist pkg
+  when (buildroot /= latest) $
+    cmd_ "koji" ["wait-repo", dist ++ "-build", "--build", latest]
+  -- FIXME check == git nvr
