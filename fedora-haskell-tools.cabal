@@ -20,15 +20,25 @@ source-repository head
   location: https://github.com/fedora-haskell/fedora-haskell-tools
 
 Executable fhbuild
-    Main-is:       FHBuild.hs
+    Main-is:       Build.hs
     Build-depends: base < 5,
-                   Cabal > 1.10,
                    directory,
                    filepath,
                    process,
                    text,
                    unix
---    Other-modules:
+    Other-modules: Utils
 --    Hs-Source-Dirs:     src
     GHC-options:        -fwarn-missing-signatures -Wall
 --    Extensions:         CPP
+
+Executable fhkoji
+    Main-is:       Koji.hs
+    Build-depends: base < 5,
+                   directory,
+                   filepath,
+                   process,
+                   text,
+                   unix
+    Other-modules: Utils
+    GHC-options:   -fwarn-missing-signatures -Wall

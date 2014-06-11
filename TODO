@@ -24,6 +24,7 @@ Porting haskell-sig.git scripts:
 
 # fedora-haskell-packages.sh
 - clone
+- pull --all
 
 # checking
 - Fedora x < Fedora x+1
@@ -38,3 +39,7 @@ Porting haskell-sig.git scripts:
 - URM bug checking and updating
   - stacks checking
 - check review bugs
+
+# missing
+- which packages missing in dist to build package
+- include version checks

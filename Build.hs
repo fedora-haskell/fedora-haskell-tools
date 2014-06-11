@@ -27,7 +27,8 @@ import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), dropExtension, takeBaseName, takeDirectory)
 import System.IO (hPutStrLn, stderr)
-import System.Process (readProcess, readProcessWithExitCode, rawSystem)
+
+import Utils
 
 data Command = Install | Mock | Koji | Pending | Changed deriving (Eq)
 
@@ -103,65 +104,6 @@ determinePkgBranch = do
 dist2branch :: String -> String
 dist2branch d | d == rawhide = "master"
               | otherwise = d
-
-cmd :: String -> [String] -> IO String
-cmd c as = removeTrailingNewline <$> readProcess c as ""
-
-removeTrailingNewline :: String -> String
-removeTrailingNewline "" = ""
-removeTrailingNewline str =
-  if last str == '\n'
-  then init str
-  else str
-
-singleLine :: String -> String
-singleLine "" = ""
-singleLine s = (head . lines) s
-
-cmdMaybe :: String -> [String] -> IO (Maybe String)
-cmdMaybe c as = do
-  (ret, out, _err) <- readProcessWithExitCode c as ""
-  case ret of
-    ExitSuccess -> return $ Just $ removeTrailingNewline out
-    ExitFailure _ -> return Nothing
-
-cmd_ :: String -> [String] -> IO ()
-cmd_ c as = do
-  ret <- rawSystem c as
-  case ret of
-    ExitSuccess -> return ()
-    ExitFailure n -> error $ "\"" ++ c +-+ unwords as ++ "\" failed with exit code" +-+ show n
-
-cmdAssert :: String -> String -> [String] -> IO ()
-cmdAssert msg c as = do
-  ret <- rawSystem c as
-  case ret of
-    ExitSuccess -> return ()
-    ExitFailure _ -> error msg
-
-cmdlog :: String -> [String] -> IO ()
-cmdlog c as = do
-  date <- cmd "date" ["+%T"]
-  putStrLn $ date +-+ c +-+ unwords as
-  cmd_ c as
-
-cmdBool :: String -> [String] -> IO Bool
-cmdBool c as = do
-  ret <- rawSystem c as
-  case ret of
-    ExitSuccess -> return True
-    ExitFailure _ -> return False
-
-sudo :: String -> [String] -> IO ()
-sudo c as = cmdlog "sudo" (c:as)
-
-shell :: String -> IO String
-shell c = cmd "sh" ["-c", c]
-
-(+-+) :: String -> String -> String
-"" +-+ s = s
-s +-+ "" = s
-s +-+ t = s ++ " " ++ t
 
 build :: Command -> String -> Maybe FilePath -> Maybe String -> String -> IO ()
 build mode dist mdir mdep pkg = do
