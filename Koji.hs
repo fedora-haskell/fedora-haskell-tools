@@ -49,7 +49,8 @@ help = do
 
 parseArgs :: [String] -> IO (String, [String])
 parseArgs (dist:pkgs) |  dist `elem` dists && not (null pkgs) =
-  return (dist,pkgs)
+  return (dist, pkgs)
+parseArgs pkgs | not (null pkgs) = return (rawhide, pkgs)
 parseArgs _ = help >> return ("", [])
 
 prepPkg :: String -> String -> IO BuildStep

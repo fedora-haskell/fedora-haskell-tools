@@ -19,7 +19,8 @@ module Dists (dists,
              distVersion,
              distRepo,
              distUpdates,
-             distOverride) where
+             distOverride,
+             rawhide) where
 
 import Data.Char (isNumber)
 import Utils ((+-+))
