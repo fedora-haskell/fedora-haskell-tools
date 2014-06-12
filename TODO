@@ -1,5 +1,7 @@
 Porting haskell-sig.git scripts:
 
+use pkgdb-cli + cabal-sort for --all packages
+
 # git
 - branch merging
 

@@ -40,5 +40,6 @@ Executable fhkoji
                    process,
                    text,
                    unix
-    Other-modules: Utils
+    Other-modules: Dists,
+                   Utils
     GHC-options:   -fwarn-missing-signatures -Wall

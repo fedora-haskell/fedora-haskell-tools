@@ -1,5 +1,5 @@
 -- |
--- Module      :  FHKoji
+-- Module      :  Koji
 -- Copyright   :  (C) 2014  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
@@ -17,7 +17,7 @@ module Main where
 
 import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Data.List (isPrefixOf, stripPrefix, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist)
@@ -26,16 +26,20 @@ import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 
+import Dists
 import Utils
+
+type BuildStep = (String, String, FilePath)
 
 main :: IO ()
 main = do
   (dist, pkgs) <- getArgs >>= parseArgs
-  -- sort pkgs
+  -- FIXME cabal-sort pkgs
   plan <- mapM (prepPkg dist) pkgs
+  -- FIXME check plan with "cblrepo -n add"
   -- currently need packagedb-cli.git
-  hsPkgs <- lines <$> cmd "pkgdb-cli" ["list", "--branch", dist2branch dist, "--user", "haskell-sig", "--nameonly"]
-  buildDriver dist (hsPkgs \\ ["ghc"]) plan
+  hsPkgs <- lines <$> cmd "pkgdb-cli" ["list", "--branch", distBranch dist, "--user", "haskell-sig", "--nameonly"]
+  buildDriver dist (hsPkgs \\ ["ghc"]) plan plan
 
 help :: IO ()
 help = do
@@ -43,27 +47,17 @@ help = do
   hPutStrLn stderr $ "Usage:" +-+ progName +-+ "[dist] [pkg] ..."
   exitWith (ExitFailure 1)
 
-dists :: [String]
-dists = [rawhide, "f20", "f19", "epel7"]
-
-rawhide :: String
-rawhide = "f21"
-
 parseArgs :: [String] -> IO (String, [String])
 parseArgs (dist:pkgs) |  dist `elem` dists && not (null pkgs) =
   return (dist,pkgs)
 parseArgs _ = help >> return ("", [])
 
-dist2branch :: String -> String
-dist2branch d | d == rawhide = "master"
-              | otherwise = d
-
-prepPkg :: String -> String -> IO (String, String, FilePath)
+prepPkg :: String -> String -> IO BuildStep
 prepPkg dist pkg = do
-  let branch = dist2branch dist
+  let branch = distBranch dist
       dir = pkg
   dirExists <- doesDirectoryExist dir
-  putStrLn $ "\nPrep =" +-+ pkg ++ ":" ++ dist2branch dist +-+ "="
+  putStrLn $ "\nPrep =" +-+ pkg ++ ":" ++ branch +-+ "="
   unless dirExists $ do
     let anon = ["-a"]
     cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
@@ -99,7 +93,7 @@ prepPkg dist pkg = do
 buildKoji :: String -> String -> String -> FilePath -> IO ()
 buildKoji dist pkg nvr wd = do
     cmdlog "fedpkg" ["--path", wd, "build"]
-    when (dist /= rawhide) $ do
+    when (isJust $ distOverride dist) $ do
       user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
       -- FIXME: improve Notes with recursive info
       -- check if any rdeps need this build
@@ -117,21 +111,22 @@ gitBranch :: IO String
 gitBranch =
   (removePrefix "* " . head . filter (isPrefixOf "* ") . lines) <$> cmd "git" ["branch"]
 
-buildDriver :: String -> [String] -> [(String, String, FilePath)] -> IO ()
-buildDriver _ _ [] = return ()
-buildDriver dist hspkgs ((pkg, nvr, wd):rest) = do
+buildDriver :: String -> [String] -> [BuildStep] -> [BuildStep] -> IO ()
+buildDriver _ _ _ [] = return ()
+buildDriver dist hspkgs plan ((pkg, nvr, wd):rest) = do
   let spec = wd </> pkg ++ ".spec"
   deps <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefSrcPkg
   let hdeps = filter (`elem` hspkgs) deps
   unless (null hdeps) $
     -- should cache and include buildPlan data
-    mapM_ (latestInBuildRoot dist) hdeps
+    mapM_ (latestInBuildRoot dist plan) hdeps
   buildKoji dist pkg nvr wd
-  buildDriver dist hspkgs rest
+  buildDriver dist hspkgs plan rest
 
-latestInBuildRoot :: String -> String -> IO ()
-latestInBuildRoot dist pkg = do
+latestInBuildRoot :: String -> [BuildStep] -> String -> IO ()
+latestInBuildRoot dist plan pkg = do
   buildroot <- kojiLatestPkg (dist ++ "-build") pkg
+  -- FIXME need updates-candidate
   latest <- kojiLatestPkg dist pkg
   when (buildroot /= latest) $
     cmd_ "koji" ["wait-repo", dist ++ "-build", "--build", latest]
