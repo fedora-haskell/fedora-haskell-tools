@@ -6,7 +6,7 @@
 -- Stability   :  alpha
 -- Portability :  portable
 --
--- Explanation: Main entry point for building RPM packages.
+-- Explanation: Building RPM packages in Fedora Koji buildsystem.
 
 -- This program is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License as published by
