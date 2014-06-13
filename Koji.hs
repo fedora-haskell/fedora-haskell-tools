@@ -122,7 +122,7 @@ cabalSort bs = do
 
 buildKoji :: String -> String -> String -> FilePath -> IO ()
 buildKoji dist pkg nvr wd = do
-    cmdlog "fedpkg" ["--path", wd, "build", "--no-wait"]
+    cmdlog "fedpkg" ["--path", wd, "build", "--nowait"]
     when (distOverride dist) $ do
       user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
       -- FIXME: improve Notes with recursive info
