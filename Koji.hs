@@ -17,7 +17,7 @@ module Main where
 
 import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.List (isPrefixOf, stripPrefix, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist)
@@ -29,18 +29,18 @@ import System.IO (hPutStrLn, stderr)
 import Dists
 import Utils
 
--- (name, (nvr, dir)) -- add deps too
-type BuildStep = (String, (String, FilePath))
+-- (name, (nvr, dir, cabal)) -- add deps too
+type BuildStep = (String, (String, FilePath, FilePath))
 
 main :: IO ()
 main = do
   (dist, pkgs) <- getArgs >>= parseArgs
-  -- FIXME cabal-sort pkgs
   plan <- mapM (prepPkg dist) pkgs
+  sorted <- cabalSort plan
   -- FIXME check plan with "cblrepo -n add"
-  -- currently need packagedb-cli.git
+  -- currently need packagedb-cli.git for pkgdb2
   hsPkgs <- lines <$> cmd "pkgdb-cli" ["list", "--branch", distBranch dist, "--user", "haskell-sig", "--nameonly"]
-  buildDriver dist (hsPkgs \\ ["ghc"]) plan plan
+  buildDriver dist (hsPkgs \\ ["ghc"]) plan sorted
 
 help :: IO ()
 help = do
@@ -90,7 +90,35 @@ prepPkg dist pkg = do
       then error $ nvr +-+ "already built!"
       else do
       putStrLn $ latest +-+ "->" +-+ nvr
-      return (pkg, (nvr, wd))
+      let cabal = cabalFile wd pkg nvr
+      return (pkg, (nvr, wd, cabal))
+
+cabalFile :: FilePath -> String -> String -> FilePath
+cabalFile wd pkg nvr = wd </> hkg ++ "-" ++ ver </> hkg ++ ".cabal"
+  where
+    ver = nvrVersion nvr
+    hkg = removeghc pkg
+
+removeghc :: String -> String
+removeghc pkg = fromMaybe pkg $ stripPrefix "ghc-" pkg
+
+nvrVersion :: String -> String
+nvrVersion nvr =
+  if '-' `notElem` nvr
+  then error "nvrVersion: malformed NVR string" +-+ nvr
+  else reverse rev
+  where
+    (_, '-':rest) = break (== '-') $ reverse nvr
+    (rev, _) = break (== '-') rest
+
+cabalSort :: [BuildStep] -> IO [BuildStep]
+cabalSort bs = do
+  let hkgMap = map ((\ p -> (removeghc p, p)) . fst) bs
+  let cabals = map (\(_,(_,_,c)) -> c) bs
+  sorted <- lines <$> cmd "cabal-sort" cabals
+  return $ map (\ p -> (p, find (find p hkgMap) bs)) sorted
+  where
+    find k m = fromJust $ lookup k m
 
 buildKoji :: String -> String -> String -> FilePath -> IO ()
 buildKoji dist pkg nvr wd = do
@@ -115,7 +143,7 @@ gitBranch =
 
 buildDriver :: String -> [String] -> [BuildStep] -> [BuildStep] -> IO ()
 buildDriver _ _ _ [] = return ()
-buildDriver dist hspkgs plan ((pkg, (nvr, wd)):rest) = do
+buildDriver dist hspkgs plan ((pkg, (nvr, wd, _)):rest) = do
   let spec = wd </> pkg ++ ".spec"
   deps <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefSrcPkg
   let hdeps = filter (`elem` hspkgs) deps
@@ -129,8 +157,9 @@ latestInBuildRoot dist plan pkg = do
   let inplan = lookup pkg plan
   latest <- kojiLatestPkg (dist ++ "-build") pkg
   case inplan of
-    Just (nvr, _) ->
+    Just (nvr, _, _) ->
       if nvr == latest
+         -- FIXME cache result
       then cmd_ "koji" ["wait-repo", dist ++ "-build", "--build", latest]
       else error $ dist ++ "-build" +-+ "has" +-+ latest +-+ "not" +-+ nvr
     Nothing ->
