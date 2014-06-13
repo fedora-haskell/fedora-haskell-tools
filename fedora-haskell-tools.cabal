@@ -30,7 +30,6 @@ Executable fhbuild
     Other-modules: Utils
 --    Hs-Source-Dirs:     src
     GHC-options:        -fwarn-missing-signatures -Wall
---    Extensions:         CPP
 
 Executable fhkoji
     Main-is:       Koji.hs

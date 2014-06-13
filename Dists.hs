@@ -54,7 +54,7 @@ distUpdates :: String -> Maybe String
 distUpdates d | distShort d == "f" = Just "updates"
 distUpdates _ = Nothing
 
-distOverride :: String -> Maybe String
-distOverride d | d == rawhide = Nothing
-               | d == "epel7" = Nothing
-               | otherwise = Just $ d ++ "-override"
+distOverride :: String -> Bool
+distOverride d | d == rawhide = False
+               | d == "epel7" = False
+               | otherwise = True

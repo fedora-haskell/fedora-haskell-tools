@@ -17,7 +17,7 @@ module Main where
 
 import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe)
 import Data.List (isPrefixOf, stripPrefix, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist)
@@ -94,7 +94,7 @@ prepPkg dist pkg = do
 buildKoji :: String -> String -> String -> FilePath -> IO ()
 buildKoji dist pkg nvr wd = do
     cmdlog "fedpkg" ["--path", wd, "build"]
-    when (isJust $ distOverride dist) $ do
+    when (distOverride dist) $ do
       user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
       -- FIXME: improve Notes with recursive info
       -- check if any rdeps need this build
