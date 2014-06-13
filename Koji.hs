@@ -29,7 +29,8 @@ import System.IO (hPutStrLn, stderr)
 import Dists
 import Utils
 
-type BuildStep = (String, String, FilePath)
+-- (name, (nvr, dir)) -- add deps too
+type BuildStep = (String, (String, FilePath))
 
 main :: IO ()
 main = do
@@ -89,7 +90,7 @@ prepPkg dist pkg = do
       then error $ nvr +-+ "already built!"
       else do
       putStrLn $ latest +-+ "->" +-+ nvr
-      return (pkg, nvr, wd)
+      return (pkg, (nvr, wd))
 
 buildKoji :: String -> String -> String -> FilePath -> IO ()
 buildKoji dist pkg nvr wd = do
@@ -114,21 +115,24 @@ gitBranch =
 
 buildDriver :: String -> [String] -> [BuildStep] -> [BuildStep] -> IO ()
 buildDriver _ _ _ [] = return ()
-buildDriver dist hspkgs plan ((pkg, nvr, wd):rest) = do
+buildDriver dist hspkgs plan ((pkg, (nvr, wd)):rest) = do
   let spec = wd </> pkg ++ ".spec"
   deps <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefSrcPkg
   let hdeps = filter (`elem` hspkgs) deps
   unless (null hdeps) $
-    -- should cache and include buildPlan data
     mapM_ (latestInBuildRoot dist plan) hdeps
   buildKoji dist pkg nvr wd
   buildDriver dist hspkgs plan rest
 
 latestInBuildRoot :: String -> [BuildStep] -> String -> IO ()
 latestInBuildRoot dist plan pkg = do
-  buildroot <- kojiLatestPkg (dist ++ "-build") pkg
-  -- FIXME need updates-candidate
-  latest <- kojiLatestPkg dist pkg
-  when (buildroot /= latest) $
-    cmd_ "koji" ["wait-repo", dist ++ "-build", "--build", latest]
-  -- FIXME check == git nvr
+  let inplan = lookup pkg plan
+  latest <- kojiLatestPkg (dist ++ "-build") pkg
+  case inplan of
+    Just (nvr, _) ->
+      if nvr == latest
+      then cmd_ "koji" ["wait-repo", dist ++ "-build", "--build", latest]
+      else error $ dist ++ "-build" +-+ "has" +-+ latest +-+ "not" +-+ nvr
+    Nothing ->
+      -- FIXME check pkg git nvr
+      cmd_ "koji" ["wait-repo", dist ++ "-build", "--build", latest]
