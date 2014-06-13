@@ -122,7 +122,7 @@ cabalSort bs = do
 
 buildKoji :: String -> String -> String -> FilePath -> IO ()
 buildKoji dist pkg nvr wd = do
-    cmdlog "fedpkg" ["--path", wd, "build"]
+    cmdlog "fedpkg" ["--path", wd, "build", "--no-wait"]
     when (distOverride dist) $ do
       user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
       -- FIXME: improve Notes with recursive info
@@ -152,16 +152,14 @@ buildDriver dist hspkgs plan ((pkg, (nvr, wd, _)):rest) = do
   buildKoji dist pkg nvr wd
   buildDriver dist hspkgs plan rest
 
+-- FIXME cache results
 latestInBuildRoot :: String -> [BuildStep] -> String -> IO ()
 latestInBuildRoot dist plan pkg = do
   let inplan = lookup pkg plan
-  latest <- kojiLatestPkg (dist ++ "-build") pkg
   case inplan of
     Just (nvr, _, _) ->
-      if nvr == latest
-         -- FIXME cache result
-      then cmd_ "koji" ["wait-repo", dist ++ "-build", "--build", latest]
-      else error $ dist ++ "-build" +-+ "has" +-+ latest +-+ "not" +-+ nvr
-    Nothing ->
+      cmd_ "koji" ["wait-repo", dist ++ "-build", "--build", nvr]
+    Nothing -> do
+      latest <- kojiLatestPkg (dist ++ "-build") pkg
       -- FIXME check pkg git nvr
       cmd_ "koji" ["wait-repo", dist ++ "-build", "--build", latest]
