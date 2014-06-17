@@ -18,7 +18,7 @@ module Main where
 import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
 import Data.Maybe (catMaybes, fromMaybe)
-import Data.List (find, isPrefixOf, nub, stripPrefix, union, (\\))
+import Data.List (find, isPrefixOf, nub, stripPrefix, union)
 
 import System.Directory (doesDirectoryExist, doesFileExist)
 import System.Environment (getArgs, getProgName)
@@ -41,7 +41,7 @@ main = do
   -- FIXME check plan with "cblrepo -n add"
   -- currently need packagedb-cli.git for pkgdb2
   hsPkgs <- words <$> cmd "pkgdb-cli" ["list", "--branch", distBranch dist, "--user", "haskell-sig", "--nameonly"]
-  buildDriver dist (hsPkgs \\ ["ghc"]) plan [] sorted
+  buildDriver dist hsPkgs plan [] sorted
 
 help :: IO ()
 help = do
@@ -119,7 +119,7 @@ cabalSort bs = do
 
 buildKoji :: String -> String -> String -> FilePath -> IO ()
 buildKoji dist pkg nvr wd = do
-    cmdlog "fedpkg" ["--path", wd, "build", "--nowait"]
+    cmdlog "fedpkg" ["--path", wd, "build"]
     when (distOverride dist) $ do
       user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
       -- FIXME: improve Notes with recursive info
