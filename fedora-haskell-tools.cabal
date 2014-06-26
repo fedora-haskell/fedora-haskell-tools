@@ -42,3 +42,8 @@ Executable fhkoji
     Other-modules: Dists,
                    Utils
     GHC-options:   -fwarn-missing-signatures -Wall
+
+Executable fhbz
+    Main-is:       Bugzilla.hs
+    Build-depends: base < 5
+    GHC-options:   -fwarn-missing-signatures -Wall
