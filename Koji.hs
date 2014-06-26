@@ -17,7 +17,7 @@ module Main where
 
 import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.List (find, isPrefixOf, nub, stripPrefix, union)
 
 import System.Directory (doesDirectoryExist, doesFileExist)
@@ -37,7 +37,7 @@ main = do
   (dist, pkgs) <- getArgs >>= parseArgs
   plan <- mapM (prepPkg dist) pkgs
   sorted <- cabalSort plan
-  putStrLn $ "\nBuilding:" +-+ (unwords $ map fst sorted)
+  putStrLn $ "\nBuilding:" +-+ unwords (map fst sorted)
   -- FIXME check plan with "cblrepo -n add"
   -- currently need packagedb-cli.git for pkgdb2
   hsPkgs <- words <$> cmd "pkgdb-cli" ["list", "--branch", distBranch dist, "--user", "haskell-sig", "--nameonly"]
@@ -115,7 +115,7 @@ cabalSort :: [BuildStep] -> IO [BuildStep]
 cabalSort bs = do
   let cabals = map (\(_,(_,_,c)) -> c) bs
   sorted <- lines <$> cmd "cabal-sort" cabals
-  return $ catMaybes $ map (\ p -> find (\ (_, (_, _, pth)) -> p == pth) bs) sorted
+  return $ mapMaybe (\ p -> find (\ (_, (_, _, pth)) -> p == pth) bs) sorted
 
 buildKoji :: String -> String -> String -> FilePath -> IO ()
 buildKoji dist pkg nvr wd = do
@@ -148,7 +148,7 @@ buildDriver dist hspkgs plan buildroot ((pkg, (nvr, wd, _)):rest) = do
   let hdeps = filter (`elem` hspkgs) $ nub deps
   depNVRs <- mapM (latestInBuildRoot dist plan buildroot) hdeps
   buildKoji dist pkg nvr wd
-  buildDriver dist hspkgs plan (union buildroot depNVRs) rest
+  buildDriver dist hspkgs plan (buildroot `union` depNVRs) rest
 
 -- FIXME cache results
 latestInBuildRoot :: String -> [BuildStep] -> [String] -> String -> IO String
