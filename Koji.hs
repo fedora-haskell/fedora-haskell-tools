@@ -130,10 +130,6 @@ buildKoji dist pkg nvr wd = do
 derefSrcPkg:: String -> IO String
 derefSrcPkg pkg = singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
 
-removePrefix :: String -> String -> String
-removePrefix prefix orig =
-  fromMaybe (error prefix +-+ "is not prefix of" +-+ orig) $ stripPrefix prefix orig
-
 gitBranch :: FilePath -> IO String
 gitBranch wd =
   (removePrefix "* " . head . filter (isPrefixOf "* ") . lines) <$> cmd "git" ["-C", wd, "branch"]

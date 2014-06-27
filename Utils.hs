@@ -16,6 +16,8 @@
 module Utils where
 
 import Control.Applicative ((<$>))
+import Data.List (stripPrefix)
+import Data.Maybe (fromMaybe)
 import System.Exit (ExitCode (..))
 import System.Process (readProcess, readProcessWithExitCode, rawSystem)
 
@@ -81,3 +83,13 @@ shell c = cmd "sh" ["-c", c]
 kojiLatestPkg :: String -> String -> IO String
 kojiLatestPkg dist pkg =
   (head . words) <$> cmd "koji" ["latest-pkg", "--quiet", dist, pkg]
+
+removePrefix :: String -> String -> String
+removePrefix prefix orig =
+  fromMaybe (error prefix +-+ "is not prefix of" +-+ orig) $ stripPrefix prefix orig
+
+removeSuffix :: String -> String -> String
+removeSuffix suffix orig =
+  fromMaybe orig $ stripSuffix suffix orig
+  where
+    stripSuffix sf str = reverse <$> stripPrefix (reverse sf) (reverse str)

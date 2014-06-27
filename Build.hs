@@ -19,7 +19,7 @@ import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Control.Monad (filterM, unless, when)
 import Data.Maybe (fromMaybe, isJust)
-import Data.List (intercalate, isPrefixOf, stripPrefix)
+import Data.List (intercalate, isPrefixOf)
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, setCurrentDirectory)
@@ -224,16 +224,6 @@ derefPkg (pkg, mver) = do
 
 derefSrcPkg:: String -> IO String
 derefSrcPkg pkg = singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
-
-removePrefix :: String -> String -> String
-removePrefix prefix orig =
-  fromMaybe (error prefix +-+ "is not prefix of" +-+ orig) $ stripPrefix prefix orig
-
-removeSuffix :: String -> String -> String
-removeSuffix suffix orig =
-  fromMaybe orig $ stripSuffix suffix orig
-  where
-    stripSuffix sf str = reverse <$> stripPrefix (reverse sf) (reverse str)
 
 gitBranch :: IO String
 gitBranch =
