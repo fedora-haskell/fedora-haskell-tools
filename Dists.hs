@@ -26,10 +26,10 @@ import Data.Char (isNumber)
 import Utils ((+-+))
 
 dists :: [String]
-dists = [rawhide, "f20", "f19", "epel7"]
+dists = [rawhide, "f21", "f20", "f19", "epel7"]
 
 rawhide :: String
-rawhide = "f21"
+rawhide = "f22"
 
 distBranch :: String -> String
 distBranch d | d == rawhide = "master"

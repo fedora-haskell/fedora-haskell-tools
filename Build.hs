@@ -1,10 +1,9 @@
 -- |
--- Module      :  Main
+-- Module      :  Build
 -- Copyright   :  (C) 2014  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
 -- Stability   :  alpha
--- Portability :  portable
 --
 -- Explanation: Main entry point for building RPM packages.
 
@@ -28,6 +27,7 @@ import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), dropExtension, takeBaseName, takeDirectory)
 import System.IO (hPutStrLn, stderr)
 
+import Dists
 import Utils
 
 data Command = Install | Mock | Koji | Pending | Changed deriving (Eq)
@@ -59,12 +59,6 @@ help = do
     ++ "  pending\t- show planned changes\n"
     ++ "  changed\t- show changed pkgs\n"
   exitWith (ExitFailure 1)
-
-dists :: [String]
-dists = [rawhide, "f20", "f19"]
-
-rawhide :: String
-rawhide = "f21"
 
 -- allow "fhbuild CMD", "fhbuild CMD dir" or "fhbuild CMD DIST PKG..."
 parseArgs :: [String] -> IO ([String], Maybe FilePath)
