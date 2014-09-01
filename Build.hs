@@ -215,7 +215,7 @@ fhbuildMissing dist dep = do
 derefPkg :: (String, Maybe String) -> IO (String, Maybe String)
 derefPkg (pkg, mver) = do
   res <- singleLine <$> cmd "repoquery" ["--qf", "%{name}", "--whatprovides", pkg]
-  return (res, mver)
+  return (if null res then pkg else res, mver)
 
 derefSrcPkg:: String -> IO String
 derefSrcPkg pkg = singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
