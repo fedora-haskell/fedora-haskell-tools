@@ -18,7 +18,7 @@ import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Control.Monad (filterM, unless, when)
 import Data.Maybe (fromMaybe, isJust)
-import Data.List (intercalate, isPrefixOf)
+import Data.List (intercalate, isPrefixOf, nub)
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, setCurrentDirectory)
@@ -130,9 +130,10 @@ build mode dist mdir mdep pkg = do
           cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
           putStrLn ""
           let spec = wd </> pkg ++ ".spec"
+          putStrLn "repoquerying deps..."
           -- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> "pkg"
           depvers <- (map (processDeps . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefPkg
-          missing <- filterM notInstalled depvers
+          missing <- nub <$> filterM notInstalled depvers
           -- FIXME sort into build order
           let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (map fst missing)
           unless (null hmissing) $ do
