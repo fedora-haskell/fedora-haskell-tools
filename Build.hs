@@ -210,7 +210,8 @@ notInstalled (pkg, mver) =
 fhbuildMissing :: String -> String -> IO ()
 fhbuildMissing dist dep = do
   base <- derefSrcPkg dep
-  build Install dist Nothing (Just dep) base
+  maybe (error $ "No" +-+ dep +-+ "package available!")
+    (build Install dist Nothing (Just dep)) base
 
 derefPkg :: (String, Maybe String) -> IO (String, Maybe String)
 derefPkg (pkg, mver) = do
@@ -219,8 +220,10 @@ derefPkg (pkg, mver) = do
     putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
   return (if null res then pkg else res, mver)
 
-derefSrcPkg:: String -> IO String
-derefSrcPkg pkg = singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
+derefSrcPkg:: String -> IO (Maybe String)
+derefSrcPkg pkg = do
+  res <- singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
+  return $ if null res then Nothing else Just res
 
 gitBranch :: IO String
 gitBranch =
