@@ -21,6 +21,9 @@ import Data.Char (isLetter)
 import Data.List (intercalate, isPrefixOf, isSuffixOf)
 import System.Directory (doesFileExist, getCurrentDirectory)
 import System.Environment (getArgs, getProgName)
+import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
+                              getOpt, usageInfo)
+
 -- import System.Exit (ExitCode (..), exitWith)
 -- import System.FilePath ((</>))
 -- import System.IO (hPutStrLn, stderr)
@@ -39,20 +42,38 @@ data BugState = BugState {
 ghcVersion :: String
 ghcVersion = "7.8.3"
 
+data Flag = Force | DryRun
+   deriving (Eq, Show)
+
+options :: [OptDescr Flag]
+options =
+ [ Option ['f'] ["force"]  (NoArg Force)  "force update"
+ , Option ['n'] ["dryrun"] (NoArg DryRun) "do not update bugzilla"
+ ]
+
+parseOpts :: [String] -> IO ([Flag], [String])
+parseOpts argv =
+   case getOpt Permute options argv of
+      (os,ps,[]  ) -> return (os,ps)
+      (_,_,errs) -> do
+        prog <- getProgName
+        error $ concat errs ++ usageInfo (header prog) options
+  where header prog = "Usage:" +-+ prog +-+ "[OPTION...] [package]..."
+
 main :: IO ()
 main = do
   dir <- getCurrentDirectory
   unless ("cblrepo/f22" `isSuffixOf` dir) $
-    error $ "Not in f22/!" +-+ cblrepoHelp
+    error $ "Not in cblrepo/f22/ !" +-+ cblrepoHelp
   db <- doesFileExist "cblrepo.db"
-  unless db $ error $
-    "No cblrepo.db!" +-+ cblrepoHelp
+  unless db $
+    error $ "No cblrepo.db!" +-+ cblrepoHelp
   ghc <- shell "cblrepo list | grep '^ghc  '"
   unless ("ghc " +-+ ghcVersion `isPrefixOf` ghc) $
     error $ "cblrepo.db does not contain ghc-" ++ ghcVersion ++ ":" +-+ ghc
-  args <- getArgs
+  (opts, args) <- getArgs >>= parseOpts
   bugs <- parseLines . lines <$> bugzillaQuery (["--cc=haskell-devel@lists.fedoraproject.org", "--bug_status=NEW", "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ if null args then [] else ["--component=" ++ intercalate "," args])
-  mapM_ checkBug bugs
+  mapM_ (checkBug opts (null args)) bugs
 
 cblrepoHelp :: String
 cblrepoHelp = "Please run in haskell-sig/cblrepo/f22/ dir.\nGet it with: git clone git://git.fedorahosted.org/git/haskell-sig.git"
@@ -71,22 +92,24 @@ parseLines (bid:bcomp:bst:bsum:bwh:rest) =
   BugState bid bcomp bst bsum bwh : parseLines rest
 parseLines _ = error "Bad bugzilla query output!"
 
-checkBug :: BugState -> IO ()
-checkBug (BugState bid bcomp _bst bsum bwh) =
-  unless (bcomp `elem` excludedPkgs) $ do
+checkBug :: [Flag] -> Bool -> BugState -> IO ()
+checkBug opts all' (BugState bid bcomp _bst bsum bwh) =
+  let force = Force `elem` opts in
+  unless (bcomp `elem` excludedPkgs && all') $ do
     let pkgver = removeSuffix " is available" bsum
         hkgver = removeGhcPrefix pkgver
         hkgcver = comma hkgver
         hkg = removeGhcPrefix bcomp
     unless (null bwh || hkg `isPrefixOf` bwh) $
       putStrLn $ "Whiteboard format warning for" +-+ hkgver ++ ":" +-+ bwh +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
-    unless ((hkgver ++ ":") `isPrefixOf` bwh) $ do
+    unless ((hkgver ++ ":") `isPrefixOf` bwh && not force) $ do
       cblrp <- cmd "cblrepo" ["-n", "add", hkgcver]
       let state = if null cblrp then "ok" else "NG"
       putStrLn $ "*" +-+ (if null bwh then "New" else bwh +-+ "->") +-+ hkgver ++ ":" ++ state
       unless (null cblrp) $
         putStrLn cblrp
-      updateBug bid bcomp hkgver cblrp state
+      unless (DryRun `elem` opts) $
+        updateBug bid bcomp hkgver cblrp state
 
 excludedPkgs :: [String]
 -- git-annex made cblrepo use 9GB of vmem...
