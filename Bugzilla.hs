@@ -36,6 +36,9 @@ data BugState = BugState {
   whiteboard :: String
   }
 
+ghcVersion :: String
+ghcVersion = "7.8.3"
+
 main :: IO ()
 main = do
   dir <- getCurrentDirectory
@@ -45,8 +48,8 @@ main = do
   unless db $ error $
     "No cblrepo.db!" +-+ cblrepoHelp
   ghc <- shell "cblrepo list | grep '^ghc  '"
-  unless ("ghc  7.6.3" `isPrefixOf` ghc) $
-    error $ "cblrepo.db does not contain ghc-7.6.3:" +-+ ghc
+  unless ("ghc " +-+ ghcVersion `isPrefixOf` ghc) $
+    error $ "cblrepo.db does not contain ghc-" ++ ghcVersion ++ ":" +-+ ghc
   args <- getArgs
   bugs <- parseLines . lines <$> bugzillaQuery (["--cc=haskell-devel@lists.fedoraproject.org", "--bug_status=NEW", "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ if null args then [] else ["--component=" ++ intercalate "," args])
   mapM_ checkBug bugs
