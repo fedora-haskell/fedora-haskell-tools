@@ -105,7 +105,9 @@ checkBug opts all' (BugState bid bcomp _bst bsum bwh) =
     unless ((hkgver ++ ":") `isPrefixOf` bwh && not force) $ do
       cblrp <- cmd "cblrepo" ["-n", "add", hkgcver]
       let state = if null cblrp then "ok" else "NG"
-      putStrLn $ "*" +-+ (if null bwh then "New" else bwh +-+ "->") +-+ hkgver ++ ":" ++ state
+      if (hkgver ++ ":") `isPrefixOf` bwh
+        then putStrLn $ "*" +-+ bwh
+        else putStrLn $ "*" +-+ (if null bwh then "New" else bwh +-+ "->") +-+ hkgver ++ ":" ++ state
       unless (null cblrp) $
         putStrLn cblrp
       unless (DryRun `elem` opts) $
