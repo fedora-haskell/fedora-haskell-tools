@@ -16,13 +16,15 @@
 module Main where
 
 import Control.Applicative ((<$>))
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import Data.Char (isLetter)
 import Data.List (intercalate, isPrefixOf, isSuffixOf)
-import System.Directory (doesFileExist, getCurrentDirectory)
-import System.Environment (getArgs, getProgName)
+import Data.Time.Clock (diffUTCTime, getCurrentTime)
+import System.Directory (doesFileExist, getCurrentDirectory, getModificationTime)
+import System.Environment (getArgs, getEnv, getProgName)
 import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               getOpt, usageInfo)
+import System.FilePath ((</>))
 
 -- import System.Exit (ExitCode (..), exitWith)
 -- import System.FilePath ((</>))
@@ -72,6 +74,7 @@ main = do
   unless ("ghc " +-+ ghcVersion `isPrefixOf` ghc) $
     error $ "cblrepo.db does not contain ghc-" ++ ghcVersion ++ ":" +-+ ghc
   (opts, args) <- getArgs >>= parseOpts
+  updateCabalPackages
   bugs <- parseLines . lines <$> bugzillaQuery (["--cc=haskell-devel@lists.fedoraproject.org", "--bug_status=NEW", "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ if null args then [] else ["--component=" ++ intercalate "," args])
   mapM_ (checkBug opts (null args)) bugs
 
@@ -138,3 +141,12 @@ updateBug bid bcomp hkgver cblrp state = do
   bugzillaModify ["--whiteboard==" ++ hkgver ++ ":" ++ state,
                   "--comment=" ++ comment,
                   bid]
+
+updateCabalPackages :: IO ()
+updateCabalPackages = do
+  home <- getEnv "HOME"
+  pkgs <- getModificationTime (home </> ".cabal/packages/hackage.haskell.org/00-index.tar.gz")
+  now <- getCurrentTime
+  let diff = diffUTCTime now pkgs
+  when (diff > 36000) $
+    cmd_ "cabal" ["update"]

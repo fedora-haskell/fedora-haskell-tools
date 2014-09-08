@@ -45,5 +45,6 @@ Executable fhkoji
 
 Executable fhbz
     Main-is:       Bugzilla.hs
-    Build-depends: base < 5
+    Build-depends: base < 5,
+                   time
     GHC-options:   -fwarn-missing-signatures -Wall
