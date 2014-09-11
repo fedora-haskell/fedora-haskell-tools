@@ -76,7 +76,7 @@ main = do
   (opts, args) <- getArgs >>= parseOpts
   updateCabalPackages
   bugs <- parseLines . lines <$> bugzillaQuery (["--cc=haskell-devel@lists.fedoraproject.org", "--bug_status=NEW", "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ if null args then [] else ["--component=" ++ intercalate "," args])
-  mapM_ (checkBug opts (null args)) bugs
+  mapM_ (checkBug opts) bugs
 
 cblrepoHelp :: String
 cblrepoHelp = "Please run in haskell-sig/cblrepo/f22/ dir.\nGet it with: git clone git://git.fedorahosted.org/git/haskell-sig.git"
@@ -95,10 +95,10 @@ parseLines (bid:bcomp:bst:bsum:bwh:rest) =
   BugState bid bcomp bst bsum bwh : parseLines rest
 parseLines _ = error "Bad bugzilla query output!"
 
-checkBug :: [Flag] -> Bool -> BugState -> IO ()
-checkBug opts all' (BugState bid bcomp _bst bsum bwh) =
+checkBug :: [Flag] -> BugState -> IO ()
+checkBug opts (BugState bid bcomp _bst bsum bwh) =
   let force = Force `elem` opts in
-  unless (bcomp `elem` excludedPkgs && all') $ do
+  unless (bcomp `elem` excludedPkgs) $ do
     let pkgver = removeSuffix " is available" bsum
         hkgver = removeGhcPrefix pkgver
         hkgcver = comma hkgver
