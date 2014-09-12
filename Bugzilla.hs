@@ -18,7 +18,7 @@ module Main where
 import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
 import Data.Char (isLetter)
-import Data.List (intercalate, isPrefixOf, isSuffixOf)
+import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.Directory (doesFileExist, getCurrentDirectory, getModificationTime)
 import System.Environment (getArgs, getEnv, getProgName)
@@ -107,7 +107,9 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
       putStrLn $ "Whiteboard format warning for" +-+ hkgver ++ ":" +-+ bwh +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
     unless ((hkgver ++ ":") `isPrefixOf` bwh && not force) $ do
       cblrp <- cmd "cblrepo" ["-n", "add", hkgcver]
-      let state = if null cblrp then "ok" else "NG"
+      let state = if null cblrp
+                  then "ok"
+                  else if "haskell-platform" `isInfixOf` cblrp then "HP" else "NG"
       if (hkgver ++ ":") `isPrefixOf` bwh
         then putStrLn $ "*" +-+ bwh
         else putStrLn $ "*" +-+ (if null bwh then "New" else bwh +-+ "->") +-+ hkgver ++ ":" ++ state
