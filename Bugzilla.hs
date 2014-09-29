@@ -110,12 +110,12 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
     unless ((hkgver ++ ":") `isPrefixOf` bwh && not force) $ do
       updateCabalPackages
       cblrp <- cmd "cblrepo" ["-n", "add", hkgcver]
-      let state = if null cblrp
-                  then "ok"
-                  else if "haskell-platform" `isInfixOf` cblrp then "HP" else "NG"
-      if (hkgver ++ ":") `isPrefixOf` bwh
-        then putStrLn $ "*" +-+ bwh
-        else putStrLn $ "*" +-+ (if null bwh then "New" else bwh +-+ "->") +-+ hkgver ++ ":" ++ state
+      let state | null cblrp = "ok"
+                | "haskell-platform" `isInfixOf` cblrp = "HP"
+                | otherwise = "NG"
+      putStrLn $ if (hkgver ++ ":") `isPrefixOf` bwh
+                 then "*" +-+ bwh ++ (if state `isSuffixOf` bwh then "" else " ->" +-+ state)
+                 else "*" +-+ (if null bwh then "New" else bwh +-+ "->") +-+ hkgver ++ ":" ++ state
       unless (null cblrp) $
         putStrLn cblrp
       unless (DryRun `elem` opts) $
