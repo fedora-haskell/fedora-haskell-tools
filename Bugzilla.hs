@@ -45,13 +45,14 @@ data BugState = BugState {
 ghcVersion :: String
 ghcVersion = "7.8.3"
 
-data Flag = Force | DryRun | State String
+data Flag = Force | DryRun | Refresh | State String
    deriving (Eq, Show)
 
 options :: [OptDescr Flag]
 options =
- [ Option "f" ["force"]  (NoArg Force)  "update even if no version change"
+ [ Option "f" ["force"]  (NoArg Force)  "update even if no version change (implies --refresh)"
  , Option "n" ["dryrun"] (NoArg DryRun) "do not update bugzilla"
+ , Option "r" ["refresh"] (NoArg Refresh) "update if cblrepo status changed"
  , Option "s" ["state"]  (ReqArg State "BUGSTATE") "bug state (default NEW)"
  ]
 
@@ -99,7 +100,9 @@ parseLines _ = error "Bad bugzilla query output!"
 
 checkBug :: [Flag] -> BugState -> IO ()
 checkBug opts (BugState bid bcomp _bst bsum bwh) =
-  let force = Force `elem` opts in
+  let force = Force `elem` opts
+      refresh = Refresh `elem` opts
+  in
   unless (bcomp `elem` excludedPkgs) $ do
     let pkgver = removeSuffix " is available" bsum
         hkgver = removeGhcPrefix pkgver
@@ -107,19 +110,20 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
         hkg = removeGhcPrefix bcomp
     unless (null bwh || hkg `isPrefixOf` bwh) $
       putStrLn $ "Whiteboard format warning for" +-+ hkgver ++ ":" +-+ bwh +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
-    unless ((hkgver ++ ":") `isPrefixOf` bwh && not force) $ do
+    unless ((hkgver ++ ":") `isPrefixOf` bwh && not (force || refresh)) $ do
       updateCabalPackages
       cblrp <- cmd "cblrepo" ["-n", "add", hkgcver]
       let state | null cblrp = "ok"
                 | "haskell-platform" `isInfixOf` cblrp = "HP"
                 | otherwise = "NG"
-      putStrLn $ if (hkgver ++ ":") `isPrefixOf` bwh
-                 then "*" +-+ bwh ++ (if state `isSuffixOf` bwh then "" else " ->" +-+ state)
-                 else "*" +-+ (if null bwh then "New" else bwh +-+ "->") +-+ hkgver ++ ":" ++ state
-      unless (null cblrp) $
-        putStrLn cblrp
-      unless (DryRun `elem` opts) $
-        updateBug bid bcomp hkgver cblrp state
+      unless ((hkgver ++ ":" ++ state == bwh) && not force) $ do
+        putStrLn $ if (hkgver ++ ":") `isPrefixOf` bwh
+                   then "*" +-+ bwh ++ (if state `isSuffixOf` bwh then "" else " ->" +-+ state)
+                   else "*" +-+ (if null bwh then "New" else bwh +-+ "->") +-+ hkgver ++ ":" ++ state
+        unless (null cblrp) $
+          putStrLn cblrp
+        unless (DryRun `elem` opts) $
+          updateBug bid bcomp hkgver cblrp state
 
 excludedPkgs :: [String]
 -- git-annex made cblrepo use 9GB of vmem...
