@@ -19,6 +19,7 @@ import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
 import Data.Char (isLetter)
 import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf)
+import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.Directory (doesFileExist, getCurrentDirectory, getModificationTime)
 import System.Environment (getArgs, getEnv, getProgName)
@@ -44,13 +45,14 @@ data BugState = BugState {
 ghcVersion :: String
 ghcVersion = "7.8.3"
 
-data Flag = Force | DryRun
+data Flag = Force | DryRun | State String
    deriving (Eq, Show)
 
 options :: [OptDescr Flag]
 options =
- [ Option ['f'] ["force"]  (NoArg Force)  "force update"
- , Option ['n'] ["dryrun"] (NoArg DryRun) "do not update bugzilla"
+ [ Option "f" ["force"]  (NoArg Force)  "update even if no version change"
+ , Option "n" ["dryrun"] (NoArg DryRun) "do not update bugzilla"
+ , Option "s" ["state"]  (ReqArg State "BUGSTATE") "bug state (default NEW)"
  ]
 
 parseOpts :: [String] -> IO ([Flag], [String])
@@ -74,8 +76,8 @@ main = do
   unless ("ghc " +-+ ghcVersion `isPrefixOf` ghc) $
     error $ "cblrepo.db does not contain ghc-" ++ ghcVersion ++ ":" +-+ ghc
   (opts, args) <- getArgs >>= parseOpts
-  updateCabalPackages
-  bugs <- parseLines . lines <$> bugzillaQuery (["--cc=haskell-devel@lists.fedoraproject.org", "--bug_status=NEW", "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ if null args then [] else ["--component=" ++ intercalate "," args])
+  let state = fromMaybe "NEW" $ listToMaybe $ map (\ (State s) -> s) $ filter (\ o -> case o of (State _) -> True ; _ -> False) opts
+  bugs <- parseLines . lines <$> bugzillaQuery (["--cc=haskell-devel@lists.fedoraproject.org", "--bug_status=" ++ state, "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ if null args then [] else ["--component=" ++ intercalate "," args])
   mapM_ (checkBug opts) bugs
 
 cblrepoHelp :: String
@@ -106,6 +108,7 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
     unless (null bwh || hkg `isPrefixOf` bwh) $
       putStrLn $ "Whiteboard format warning for" +-+ hkgver ++ ":" +-+ bwh +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
     unless ((hkgver ++ ":") `isPrefixOf` bwh && not force) $ do
+      updateCabalPackages
       cblrp <- cmd "cblrepo" ["-n", "add", hkgcver]
       let state = if null cblrp
                   then "ok"
