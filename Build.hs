@@ -154,7 +154,7 @@ build mode dist mdir mdep pkg = do
           unless (null ipkgs) $
             sudo "yum" ("remove":ipkgs)
           arch <- cmd "arch" []
-          let rpms = map (\ p -> wd </> arch </> p ++ verrel ++ ".rpm") opkgs
+          let rpms = map (\ p -> wd </> arch </> p ++ verrel ++ "." ++ arch ++ ".rpm") opkgs
           sudo "yum" $ ["-y", "localinstall"] ++ rpms
       Mock -> do
         putStrLn $ "Mock building" +-+ nvr
