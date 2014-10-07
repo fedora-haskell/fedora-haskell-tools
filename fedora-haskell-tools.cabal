@@ -25,7 +25,6 @@ Executable fhbuild
                    directory,
                    filepath,
                    process,
-                   text,
                    unix
     Other-modules: Utils
 --    Hs-Source-Dirs:     src
@@ -37,7 +36,6 @@ Executable fhkoji
                    directory,
                    filepath,
                    process,
-                   text,
                    unix
     Other-modules: Dists,
                    Utils
