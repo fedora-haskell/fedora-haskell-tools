@@ -143,7 +143,7 @@ build mode dist mdir mdep pkg = do
           stillMissing <- map (uncurry maybePkgVer) <$> filterM notInstalled missing
           unless (null stillMissing) $ do
             putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
-            sudo "yum" $ ["install", "-y"] ++ stillMissing
+            sudo "yum" $ ["install", "-y", "--nogpgcheck"] ++ stillMissing
           putStrLn $ "Building" +-+ nvr +-+ "(buildlog:" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
           -- workaround "fedpkg --path dir local" saving .build.log in cwd
           withCurrentDirectory wd $
