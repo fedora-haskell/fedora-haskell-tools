@@ -18,7 +18,7 @@ import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Control.Monad (filterM, unless, when)
 import Data.Maybe (fromMaybe, isJust)
-import Data.List (intercalate, isPrefixOf, nub)
+import Data.List (intercalate, isPrefixOf, isSuffixOf, nub)
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, setCurrentDirectory)
@@ -222,7 +222,12 @@ derefPkg (pkg, mver) = do
 derefSrcPkg:: String -> IO (Maybe String)
 derefSrcPkg pkg = do
   res <- singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
-  return $ if null res then Nothing else Just res
+  return $ if null res
+              -- maybe package has never been built yet
+           then if "-devel" `isSuffixOf` pkg && "ghc-" `isPrefixOf` pkg
+                then Just $ removeSuffix "-devel" pkg
+                else Nothing
+           else Just res
 
 gitBranch :: IO String
 gitBranch =
