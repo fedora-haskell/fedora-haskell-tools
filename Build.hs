@@ -114,8 +114,10 @@ build mode dist mdir mdep pkg = do
   retired <- doesFileExist $ wd </> "dead.package"
   unless retired $ do
     cmdAssert "not a Fedora pkg git dir!" "grep" ["-q", "pkgs.fedoraproject.org", wd </> ".git/config"]
-    when dirExists $
-      -- FIXME check correct branch
+    when dirExists $ do
+      actual <- withCurrentDirectory wd gitBranch
+      when (branch /= actual) $
+        cmd_ "fedpkg" ["switch-branch", branch]
       cmd_ "git" ["-C", wd, "pull", "-q"]
     nvr <- cmd "fedpkg" ["--path", wd, "verrel"]
     let verrel = removePrefix (pkg ++ "-") nvr
