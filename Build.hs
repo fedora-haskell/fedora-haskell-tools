@@ -117,7 +117,7 @@ build mode dist mdir mdep pkg = do
     when dirExists $ do
       actual <- withCurrentDirectory wd gitBranch
       when (branch /= actual) $
-        cmd_ "fedpkg" ["switch-branch", branch]
+        cmd_ "fedpkg" ["--path", wd, "switch-branch", branch]
       cmd_ "git" ["-C", wd, "pull", "-q"]
     nvr <- cmd "fedpkg" ["--path", wd, "verrel"]
     let verrel = removePrefix (pkg ++ "-") nvr
