@@ -105,7 +105,7 @@ build mode dist mdir mdep pkg = do
       branch = dist2branch dist
   dirExists <- if isJust mdir then return True else doesDirectoryExist dir
   unless (mode `elem` [Pending, Changed]) $
-    putStrLn $ "\n==" +-+ pkg ++ ":" ++ dist2branch dist +-+ "=="
+    putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
   unless dirExists $ do
     let anon = ["-a" | mode /= Koji]
     cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
@@ -220,15 +220,26 @@ derefPkg (pkg, mver) = do
     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
   return (if null res then pkg else res, mver)
 
-derefSrcPkg:: String -> IO (Maybe String)
+-- drop Maybe?
+derefSrcPkg :: String -> IO (Maybe String)
 derefSrcPkg pkg = do
   res <- singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
-  return $ if null res
-              -- maybe package has never been built yet
-           then if "-devel" `isSuffixOf` pkg && "ghc-" `isPrefixOf` pkg
-                then Just $ removeSuffix "-devel" pkg
-                else Nothing
-           else Just res
+  if null res
+     -- maybe package has never been built yet
+    then if "-devel" `isSuffixOf` pkg
+         then do
+           let nondevel = removeSuffix "-devel" pkg
+           dir1 <- doesDirectoryExist nondevel
+           if dir1
+             then return $ Just nondevel
+             else if "ghc-" `isPrefixOf` pkg
+                  then do
+                    let base = removePrefix "ghc-" nondevel
+                    dir2 <- doesDirectoryExist base
+                    return $ Just (if dir2 then base else nondevel)
+                  else return $ Just pkg
+         else return $ Just pkg
+    else return $ Just res
 
 gitBranch :: IO String
 gitBranch =
