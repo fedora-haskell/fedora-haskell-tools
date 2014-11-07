@@ -241,7 +241,7 @@ gitBranch =
 
 pkgdb :: String -> IO (Maybe String)
 pkgdb pkg = do
-  res <- words <$> shell "pkgdb-cli list --nameonly pkg | grep pkg$"
+  res <- words <$> shell ("pkgdb-cli list --nameonly" +-+ pkg +-+ "| grep" +-+ pkg ++ "$")
   return $ if pkg `elem` res then Just pkg else Nothing
 
 eqNVR :: String -> String -> Bool
