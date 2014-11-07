@@ -111,7 +111,7 @@ build mode dist mdir mdep pkg = do
     cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
   b <- doesDirectoryExist $ dir </> branch
   let wd = dir </> if b then branch else ""
-  withCurrentDirectory wd $ do
+  withCurrentDirectory wd $ \ cwd -> do
     retired <- doesFileExist "dead.package"
     unless retired $ do
       cmdAssert "not a Fedora pkg git dir!" "grep" ["-q", "pkgs.fedoraproject.org", ".git/config"]
@@ -142,7 +142,8 @@ build mode dist mdir mdep pkg = do
             unless (null hmissing) $ do
               putStrLn "Missing:"
               mapM_ putStrLn hmissing
-              mapM_ (fhbuildMissing dist) hmissing
+              withCurrentDirectory cwd $ \ _ ->
+                mapM_ (fhbuildMissing dist) hmissing
             stillMissing <- map (uncurry maybePkgVer) <$> filterM notInstalled missing
             unless (null stillMissing) $ do
               putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
@@ -189,8 +190,8 @@ build mode dist mdir mdep pkg = do
           unless (eqNVR nvr latest) $
             putStrLn pkg
 
-withCurrentDirectory :: FilePath -> IO a -> IO a
-withCurrentDirectory dir m =
+withCurrentDirectory :: FilePath -> (FilePath -> IO a) -> IO a
+withCurrentDirectory dir =
     bracket
         (do cwd <- getCurrentDirectory
             exists <- doesDirectoryExist dir
@@ -199,7 +200,6 @@ withCurrentDirectory dir m =
               else error $ "Cannot set non-existent directory" +-+ dir
             return cwd)
         setCurrentDirectory
-        (const m)
 
 maybePkgVer :: String -> Maybe String -> String
 maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver
