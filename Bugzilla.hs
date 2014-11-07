@@ -100,30 +100,32 @@ parseLines _ = error "Bad bugzilla query output!"
 
 checkBug :: [Flag] -> BugState -> IO ()
 checkBug opts (BugState bid bcomp _bst bsum bwh) =
-  let force = Force `elem` opts
-      refresh = Refresh `elem` opts
-  in
   unless (bcomp `elem` excludedPkgs) $ do
-    let pkgver = removeSuffix " is available" bsum
-        hkgver = removeGhcPrefix pkgver
-        hkgcver = comma hkgver
-        hkg = removeGhcPrefix bcomp
-    unless (null bwh || hkg `isPrefixOf` bwh) $
-      putStrLn $ "Whiteboard format warning for" +-+ hkgver ++ ":" +-+ bwh +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
-    unless ((hkgver ++ ":") `isPrefixOf` bwh && not (force || refresh)) $ do
+    let hkg = removeGhcPrefix bcomp
+        (hkgver, state) = colon bwh
+        hkgver' = removeGhcPrefix $ removeSuffix " is available" bsum
+    unless (null bwh || hkg `isPrefixOf` hkgver) $
+      putStrLn $ "Whiteboard format warning for" +-+ hkgver' ++ ":" +-+ bwh +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
+    -- should not happen!
+    unless (hkg `isPrefixOf` hkgver') $
+      putStrLn $ "Component and Summary inconsistent!" +-+ hkg +-+ hkgver' +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
+    let force = Force `elem` opts
+        refresh = Refresh `elem` opts
+    unless (hkgver == hkgver' && not (force || refresh)) $ do
       updateCabalPackages
-      cblrp <- cmd "cblrepo" ["-n", "add", hkgcver]
-      let state | null cblrp = "ok"
-                | "haskell-platform" `isInfixOf` cblrp = "HP"
-                | otherwise = "NG"
-      unless ((hkgver ++ ":" ++ state == bwh) && not force) $ do
-        putStrLn $ if (hkgver ++ ":") `isPrefixOf` bwh
-                   then "*" +-+ bwh ++ (if state `isSuffixOf` bwh then "" else " ->" +-+ state)
-                   else "*" +-+ (if null bwh then "New" else bwh +-+ "->") +-+ hkgver ++ ":" ++ state
+      cblrp <- cmd "cblrepo" ["-n", "add", comma hkgver']
+      let state' | null cblrp = "ok"
+                 | "haskell-platform" `isInfixOf` cblrp = "HP"
+                 | otherwise = "NG"
+      unless ((hkgver, state) == (hkgver', state') && not force) $ do
+        let statemsg = if state == state' then state else state +-+ "->" +-+ state'
+        putStrLn $ if hkgver == hkgver'
+                   then "*" +-+ hkgver ++ ":" +-+ statemsg
+                   else "*" +-+ (if null bwh then "New" else hkgver +-+ "->") +-+ hkgver' ++ ":" +-+ statemsg
         unless (null cblrp) $
           putStrLn cblrp
         unless (DryRun `elem` opts) $
-          updateBug bid bcomp hkgver cblrp state
+          updateBug bid bcomp hkgver' cblrp state
 
 excludedPkgs :: [String]
 -- git-annex made cblrepo use 9GB of vmem...
@@ -138,6 +140,11 @@ comma :: String -> String
 comma nv = reverse eman ++ "," ++ reverse rev
   where
     (rev, '-':eman) = break (== '-') $ reverse nv
+
+colon :: String -> (String, String)
+colon ps = (nv,s)
+  where
+    (nv, ':':s) = break (== ':') ps
 
 updateBug :: String -> String -> String -> String -> String -> IO ()
 updateBug bid bcomp hkgver cblrp state = do
