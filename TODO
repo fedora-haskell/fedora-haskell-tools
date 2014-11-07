@@ -4,8 +4,11 @@ use pkgdb-cli + cabal-sort for --all packages
 
 deps query tool
 
+rhel7 git does not have -C!
+
 # git
 - branch merging
+- build new packages across branches
 
 # command options
 - debug output

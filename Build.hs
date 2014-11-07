@@ -18,7 +18,7 @@ import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Control.Monad (filterM, unless, when)
 import Data.Maybe (fromMaybe, isJust)
-import Data.List (intercalate, isPrefixOf, isSuffixOf, nub)
+import Data.List (intercalate, isPrefixOf, nub)
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, setCurrentDirectory)
@@ -222,30 +222,27 @@ derefPkg (pkg, mver) = do
     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
   return (if null res then pkg else res, mver)
 
--- drop Maybe?
 derefSrcPkg :: String -> IO (Maybe String)
 derefSrcPkg pkg = do
   res <- singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
   if null res
      -- maybe package has never been built yet
-    then if "-devel" `isSuffixOf` pkg
-         then do
-           let nondevel = removeSuffix "-devel" pkg
-           dir1 <- doesDirectoryExist nondevel
-           if dir1
-             then return $ Just nondevel
-             else if "ghc-" `isPrefixOf` pkg
-                  then do
-                    let base = removePrefix "ghc-" nondevel
-                    dir2 <- doesDirectoryExist base
-                    return $ Just (if dir2 then base else nondevel)
-                  else return $ Just pkg
-         else return $ Just pkg
+    then do
+    let nondevel = removeSuffix "-devel" pkg
+    p <- pkgdb nondevel
+    if isJust p
+      then return p
+      else pkgdb $ removePrefix "ghc-" nondevel
     else return $ Just res
 
 gitBranch :: IO String
 gitBranch =
   (removePrefix "* " . head . filter (isPrefixOf "* ") . lines) <$> cmd "git" ["branch"]
+
+pkgdb :: String -> IO (Maybe String)
+pkgdb pkg = do
+  res <- words <$> shell "pkgdb-cli list --nameonly pkg | grep pkg$"
+  return $ if pkg `elem` res then Just pkg else Nothing
 
 eqNVR :: String -> String -> Bool
 eqNVR p1 p2 =

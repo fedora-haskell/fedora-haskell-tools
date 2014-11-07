@@ -93,7 +93,7 @@ bugzillaModify args = cmd_ "bugzilla" ("modify":args)
 parseLines :: [String] -> [BugState]
 parseLines [] = []
 -- final empty whiteboard eaten by lines
-parseLines (bid:bcomp:bst:bsum:[]) = [BugState bid bcomp bst bsum ""]
+parseLines [bid, bcomp, bst, bsum] = [BugState bid bcomp bst bsum ""]
 parseLines (bid:bcomp:bst:bsum:bwh:rest) =
   BugState bid bcomp bst bsum bwh : parseLines rest
 parseLines _ = error "Bad bugzilla query output!"
