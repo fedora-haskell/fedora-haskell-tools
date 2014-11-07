@@ -111,83 +111,83 @@ build mode dist mdir mdep pkg = do
     cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
   b <- doesDirectoryExist $ dir </> branch
   let wd = dir </> if b then branch else ""
-  retired <- doesFileExist $ wd </> "dead.package"
-  unless retired $ do
-    cmdAssert "not a Fedora pkg git dir!" "grep" ["-q", "pkgs.fedoraproject.org", wd </> ".git/config"]
-    when dirExists $ do
-      actual <- withCurrentDirectory wd gitBranch
-      when (branch /= actual) $
-        cmd_ "fedpkg" ["--path", wd, "switch-branch", branch]
-      cmd_ "git" ["-C", wd, "pull", "-q"]
-    nvr <- cmd "fedpkg" ["--path", wd, "verrel"]
-    let verrel = removePrefix (pkg ++ "-") nvr
-    case mode of
-      Install -> do
-        let req = fromMaybe pkg mdep
-        installed <- cmdMaybe "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", req]
-        if Just (req ++ "-" ++ verrel) == installed
-          then putStrLn $ nvr +-+ "already installed!\n"
-          else do
-          putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
-          cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
-          putStrLn ""
-          let spec = wd </> pkg ++ ".spec"
-          putStrLn "repoquerying deps..."
-          -- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> "pkg"
-          depvers <- (map (processDeps . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefPkg
-          missing <- nub <$> filterM notInstalled depvers
-          -- FIXME sort into build order
-          let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (map fst missing)
-          unless (null hmissing) $ do
-            putStrLn "Missing:"
-            mapM_ putStrLn hmissing
-            mapM_ (fhbuildMissing dist) hmissing
-          stillMissing <- map (uncurry maybePkgVer) <$> filterM notInstalled missing
-          unless (null stillMissing) $ do
-            putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
-            sudo "yum" $ ["install", "-y", "--nogpgcheck"] ++ stillMissing
-          putStrLn $ "Building" +-+ nvr +-+ "(buildlog:" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
-          -- workaround "fedpkg --path dir local" saving .build.log in cwd
-          withCurrentDirectory wd $
+  withCurrentDirectory wd $ do
+    retired <- doesFileExist "dead.package"
+    unless retired $ do
+      cmdAssert "not a Fedora pkg git dir!" "grep" ["-q", "pkgs.fedoraproject.org", ".git/config"]
+      when dirExists $ do
+        actual <- gitBranch
+        when (branch /= actual) $
+          cmd_ "fedpkg" ["switch-branch", branch]
+        cmd_ "git" ["pull", "-q"]
+      nvr <- cmd "fedpkg" ["verrel"]
+      let verrel = removePrefix (pkg ++ "-") nvr
+      case mode of
+        Install -> do
+          let req = fromMaybe pkg mdep
+          installed <- cmdMaybe "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", req]
+          if Just (req ++ "-" ++ verrel) == installed
+            then putStrLn $ nvr +-+ "already installed!\n"
+            else do
+            putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
+            cmd_ "git" ["--no-pager", "log", "-1"]
+            putStrLn ""
+            let spec = pkg ++ ".spec"
+            putStrLn "repoquerying deps..."
+            -- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> "pkg"
+            depvers <- (map (processDeps . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefPkg
+            missing <- nub <$> filterM notInstalled depvers
+            -- FIXME sort into build order
+            let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (map fst missing)
+            unless (null hmissing) $ do
+              putStrLn "Missing:"
+              mapM_ putStrLn hmissing
+              mapM_ (fhbuildMissing dist) hmissing
+            stillMissing <- map (uncurry maybePkgVer) <$> filterM notInstalled missing
+            unless (null stillMissing) $ do
+              putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
+              sudo "yum" $ ["install", "-y", "--nogpgcheck"] ++ stillMissing
+            putStrLn $ "Building" +-+ nvr +-+ "(buildlog:" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
+            -- note "fedpkg --path dir local" saves .build.log in cwd
             cmdlog "fedpkg" ["-q", "local"]
-          putStrLn $ nvr +-+ "built\n"
-          opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
-          ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
-          unless (null ipkgs) $
-            sudo "yum" ("remove":ipkgs)
-          arch <- cmd "arch" []
-          let rpms = map (\ p -> wd </> arch </> p ++ "-" ++ verrel ++ "." ++ arch ++ ".rpm") opkgs
-          sudo "yum" $ ["-y", "localinstall"] ++ rpms
-      Mock -> do
-        putStrLn $ "Mock building" +-+ nvr
-        cmdlog "fedpkg" ["--path", wd, "mockbuild"]
-      Koji -> do
-        cmd_ "git" ["--no-pager", "-C", wd, "log", "-1"]
-        let target = dist ++ "-build"
-        -- FIXME: handle case of no build
-        latest <- kojiLatestPkg target pkg
-        if nvr == latest
-          then error $ nvr +-+ "already built!"
-          else do
-          putStrLn $ latest +-+ "->" +-+ nvr
-          cmdlog "fedpkg" ["--path", wd, "build"]
-          when (dist /= rawhide) $ do
-            user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
-            -- FIXME: improve Notes with recursive info
-            cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
-          cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
-      Pending -> do
-        let target = dist ++ "-build"
-        -- FIXME: handle case of no build
-        latest <- kojiLatestPkg target pkg
-        unless (eqNVR nvr latest) $
-          putStrLn $ latest +-+ "->" +-+ nvr
-      Changed -> do
-        let target = dist ++ "-build"
-        -- FIXME: handle case of no build
-        latest <- kojiLatestPkg target pkg
-        unless (eqNVR nvr latest) $
-          putStrLn pkg
+            putStrLn $ nvr +-+ "built\n"
+            opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
+            ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
+            unless (null ipkgs) $
+              sudo "yum" ("remove":ipkgs)
+            arch <- cmd "arch" []
+            let rpms = map (\ p -> arch </> p ++ "-" ++ verrel ++ "." ++ arch ++ ".rpm") opkgs
+            sudo "yum" $ ["-y", "localinstall"] ++ rpms
+        Mock -> do
+          putStrLn $ "Mock building" +-+ nvr
+          cmdlog "fedpkg" ["mockbuild"]
+        Koji -> do
+          cmd_ "git" ["--no-pager", "log", "-1"]
+          let target = dist ++ "-build"
+          -- FIXME: handle case of no build
+          latest <- kojiLatestPkg target pkg
+          if nvr == latest
+            then error $ nvr +-+ "already built!"
+            else do
+            putStrLn $ latest +-+ "->" +-+ nvr
+            cmdlog "fedpkg" ["build"]
+            when (dist /= rawhide) $ do
+              user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
+              -- FIXME: improve Notes with recursive info
+              cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
+            cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
+        Pending -> do
+          let target = dist ++ "-build"
+          -- FIXME: handle case of no build
+          latest <- kojiLatestPkg target pkg
+          unless (eqNVR nvr latest) $
+            putStrLn $ latest +-+ "->" +-+ nvr
+        Changed -> do
+          let target = dist ++ "-build"
+          -- FIXME: handle case of no build
+          latest <- kojiLatestPkg target pkg
+          unless (eqNVR nvr latest) $
+            putStrLn pkg
 
 withCurrentDirectory :: FilePath -> IO a -> IO a
 withCurrentDirectory dir m =
