@@ -142,9 +142,10 @@ comma nv = reverse eman ++ "," ++ reverse rev
     (rev, '-':eman) = break (== '-') $ reverse nv
 
 colon :: String -> (String, String)
-colon ps = (nv,s)
+colon "" = ("","")
+colon ps = (nv, if null s then s else removePrefix ":" s)
   where
-    (nv, ':':s) = break (== ':') ps
+    (nv, s) = break (== ':') ps
 
 updateBug :: String -> String -> String -> String -> String -> IO ()
 updateBug bid bcomp hkgver cblrp state = do
