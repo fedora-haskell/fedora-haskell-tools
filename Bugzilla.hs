@@ -45,7 +45,7 @@ data BugState = BugState {
 ghcVersion :: String
 ghcVersion = "7.8.3"
 
-data Flag = Force | DryRun | Refresh | State String
+data Flag = Force | DryRun | NoComment | Refresh | State String
    deriving (Eq, Show)
 
 options :: [OptDescr Flag]
@@ -54,6 +54,7 @@ options =
  , Option "n" ["dryrun"] (NoArg DryRun) "do not update bugzilla"
  , Option "r" ["refresh"] (NoArg Refresh) "update if cblrepo status changed"
  , Option "s" ["state"]  (ReqArg State "BUGSTATE") "bug state (default NEW)"
+ , Option "N" ["no-comment"]  (NoArg NoComment) "update the whiteboard only"
  ]
 
 parseOpts :: [String] -> IO ([Flag], [String])
@@ -124,8 +125,9 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
                    else "*" +-+ (if null bwh then "New" else hkgver +-+ "->") +-+ hkgver' ++ ":" +-+ statemsg
         unless (null cblrp) $
           putStrLn cblrp
-        unless (DryRun `elem` opts) $
-          updateBug bid bcomp hkgver' cblrp state
+        unless (DryRun `elem` opts) $ do
+          let nocomment = NoComment `elem` opts
+          updateBug bid bcomp hkgver' cblrp state' nocomment
 
 excludedPkgs :: [String]
 -- git-annex made cblrepo use 9GB of vmem...
@@ -147,17 +149,16 @@ colon ps = (nv, if null s then "" else removePrefix ":" s)
   where
     (nv, s) = break (== ':') ps
 
-updateBug :: String -> String -> String -> String -> String -> IO ()
-updateBug bid bcomp hkgver cblrp state = do
+updateBug :: String -> String -> String -> String -> String -> Bool -> IO ()
+updateBug bid bcomp hkgver cblrp state nocomment = do
   rebuilds <- if null cblrp then tail . lines <$> cmd "cblrepo" ["build", removeGhcPrefix bcomp] else return []
   progname <- getProgName
   let comment = progname ++ ":" +-+
                 if null cblrp
-                then "Rawhide can be updated to" +-+ hkgver +-+ "\naccording to the current cblrepo data in haskell-sig.git" ++ (if null rebuilds then "\nwithout any other package rebuilds." else ".\n\nIt would require rebuilding:\n" +-+  unwords rebuilds)
+                then "Rawhide can be updated to" +-+ hkgver +-+ "\naccording to the current cblrepo data in haskell-sig.git" ++ (if null rebuilds then "\nwithout any other package rebuilds." else ".\n\nIt would require also rebuilding:\n" +-+  unwords rebuilds)
                 else "cblrepo output for" +-+ hkgver ++ ":\n\n" ++ cblrp
-  bugzillaModify ["--whiteboard==" ++ hkgver ++ ":" ++ state,
-                  "--comment=" ++ comment,
-                  bid]
+  bugzillaModify $ ["--whiteboard==" ++ hkgver ++ ":" ++ state] ++
+    (if nocomment then [] else ["--comment=" ++ comment]) ++ [bid]
 
 updateCabalPackages :: IO ()
 updateCabalPackages = do
