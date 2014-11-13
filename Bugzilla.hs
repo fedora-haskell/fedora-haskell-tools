@@ -104,20 +104,20 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
     let hkg = removeGhcPrefix bcomp
         (hkgver, state) = colon bwh
         hkgver' = removeGhcPrefix $ removeSuffix " is available" bsum
-    unless (null bwh || hkg `isPrefixOf` hkgver) $
+    unless (null hkgver || hkg `isPrefixOf` hkgver) $
       putStrLn $ "Whiteboard format warning for" +-+ hkgver' ++ ":" +-+ bwh +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
     -- should not happen!
     unless (hkg `isPrefixOf` hkgver') $
       putStrLn $ "Component and Summary inconsistent!" +-+ hkg +-+ hkgver' +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
     let force = Force `elem` opts
         refresh = Refresh `elem` opts
-    unless (hkgver == hkgver' && not (force || refresh)) $ do
+    when (hkgver /= hkgver' || force || refresh) $ do
       updateCabalPackages
       cblrp <- cmd "cblrepo" ["-n", "add", comma hkgver']
       let state' | null cblrp = "ok"
                  | "haskell-platform" `isInfixOf` cblrp = "HP"
                  | otherwise = "NG"
-      unless ((hkgver, state) == (hkgver', state') && not force) $ do
+      when ((hkgver, state) /= (hkgver', state') || force) $ do
         let statemsg = if state == state' then state else state +-+ "->" +-+ state'
         putStrLn $ if hkgver == hkgver'
                    then "*" +-+ hkgver ++ ":" +-+ statemsg
@@ -143,7 +143,7 @@ comma nv = reverse eman ++ "," ++ reverse rev
 
 colon :: String -> (String, String)
 colon "" = ("","")
-colon ps = (nv, if null s then s else removePrefix ":" s)
+colon ps = (nv, if null s then "" else removePrefix ":" s)
   where
     (nv, s) = break (== ':') ps
 
