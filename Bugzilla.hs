@@ -119,7 +119,7 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
                  | "haskell-platform" `isInfixOf` cblrp = "HP"
                  | otherwise = "NG"
       when ((hkgver, state) /= (hkgver', state') || force) $ do
-        let statemsg = if state == state' then state else state +-+ "->" +-+ state'
+        let statemsg = if null state || state == state' then state' else state +-+ "->" +-+ state'
         putStrLn $ if hkgver == hkgver'
                    then "*" +-+ hkgver ++ ":" +-+ statemsg
                    else "*" +-+ (if null bwh then "New" else hkgver +-+ "->") +-+ hkgver' ++ ":" +-+ statemsg
