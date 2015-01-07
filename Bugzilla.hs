@@ -121,9 +121,11 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
       when ((hkgver, state) /= (hkgver', state') || force) $ do
         let statemsg = if null state || state == state' then state' else state +-+ "->" +-+ state'
         putStrLn $ if hkgver == hkgver'
-                   then "*" +-+ hkgver ++ ":" +-+ statemsg
-                   else "*" +-+ (if null bwh then "New" else hkgver +-+ "->") +-+ hkgver' ++ ":" +-+ statemsg
-        putStrLn $ cblrp ++ "\n"
+                   then hkgver ++ ":" +-+ statemsg
+                   else (if null bwh then "New" else hkgver +-+ "->") +-+ hkgver' ++ ":" +-+ statemsg
+        unless (null cblrp) $
+          putStrLn cblrp
+        putStrLn
         unless (DryRun `elem` opts) $ do
           let nocomment = NoComment `elem` opts
           updateBug bid bcomp hkgver' cblrp state' nocomment
