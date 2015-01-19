@@ -125,7 +125,7 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
                    else (if null bwh then "New" else hkgver +-+ "->") +-+ hkgver' ++ ":" +-+ statemsg
         unless (null cblrp) $
           putStrLn cblrp
-        putStrLn
+        putStrLn ""
         unless (DryRun `elem` opts) $ do
           let nocomment = NoComment `elem` opts
           updateBug bid bcomp hkgver' cblrp state' nocomment
