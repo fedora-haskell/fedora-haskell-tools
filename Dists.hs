@@ -18,6 +18,7 @@ module Dists (dists,
              distShort,
              distVersion,
              distRepo,
+             distTarget,
              distUpdates,
              distOverride,
              rawhide) where
@@ -56,5 +57,9 @@ distUpdates _ = Nothing
 
 distOverride :: String -> Bool
 distOverride d | d == rawhide = False
-               | d == "epel7" = False
+--               | d == "epel8" = False
                | otherwise = True
+
+distTarget :: String -> String
+distTarget d | d == rawhide = rawhide ++ "-ghc"
+             | otherwise = d ++ "-build"

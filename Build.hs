@@ -122,6 +122,7 @@ build mode dist mdir mdep pkg = do
         cmd_ "git" ["pull", "-q"]
       nvr <- cmd "fedpkg" ["verrel"]
       let verrel = removePrefix (pkg ++ "-") nvr
+          target = distTarget dist
       case mode of
         Install -> do
           let req = fromMaybe pkg mdep
@@ -164,7 +165,6 @@ build mode dist mdir mdep pkg = do
           cmdlog "fedpkg" ["mockbuild"]
         Koji -> do
           cmd_ "git" ["--no-pager", "log", "-1"]
-          let target = dist ++ "-build"
           -- FIXME: handle case of no build
           latest <- kojiLatestPkg target pkg
           if nvr == latest
@@ -178,13 +178,11 @@ build mode dist mdir mdep pkg = do
               cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
             cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
         Pending -> do
-          let target = dist ++ "-build"
           -- FIXME: handle case of no build
           latest <- kojiLatestPkg target pkg
           unless (eqNVR nvr latest) $
             putStrLn $ latest +-+ "->" +-+ nvr
         Changed -> do
-          let target = dist ++ "-build"
           -- FIXME: handle case of no build
           latest <- kojiLatestPkg target pkg
           unless (eqNVR nvr latest) $
