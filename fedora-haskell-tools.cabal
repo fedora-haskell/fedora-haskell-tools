@@ -26,20 +26,10 @@ Executable fhbuild
                    filepath,
                    process,
                    unix
-    Other-modules: Utils
---    Hs-Source-Dirs:     src
-    GHC-options:        -fwarn-missing-signatures -Wall
-
-Executable fhkoji
-    Main-is:       Koji.hs
-    Build-depends: base < 5,
-                   directory,
-                   filepath,
-                   process,
-                   unix
     Other-modules: Dists,
                    Utils
-    GHC-options:   -fwarn-missing-signatures -Wall
+--    Hs-Source-Dirs:     src
+    GHC-options:        -fwarn-missing-signatures -Wall
 
 Executable fhbz
     Main-is:       Bugzilla.hs
