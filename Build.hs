@@ -167,7 +167,7 @@ build mode dist mdir mdep pkg = do
             then error $ nvr +-+ "already built!"
             else do
             putStrLn $ latest +-+ "->" +-+ nvr
-            cmdlog "fedpkg" ["build"]
+            cmdlog "fedpkg" $ ["build"] ++ (maybe [] (["--target"] ++) (distBuildTarget dist))
             when (distOverride dist) $ do
               user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
               -- FIXME: improve Notes with recursive info

@@ -15,6 +15,7 @@
 
 module Dists (dists,
              distBranch,
+             distBuildTarget,
              distShort,
              distVersion,
              distRepo,
@@ -63,3 +64,7 @@ distOverride d | d == rawhide = False
 distTarget :: String -> String
 distTarget d | d == rawhide = rawhide ++ "-ghc"
              | otherwise = d ++ "-build"
+
+distBuildTarget  :: String -> Maybe [String]
+distBuildTarget d | d == rawhide = Just $ [rawhide ++ "-ghc"]
+                  | otherwise = Nothing
