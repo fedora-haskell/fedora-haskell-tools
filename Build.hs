@@ -95,14 +95,10 @@ determinePkgBranch = do
       else
       error "Not a git repo: cannot determine branch"
 
-dist2branch :: String -> String
-dist2branch d | d == rawhide = "master"
-              | otherwise = d
-
 build :: Command -> String -> Maybe FilePath -> Maybe String -> String -> IO ()
 build mode dist mdir mdep pkg = do
   let dir = fromMaybe pkg mdir
-      branch = dist2branch dist
+      branch = distBranch dist
   dirExists <- if isJust mdir then return True else doesDirectoryExist dir
   unless (mode `elem` [Pending, Changed]) $
     putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
@@ -172,7 +168,7 @@ build mode dist mdir mdep pkg = do
             else do
             putStrLn $ latest +-+ "->" +-+ nvr
             cmdlog "fedpkg" ["build"]
-            when (dist /= rawhide) $ do
+            when (distOverride dist) $ do
               user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
               -- FIXME: improve Notes with recursive info
               cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
