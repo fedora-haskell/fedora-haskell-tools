@@ -163,7 +163,6 @@ build mode dist mdir mdep pkg = do
           cmdlog "fedpkg" ["mockbuild"]
         Koji -> do
           cmd_ "git" ["--no-pager", "log", "-1"]
-          -- FIXME: handle case of no build
           latest <- kojiLatestPkg target pkg
           if nvr == latest
             then error $ nvr +-+ "already built!"
@@ -176,12 +175,10 @@ build mode dist mdir mdep pkg = do
               cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
             cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
         Pending -> do
-          -- FIXME: handle case of no build
           latest <- kojiLatestPkg target pkg
           unless (eqNVR nvr latest) $
             putStrLn $ latest +-+ "->" +-+ nvr
         Changed -> do
-          -- FIXME: handle case of no build
           latest <- kojiLatestPkg target pkg
           unless (eqNVR nvr latest) $
             putStrLn pkg

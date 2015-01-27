@@ -85,8 +85,9 @@ shell :: String -> IO String
 shell c = cmd "sh" ["-c", c]
 
 kojiLatestPkg :: String -> String -> IO String
-kojiLatestPkg dist pkg =
-  (head . words) <$> cmd "koji" ["latest-pkg", "--quiet", dist, pkg]
+kojiLatestPkg dist pkg = do
+  res <- words <$> cmd "koji" ["latest-pkg", "--quiet", dist, pkg]
+  return $ if null res then "" else head res
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =
