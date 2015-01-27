@@ -30,7 +30,7 @@ import System.IO (hPutStrLn, stderr)
 import Dists
 import Utils
 
-data Command = Install | Mock | Koji | Pending | Changed deriving (Eq)
+data Command = Install | Mock | Koji | Pending | Changed | Built deriving (Eq)
 
 main :: IO ()
 main = do
@@ -42,10 +42,11 @@ main = do
     mode "koji" = Koji
     mode "pending" = Pending
     mode "changed" = Changed
+    mode "built" = Built
     mode _ = undefined
 
 commands :: [String]
-commands = ["install", "mock" , "koji", "pending", "changed"]
+commands = ["install", "mock" , "koji", "pending", "changed", "built"]
 
 help :: IO ()
 help = do
@@ -58,6 +59,7 @@ help = do
     ++ "  koji\t\t- build in Koji\n"
     ++ "  pending\t- show planned changes\n"
     ++ "  changed\t- show changed pkgs\n"
+    ++ "  built\t\t- show pkgs whose NVR already built\n"
   exitWith (ExitFailure 1)
 
 -- allow "fhbuild CMD", "fhbuild CMD dir" or "fhbuild CMD DIST PKG..."
@@ -100,7 +102,7 @@ build mode dist mdir mdep pkg = do
   let dir = fromMaybe pkg mdir
       branch = distBranch dist
   dirExists <- if isJust mdir then return True else doesDirectoryExist dir
-  unless (mode `elem` [Pending, Changed]) $
+  unless (mode `elem` [Pending, Changed, Built]) $
     putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
   unless dirExists $ do
     let anon = ["-a" | mode /= Koji]
@@ -182,6 +184,10 @@ build mode dist mdir mdep pkg = do
           -- FIXME: handle case of no build
           latest <- kojiLatestPkg target pkg
           unless (eqNVR nvr latest) $
+            putStrLn pkg
+        Built -> do
+          latest <- kojiLatestPkg target pkg
+          when (eqNVR nvr latest) $
             putStrLn pkg
 
 withCurrentDirectory :: FilePath -> (FilePath -> IO a) -> IO a
