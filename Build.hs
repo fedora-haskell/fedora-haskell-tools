@@ -156,6 +156,7 @@ build mode dist mdir mdep pkg = do
             unless (null ipkgs) $
               sudo "yum" ("remove":ipkgs)
             arch <- cmd "arch" []
+            -- maybe filter out pandoc-pdf if not installed
             let rpms = map (\ p -> arch </> p ++ "-" ++ verrel ++ "." ++ arch ++ ".rpm") opkgs
             sudo "yum" $ ["-y", "localinstall"] ++ rpms
         Mock -> do
