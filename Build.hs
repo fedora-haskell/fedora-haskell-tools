@@ -35,7 +35,7 @@ data Command = Install | Mock | Koji | Pending | Changed | Built deriving (Eq)
 main :: IO ()
 main = do
   (com:dist:pkgs, mdir) <- getArgs >>= parseArgs
-  mapM_ (build (mode com) dist mdir Nothing) pkgs
+  build (mode com) dist mdir Nothing pkgs
   where
     mode "install" = Install
     mode "mock" = Mock
@@ -97,8 +97,9 @@ determinePkgBranch = do
       else
       error "Not a git repo: cannot determine branch"
 
-build :: Command -> String -> Maybe FilePath -> Maybe String -> String -> IO ()
-build mode dist mdir mdep pkg = do
+build :: Command -> String -> Maybe FilePath -> Maybe String -> [String] -> IO ()
+build _ _ _ _ [] = return ()
+build mode dist mdir mdep (pkg:rest) = do
   let dir = fromMaybe pkg mdir
       branch = distBranch dist
   dirExists <- if isJust mdir then return True else doesDirectoryExist dir
@@ -164,17 +165,21 @@ build mode dist mdir mdep pkg = do
           cmdlog "fedpkg" ["mockbuild"]
         Koji -> do
           cmd_ "git" ["--no-pager", "log", "-1"]
+          putStrLn ""
           latest <- kojiLatestPkg target pkg
           if nvr == latest
             then error $ nvr +-+ "already built!"
             else do
-            putStrLn $ latest +-+ "->" +-+ nvr
+            putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
             cmdlog "fedpkg" $ ["build"] ++ (maybe [] (["--target"] ++) (distBuildTarget dist))
             when (distOverride dist) $ do
               user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
               -- FIXME: improve Notes with recursive info
               cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
-            cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
+            when (not (null rest)) $ do
+               dep <- dependent pkg (head rest)
+               when dep $
+                 cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
         Pending -> do
           latest <- kojiLatestPkg target pkg
           unless (eqNVR nvr latest) $
@@ -187,6 +192,7 @@ build mode dist mdir mdep pkg = do
           latest <- kojiLatestPkg target pkg
           when (eqNVR nvr latest) $
             putStrLn pkg
+      build mode dist mdir mdep rest
 
 withCurrentDirectory :: FilePath -> (FilePath -> IO a) -> IO a
 withCurrentDirectory dir =
@@ -210,7 +216,7 @@ fhbuildMissing :: String -> String -> IO ()
 fhbuildMissing dist dep = do
   base <- derefSrcPkg dep
   maybe (error $ "No" +-+ dep +-+ "package available!")
-    (build Install dist Nothing (Just dep)) base
+    (\ p -> build Install dist Nothing (Just dep) [p]) base
 
 derefPkg :: (String, Maybe String) -> IO (String, Maybe String)
 derefPkg (pkg, mver) = do
@@ -251,3 +257,6 @@ processDeps [p, "=", v] = (p, Just v)
 processDeps (p:_) = (p, Nothing)
 processDeps [] = error "processDeps: empty string!"
 
+-- FIXME
+dependent :: String -> String -> IO Bool
+dependent dep pkg = return True

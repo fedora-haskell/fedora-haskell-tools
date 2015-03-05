@@ -4,6 +4,11 @@ use pkgdb-cli + cabal-sort for --all packages
 
 deps query tool
 
+# Issues
+- seems to fedpkg clone always now
+
+PARALLELIZE PARALLELIZE PARALLELIZE!!
+
 # git
 - branch merging
 - build new packages across branches

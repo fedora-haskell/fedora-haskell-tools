@@ -28,7 +28,7 @@ import Data.Char (isNumber)
 import Utils ((+-+))
 
 dists :: [String]
-dists = [rawhide, "f22", "f21", "f20", "f19", "epel7"]
+dists = [rawhide, "f22", "f21", "f20", "epel7"]
 
 rawhide :: String
 rawhide = "f23"
