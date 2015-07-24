@@ -175,7 +175,7 @@ build mode dist mdir mdep (pkg:rest) = do
             when (distOverride dist) $ do
               user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
               -- FIXME: improve Notes with recursive info
-              cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", pkg +-+ "stack"]
+              cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
             when (not (null rest)) $ do
                dep <- dependent pkg (head rest)
                when dep $
