@@ -28,6 +28,7 @@ import System.FilePath ((</>), dropExtension, takeBaseName, takeDirectory)
 import System.IO (hPutStrLn, stderr)
 
 import Dists
+import RPM
 import Utils
 
 data Command = Install | Mock | Koji | Pending | Changed | Built deriving (Eq)
@@ -145,9 +146,11 @@ build mode dist mdir mdep (pkg:rest) = do
               withCurrentDirectory cwd $ \ _ ->
                 mapM_ (fhbuildMissing dist) hmissing
             stillMissing <- map (uncurry maybePkgVer) <$> filterM notInstalled missing
+            pkgmgr <- packageManager
+
             unless (null stillMissing) $ do
               putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
-              sudo "yum" $ ["install", "-y", "--nogpgcheck"] ++ stillMissing
+              rpmInstall stillMissing
             putStrLn $ "Building" +-+ nvr +-+ "(buildlog:" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
             -- note "fedpkg --path dir local" saves .build.log in cwd
             cmdlog "fedpkg" ["-q", "local"]
@@ -155,11 +158,11 @@ build mode dist mdir mdep (pkg:rest) = do
             opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
             ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
             unless (null ipkgs) $
-              sudo "yum" ("remove":ipkgs)
+              sudo pkgmgr ("remove":ipkgs)
             arch <- cmd "arch" []
             -- maybe filter out pandoc-pdf if not installed
             let rpms = map (\ p -> arch </> p ++ "-" ++ verrel ++ "." ++ arch ++ ".rpm") opkgs
-            sudo "yum" $ ["-y", "install"] ++ rpms
+            rpmInstall rpms
         Mock -> do
           putStrLn $ "Mock building" +-+ nvr
           cmdlog "fedpkg" ["mockbuild"]
@@ -220,7 +223,7 @@ fhbuildMissing dist dep = do
 
 derefPkg :: (String, Maybe String) -> IO (String, Maybe String)
 derefPkg (pkg, mver) = do
-  res <- singleLine <$> cmd "repoquery" ["--qf", "%{name}", "--whatprovides", pkg]
+  res <- singleLine <$> repoquery ["--qf", "%{name}", "--whatprovides"] pkg
   when (null res) $ do
     installed <- not <$> notInstalled (pkg, mver)
     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
@@ -228,7 +231,7 @@ derefPkg (pkg, mver) = do
 
 derefSrcPkg :: String -> IO (Maybe String)
 derefSrcPkg pkg = do
-  res <- singleLine <$> cmd "repoquery" ["--qf", "%{base_package_name}", "--whatprovides", pkg]
+  res <- singleLine <$> repoquery ["--qf", "%{base_package_name}", "--whatprovides"] pkg
   if null res
      -- maybe package has never been built yet
     then do

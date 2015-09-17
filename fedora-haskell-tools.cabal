@@ -27,6 +27,7 @@ Executable fhbuild
                    process,
                    unix
     Other-modules: Dists,
+                   RPM,
                    Utils
 --    Hs-Source-Dirs:     src
     GHC-options:        -fwarn-missing-signatures -Wall
