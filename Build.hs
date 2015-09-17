@@ -231,7 +231,7 @@ derefPkg (pkg, mver) = do
 
 derefSrcPkg :: String -> IO (Maybe String)
 derefSrcPkg pkg = do
-  res <- singleLine <$> repoquery ["--qf", "%{base_package_name}", "--whatprovides"] pkg
+  res <- singleLine <$> repoquerySrc pkg
   if null res
      -- maybe package has never been built yet
     then do

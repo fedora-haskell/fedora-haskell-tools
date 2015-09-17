@@ -13,6 +13,7 @@
 
 module RPM (packageManager,
             repoquery,
+            repoquerySrc,
             rpmInstall) where
 
 import Control.Monad (when)
@@ -50,6 +51,12 @@ repoquery args key = do
   havednf <- optionalProgram "dnf"
   let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "-q"]) else ("repoquery", [])
   cmd prog (subcmd ++ args ++ [key])
+
+repoquerySrc :: String -> IO String
+repoquerySrc key = do
+  havednf <- optionalProgram "dnf"
+  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "-q", "--srpm"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
+  cmd prog (subcmd ++ [key])
 
 rpmInstall :: [String] -> IO ()
 rpmInstall rpms = do
