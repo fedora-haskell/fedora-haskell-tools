@@ -55,7 +55,7 @@ repoquery args key = do
 repoquerySrc :: String -> IO String
 repoquerySrc key = do
   havednf <- optionalProgram "dnf"
-  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "-q", "--srpm"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
+  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "-q", "--srpm", "--qf", "%{name}"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
   cmd prog (subcmd ++ [key])
 
 rpmInstall :: [String] -> IO ()
