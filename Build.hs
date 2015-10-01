@@ -195,7 +195,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
         latest <- kojiLatestPkg target pkg
         when (eqNVR nvr latest) $
           putStrLn pkg
-    build topdir mode dist mdir mdep rest
+  build topdir mode dist mdir mdep rest
 
 maybePkgVer :: String -> Maybe String -> String
 maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver
