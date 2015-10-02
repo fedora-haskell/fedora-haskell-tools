@@ -114,7 +114,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
   let wd = dir </> if b then branch else ""
   setCurrentDirectory wd
   retired <- doesFileExist "dead.package"
-  unless retired $ do
+  if retired then putStrLn "skipping dead.package" else do
     cmdAssert "not a Fedora pkg git dir!" "grep" ["-q", "pkgs.fedoraproject.org", ".git/config"]
     when dirExists $ do
       actual <- gitBranch
