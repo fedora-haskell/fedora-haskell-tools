@@ -87,7 +87,7 @@ determinePkgBranch :: IO (String, String, FilePath) -- (branch, pkg, dir)
 determinePkgBranch = do
   dir <- getCurrentDirectory
   let base = takeBaseName dir
-  if base `elem` ["master", "f20", "f19"]
+  if base `elem` map distBranch dists
     then return (base, takeBaseName $ takeDirectory dir, dir)
     else do
     git <- doesDirectoryExist (dir </> ".git")
