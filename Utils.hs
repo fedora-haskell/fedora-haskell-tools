@@ -47,6 +47,11 @@ cmdMaybe c as = do
     ExitSuccess -> return $ Just $ removeTrailingNewline out
     ExitFailure _ -> return Nothing
 
+cmdStdErr :: String -> [String] -> IO (String)
+cmdStdErr c as = do
+  (_ret, out, err) <- readProcessWithExitCode c as ""
+  return $ removeTrailingNewline $ err ++ "\n" ++ out
+
 cmd_ :: String -> [String] -> IO ()
 cmd_ c as = do
   ret <- rawSystem c as

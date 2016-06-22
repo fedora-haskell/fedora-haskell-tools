@@ -18,10 +18,10 @@ module Main where
 import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
 import Data.Char (isLetter)
-import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf)
+import Data.List (intercalate, {-isInfixOf, isSuffixOf,-} isPrefixOf)
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
-import System.Directory (doesFileExist, getCurrentDirectory, getModificationTime)
+import System.Directory ({-doesFileExist, getCurrentDirectory,-} getModificationTime)
 import System.Environment (getArgs, getEnv, getProgName)
 import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               getOpt, usageInfo)
@@ -52,7 +52,7 @@ options :: [OptDescr Flag]
 options =
  [ Option "f" ["force"]  (NoArg Force)  "update even if no version change (implies --refresh)"
  , Option "n" ["dryrun"] (NoArg DryRun) "do not update bugzilla"
- , Option "r" ["refresh"] (NoArg Refresh) "update if cblrepo status changed"
+ , Option "r" ["refresh"] (NoArg Refresh) "update if status changed"
  , Option "s" ["state"]  (ReqArg State "BUGSTATE") "bug state (default NEW)"
  , Option "N" ["no-comment"]  (NoArg NoComment) "update the whiteboard only"
  ]
@@ -68,22 +68,10 @@ parseOpts argv =
 
 main :: IO ()
 main = do
-  dir <- getCurrentDirectory
-  unless ("cblrepo/f22" `isSuffixOf` dir) $
-    error $ "Not in cblrepo/f22/ !" +-+ cblrepoHelp
-  db <- doesFileExist "cblrepo.db"
-  unless db $
-    error $ "No cblrepo.db!" +-+ cblrepoHelp
-  ghc <- shell "cblrepo list | grep '^ghc  '"
-  unless ("ghc " +-+ ghcVersion `isPrefixOf` ghc) $
-    error $ "cblrepo.db does not contain ghc-" ++ ghcVersion ++ ":" +-+ ghc
   (opts, args) <- getArgs >>= parseOpts
   let state = fromMaybe "NEW" $ listToMaybe $ map (\ (State s) -> s) $ filter (\ o -> case o of (State _) -> True ; _ -> False) opts
   bugs <- parseLines . lines <$> bugzillaQuery (["--cc=haskell-devel@lists.fedoraproject.org", "--bug_status=" ++ state, "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ if null args then [] else ["--component=" ++ intercalate "," args])
   mapM_ (checkBug opts) bugs
-
-cblrepoHelp :: String
-cblrepoHelp = "Please run in haskell-sig/cblrepo/f22/ dir.\nGet it with: git clone git://git.fedorahosted.org/git/haskell-sig.git"
 
 bugzillaQuery :: [String] -> IO String
 bugzillaQuery args = cmd "bugzilla" ("query":args)
@@ -114,10 +102,8 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
         refresh = Refresh `elem` opts
     when (hkgver /= hkgver' || force || refresh) $ do
       updateCabalPackages
-      cblrp <- cmd "cblrepo" ["-n", "add", comma hkgver']
-      let state' | null cblrp = "ok"
-                 | "haskell-platform" `isInfixOf` cblrp = "HP"
-                 | otherwise = "NG"
+      cblrp <- cmdStdErr "cblrpm" ["missingdeps", hkgver']
+      let state' = if null cblrp then "ok" else "deps"
       when ((hkgver, state) /= (hkgver', state') || force) $ do
         let statemsg = if null state || state == state' then state' else state +-+ "->" +-+ state'
         putStrLn $ if hkgver == hkgver'
@@ -131,8 +117,7 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
           updateBug bid bcomp hkgver' cblrp state' nocomment
 
 excludedPkgs :: [String]
--- git-annex made cblrepo use 9GB of vmem...
-excludedPkgs = ["ghc", "git-annex"]
+excludedPkgs = ["ghc", "emacs-haskell-mode"]
 
 removeGhcPrefix :: String -> String
 removeGhcPrefix p@('g':'h':'c':'-':rest) | isLetter $ head rest = rest
@@ -151,13 +136,13 @@ colon ps = (nv, if null s then "" else removePrefix ":" s)
     (nv, s) = break (== ':') ps
 
 updateBug :: String -> String -> String -> String -> String -> Bool -> IO ()
-updateBug bid bcomp hkgver cblrp state nocomment = do
-  rebuilds <- if null cblrp then tail . lines <$> cmd "cblrepo" ["build", removeGhcPrefix bcomp] else return []
+updateBug bid _bcomp hkgver cblrp state nocomment = do
+--  rebuilds <- if null cblrp then tail . lines <$> cmd "cblrepo" ["build", removeGhcPrefix bcomp] else return []
   progname <- getProgName
   let comment = progname ++ ":" +-+
                 if null cblrp
-                then "Rawhide can be updated to" +-+ hkgver +-+ "\naccording to the current cblrepo data in haskell-sig.git" ++ (if null rebuilds then "\nwithout any other package rebuilds." else ".\n\nIt would require also rebuilding:\n" +-+  unwords rebuilds)
-                else "cblrepo output for" +-+ hkgver ++ ":\n\n" ++ cblrp
+                then "No missing dependencies for" +-+ hkgver +-+ "\naccording to cblrpm missingdeps" {-++ (if null rebuilds then "\nwithout any other package rebuilds." else ".\n\nIt would require also rebuilding:\n" +-+  unwords rebuilds)-}
+                else  "cblrpm missingdeps output for" +-+ hkgver ++ ":\n\n" ++ cblrp
   bugzillaModify $ ["--whiteboard==" ++ hkgver ++ ":" ++ state] ++
     (if nocomment then [] else ["--comment=" ++ comment]) ++ [bid]
 
