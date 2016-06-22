@@ -145,6 +145,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
             putStrLn "Missing:"
             mapM_ putStrLn hmissing
             mapM_ (fhbuildMissing topdir dist) hmissing
+            setCurrentDirectory $ topdir </> wd
           stillMissing <- map (uncurry maybePkgVer) <$> filterM notInstalled missing
           pkgmgr <- packageManager
 
