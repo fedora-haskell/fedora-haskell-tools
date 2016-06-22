@@ -159,7 +159,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
           opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
           ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
           unless (null ipkgs) $
-            sudo pkgmgr ("remove":ipkgs)
+            sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":ipkgs)
           arch <- cmd "arch" []
           -- maybe filter out pandoc-pdf if not installed
           let rpms = map (\ p -> arch </> p ++ "-" ++ verrel ++ "." ++ arch ++ ".rpm") opkgs
