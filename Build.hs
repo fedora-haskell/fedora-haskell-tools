@@ -252,4 +252,4 @@ processDeps [] = error "processDeps: empty string!"
 
 -- FIXME
 dependent :: String -> String -> IO Bool
-dependent dep pkg = return True
+dependent _dep _pkg = return True
