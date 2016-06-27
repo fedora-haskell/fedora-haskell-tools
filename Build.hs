@@ -80,7 +80,7 @@ parseArgs [c, pkg] | c `elem` commands = do
 parseArgs (c:dist:pkgs) |  c `elem` commands
                            && dist `elem` dists
                            && not (null pkgs) =
-                             return (c:dist:pkgs, Nothing)
+                             return (c:dist:map (removeSuffix "/") pkgs, Nothing)
 parseArgs _ = help >> return ([], Nothing)
 
 determinePkgBranch :: IO (String, String, FilePath) -- (branch, pkg, dir)
