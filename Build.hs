@@ -157,12 +157,12 @@ build topdir mode dist mdir mdep (pkg:rest) = do
           cmdlog "fedpkg" ["-q", "local"]
           putStrLn $ nvr +-+ "built\n"
           opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
+          rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n", spec]
           ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
           unless (null ipkgs) $
             sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":ipkgs)
-          arch <- cmd "arch" []
           -- maybe filter out pandoc-pdf if not installed
-          let rpms = map (\ p -> arch </> p ++ "-" ++ verrel ++ "." ++ arch ++ ".rpm") opkgs
+          setCurrentDirectory topdir
           rpmInstall rpms
       Mock -> do
         putStrLn $ "Mock building" +-+ nvr
