@@ -157,7 +157,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
           cmdlog "fedpkg" ["-q", "local"]
           putStrLn $ nvr +-+ "built\n"
           opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
-          rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n", spec]
+          rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", wd </> "%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n", spec]
           ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
           unless (null ipkgs) $
             sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":ipkgs)
