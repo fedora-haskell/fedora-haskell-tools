@@ -160,7 +160,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
           rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", wd </> "%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n", spec]
           ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
           unless (null ipkgs) $
-            sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":ipkgs)
+            sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":ipkgs)
           -- maybe filter out pandoc-pdf if not installed
           setCurrentDirectory topdir
           rpmInstall rpms
