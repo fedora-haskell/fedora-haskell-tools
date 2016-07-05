@@ -15,10 +15,10 @@
 
 module Dists (dists,
              distBranch,
-             distBuildTarget,
              distShort,
              distVersion,
              distRepo,
+             distTag,
              distTarget,
              distUpdates,
              distOverride,
@@ -62,10 +62,10 @@ distOverride d | d == rawhide = False
 --               | d == "epel8" = False
                | otherwise = True
 
-distTarget :: String -> String
-distTarget d | d == rawhide = rawhide ++ "-build"
+distTag :: String -> String
+distTag d | d == rawhide = rawhide ++ "-ghc"
              | otherwise = d ++ "-build"
 
-distBuildTarget  :: String -> Maybe [String]
-distBuildTarget d | d == rawhide = Nothing -- Just $ [rawhide ++ "-ghc"]
+distTarget  :: String -> Maybe String
+distTarget d | d == rawhide = Just $ rawhide ++ "-ghc" -- Nothing
                   | otherwise = Nothing

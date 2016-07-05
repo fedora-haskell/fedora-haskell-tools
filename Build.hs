@@ -122,7 +122,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
       cmd_ "git" ["pull", "-q"]
     nvr <- cmd "fedpkg" ["verrel"]
     let verrel = removePrefix (pkg ++ "-") nvr
-        target = distTarget dist
+        tag = distTag dist
     case mode of
       Install -> do
         let req = fromMaybe pkg mdep
@@ -169,7 +169,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
       Koji -> do
         cmd_ "git" ["--no-pager", "log", "-1"]
         putStrLn ""
-        latest <- kojiLatestPkg target pkg
+        latest <- kojiLatestPkg tag pkg
         if nvr == latest
           then error $ nvr +-+ "already built!"
           else do
@@ -183,19 +183,19 @@ build topdir mode dist mdir mdep (pkg:rest) = do
           unless (null rest) $ do
             dep <- dependent pkg (head rest) branch topdir
             when dep $
-              cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
+              cmdlog "koji" ["wait-repo", tag, "--build=" ++ nvr]
             putStrLn ""
             putStrLn $ show (length rest) +-+ "packages left"
       Pending -> do
-        latest <- kojiLatestPkg target pkg
+        latest <- kojiLatestPkg tag pkg
         unless (eqNVR nvr latest) $
           putStrLn $ latest +-+ "->" +-+ nvr
       Changed -> do
-        latest <- kojiLatestPkg target pkg
+        latest <- kojiLatestPkg tag pkg
         unless (eqNVR nvr latest) $
           putStrLn pkg
       Built -> do
-        latest <- kojiLatestPkg target pkg
+        latest <- kojiLatestPkg tag pkg
         when (eqNVR nvr latest) $
           putStrLn pkg
   build topdir mode dist mdir mdep rest
