@@ -29,7 +29,6 @@ Executable fhbuild
     Other-modules: Dists,
                    RPM,
                    Utils
---    Hs-Source-Dirs:     src
     GHC-options:        -fwarn-missing-signatures -Wall
 
 Executable fhbz
@@ -37,3 +36,14 @@ Executable fhbz
     Build-depends: base < 5,
                    time
     GHC-options:   -fwarn-missing-signatures -Wall
+
+Executable fhorder
+    Main-is:       Order.hs
+    Build-depends: base < 5,
+                   filepath,
+                   unix
+    Other-modules: Dists,
+                   RPM,
+                   Utils
+    GHC-options:        -fwarn-missing-signatures -Wall
+
