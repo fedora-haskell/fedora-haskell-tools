@@ -47,7 +47,7 @@ cmdMaybe c as = do
     ExitSuccess -> return $ Just $ removeTrailingNewline out
     ExitFailure _ -> return Nothing
 
-cmdStdErr :: String -> [String] -> IO (String)
+cmdStdErr :: String -> [String] -> IO String
 cmdStdErr c as = do
   (_ret, out, err) <- readProcessWithExitCode c as ""
   return $ removeTrailingNewline $ err ++ out
@@ -75,6 +75,11 @@ cmdlog c as = do
   date <- cmd "date" ["+%T"]
   putStrLn $ date +-+ c +-+ unwords as
   cmd_ c as
+
+logMsg :: String -> IO ()
+logMsg msg = do
+  date <- cmd "date" ["+%T"]
+  putStrLn $ date +-+ msg
 
 cmdBool :: String -> [String] -> IO Bool
 cmdBool c as = do

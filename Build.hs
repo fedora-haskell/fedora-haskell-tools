@@ -110,8 +110,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
   unless dirExists $ do
     let anon = ["-a" | mode /= Koji]
     cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
-  b <- doesDirectoryExist $ dir </> branch
-  let wd = dir </> if b then branch else ""
+  wd <- pkgDir dir branch ""
   setCurrentDirectory wd
   retired <- doesFileExist "dead.package"
   if retired then putStrLn "skipping dead.package" else do
@@ -175,15 +174,18 @@ build topdir mode dist mdir mdep (pkg:rest) = do
           then error $ nvr +-+ "already built!"
           else do
           putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
-          cmdlog "fedpkg" $ ["build"] ++ (maybe [] (["--target"] ++) (distBuildTarget dist))
+          cmdlog "fedpkg" $ "build": maybe [] (\ d -> "--target":[d]) (distTarget dist)
+          logMsg $ nvr +-+ "built"
           when (distOverride dist) $ do
             user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
             -- FIXME: improve Notes with recursive info
-            cmdlog "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
-          when (not (null rest)) $ do
-            dep <- dependent pkg (head rest)
+            cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
+          unless (null rest) $ do
+            dep <- dependent pkg (head rest) branch topdir
             when dep $
               cmdlog "koji" ["wait-repo", target, "--build=" ++ nvr]
+            putStrLn ""
+            putStrLn $ show (length rest) +-+ "packages left"
       Pending -> do
         latest <- kojiLatestPkg target pkg
         unless (eqNVR nvr latest) $
@@ -197,6 +199,11 @@ build topdir mode dist mdir mdep (pkg:rest) = do
         when (eqNVR nvr latest) $
           putStrLn pkg
   build topdir mode dist mdir mdep rest
+
+pkgDir :: String -> String -> FilePath -> IO FilePath
+pkgDir dir branch top = do
+  b <- doesDirectoryExist $ top </> dir </> branch
+  return $ top </> dir </> if b then branch else ""
 
 maybePkgVer :: String -> Maybe String -> String
 maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver
@@ -250,6 +257,7 @@ processDeps [p, "=", v] = (p, Just v)
 processDeps (p:_) = (p, Nothing)
 processDeps [] = error "processDeps: empty string!"
 
--- FIXME
-dependent :: String -> String -> IO Bool
-dependent _dep _pkg = return True
+dependent :: String -> String -> String -> FilePath -> IO Bool
+dependent dep pkg branch topdir = do
+  pkgpath <- pkgDir pkg branch topdir
+  cmdBool "grep" ["-q", dep, pkgpath </> pkg ++ ".spec"]
