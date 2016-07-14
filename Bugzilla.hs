@@ -137,12 +137,14 @@ colon ps = (nv, if null s then "" else removePrefix ":" s)
 
 closeBug :: [Flag] -> String -> String -> [Char] -> IO ()
 closeBug opts bid bcomp pkgver = do
-  nvr <- (head . words) <$> cmd "koji" ["latest-pkg", "rawhide", bcomp, "--quiet"]
-  let nv = removeRelease nvr
-  when (nv == pkgver) $ do
-    putStrLn $ "closing" +-+ bid ++ ":" +-+ nv +-+ "in rawhide"
-    unless (DryRun `elem` opts) $
-      bugzillaModify $ ["--close=RAWHIDE", "--comment=" ++ nvr, bid]
+  rawhide <- cmd "koji" ["latest-pkg", "rawhide", bcomp, "--quiet"]
+  unless (null rawhide) $ do
+    let nvr = (head . words) rawhide
+    let nv = removeRelease nvr
+    when (nv == pkgver) $ do
+      putStrLn $ "closing" +-+ bid ++ ":" +-+ nv +-+ "in rawhide"
+      unless (DryRun `elem` opts) $
+        bugzillaModify $ ["--close=RAWHIDE", "--comment=" ++ nvr, bid]
   where
     removeRelease = init . dropWhileEnd (/= '-')
 
