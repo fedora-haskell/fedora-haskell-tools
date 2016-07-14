@@ -18,7 +18,7 @@ module Main where
 import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
 import Data.Char (isLetter)
-import Data.List (intercalate, {-isInfixOf, isSuffixOf,-} isPrefixOf)
+import Data.List (dropWhileEnd, intercalate, isPrefixOf)
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.Directory ({-doesFileExist, getCurrentDirectory,-} getModificationTime)
@@ -42,10 +42,7 @@ data BugState = BugState {
   whiteboard :: String
   }
 
-ghcVersion :: String
-ghcVersion = "7.8.3"
-
-data Flag = Force | DryRun | NoComment | Refresh | State String
+data Flag = Close | Force | DryRun | NoComment | Refresh | State String
    deriving (Eq, Show)
 
 options :: [OptDescr Flag]
@@ -55,6 +52,7 @@ options =
  , Option "r" ["refresh"] (NoArg Refresh) "update if status changed"
  , Option "s" ["state"]  (ReqArg State "BUGSTATE") "bug state (default NEW)"
  , Option "N" ["no-comment"]  (NoArg NoComment) "update the whiteboard only"
+ , Option "c" ["close"]  (NoArg Close) "close bugs whose version is in Rawhide"
  ]
 
 parseOpts :: [String] -> IO ([Flag], [String])
@@ -88,33 +86,35 @@ parseLines (bid:bcomp:bst:bsum:bwh:rest) =
 parseLines _ = error "Bad bugzilla query output!"
 
 checkBug :: [Flag] -> BugState -> IO ()
-checkBug opts (BugState bid bcomp _bst bsum bwh) =
+checkBug opts (BugState bid bcomp _bst bsum bwh) = do
   unless (bcomp `elem` excludedPkgs) $ do
     let hkg = removeGhcPrefix bcomp
         (hkgver, state) = colon bwh
-        hkgver' = removeGhcPrefix $ removeSuffix " is available" bsum
+        pkgver = removeSuffix " is available" bsum
+        hkgver' = removeGhcPrefix pkgver
     unless (null hkgver || hkg `isPrefixOf` hkgver) $
       putStrLn $ "Whiteboard format warning for" +-+ hkgver' ++ ":" +-+ bwh +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
     -- should not happen!
     unless (hkg `isPrefixOf` hkgver') $
       putStrLn $ "Component and Summary inconsistent!" +-+ hkg +-+ hkgver' +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
-    let force = Force `elem` opts
-        refresh = Refresh `elem` opts
-    when (hkgver /= hkgver' || force || refresh) $ do
-      updateCabalPackages
-      cblrp <- cmdStdErr "cblrpm" ["missingdeps", hkgver']
-      let state' = if null cblrp then "ok" else "deps"
-      when ((hkgver, state) /= (hkgver', state') || force) $ do
-        let statemsg = if null state || state == state' then state' else state +-+ "->" +-+ state'
-        putStrLn $ if hkgver == hkgver'
-                   then hkgver ++ ":" +-+ statemsg
-                   else (if null bwh then "New" else hkgver +-+ "->") +-+ hkgver' ++ ":" +-+ statemsg
-        unless (null cblrp) $
-          putStrLn cblrp
-        putStrLn ""
-        unless (DryRun `elem` opts) $ do
-          let nocomment = NoComment `elem` opts
-          updateBug bid bcomp hkgver' cblrp state' nocomment
+    if (Close `elem` opts) then closeBug opts bid bcomp pkgver else do
+      let force = Force `elem` opts
+          refresh = Refresh `elem` opts
+      when (hkgver /= hkgver' || force || refresh) $ do
+        updateCabalPackages
+        missing <- cmdStdErr "cblrpm" ["missingdeps", hkgver']
+        let state' = if null missing then "ok" else "deps"
+        when ((hkgver, state) /= (hkgver', state') || force) $ do
+          let statemsg = if null state || state == state' then state' else state +-+ "->" +-+ state'
+          putStrLn $ if hkgver == hkgver'
+                     then hkgver ++ ":" +-+ statemsg
+                     else (if null bwh then "New" else hkgver +-+ "->") +-+ hkgver' ++ ":" +-+ statemsg
+          unless (null missing) $
+            putStrLn missing
+          putStrLn ""
+          unless (DryRun `elem` opts) $ do
+            let nocomment = NoComment `elem` opts
+            updateBug bid bcomp hkgver' missing state' nocomment
 
 excludedPkgs :: [String]
 excludedPkgs = ["ghc", "emacs-haskell-mode"]
@@ -135,14 +135,25 @@ colon ps = (nv, if null s then "" else removePrefix ":" s)
   where
     (nv, s) = break (== ':') ps
 
+closeBug :: [Flag] -> String -> String -> [Char] -> IO ()
+closeBug opts bid bcomp pkgver = do
+  nvr <- (head . words) <$> cmd "koji" ["latest-pkg", "rawhide", bcomp, "--quiet"]
+  let nv = removeRelease nvr
+  when (nv == pkgver) $ do
+    putStrLn $ "closing" +-+ bid ++ ":" +-+ nv +-+ "in rawhide"
+    unless (DryRun `elem` opts) $
+      bugzillaModify $ ["--close=RAWHIDE", "--comment=" ++ nvr, bid]
+  where
+    removeRelease = init . dropWhileEnd (/= '-')
+
 updateBug :: String -> String -> String -> String -> String -> Bool -> IO ()
-updateBug bid _bcomp hkgver cblrp state nocomment = do
---  rebuilds <- if null cblrp then tail . lines <$> cmd "cblrepo" ["build", removeGhcPrefix bcomp] else return []
+updateBug bid _bcomp hkgver missing state nocomment = do
+--  rebuilds <- if null missing then tail . lines <$> cmd "cblrepo" ["build", removeGhcPrefix bcomp] else return []
   progname <- getProgName
   let comment = progname ++ ":" +-+
-                if null cblrp
+                if null missing
                 then "No missing dependencies for" +-+ hkgver +-+ "\naccording to cblrpm missingdeps" {-++ (if null rebuilds then "\nwithout any other package rebuilds." else ".\n\nIt would require also rebuilding:\n" +-+  unwords rebuilds)-}
-                else  "cblrpm missingdeps output for" +-+ hkgver ++ ":\n\n" ++ cblrp
+                else  "cblrpm missingdeps output for" +-+ hkgver ++ ":\n\n" ++ missing
   bugzillaModify $ ["--whiteboard==" ++ hkgver ++ ":" ++ state] ++
     (if nocomment then [] else ["--comment=" ++ comment]) ++ [bid]
 
