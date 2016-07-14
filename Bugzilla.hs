@@ -86,7 +86,7 @@ parseLines (bid:bcomp:bst:bsum:bwh:rest) =
 parseLines _ = error "Bad bugzilla query output!"
 
 checkBug :: [Flag] -> BugState -> IO ()
-checkBug opts (BugState bid bcomp _bst bsum bwh) = do
+checkBug opts (BugState bid bcomp _bst bsum bwh) =
   unless (bcomp `elem` excludedPkgs) $ do
     let hkg = removeGhcPrefix bcomp
         (hkgver, state) = colon bwh
@@ -97,7 +97,7 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) = do
     -- should not happen!
     unless (hkg `isPrefixOf` hkgver') $
       putStrLn $ "Component and Summary inconsistent!" +-+ hkg +-+ hkgver' +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
-    if (Close `elem` opts) then closeBug opts bid bcomp pkgver else do
+    if Close `elem` opts then closeBug opts bid bcomp pkgver else do
       let force = Force `elem` opts
           refresh = Refresh `elem` opts
       when (hkgver /= hkgver' || force || refresh) $ do
@@ -135,7 +135,7 @@ colon ps = (nv, if null s then "" else removePrefix ":" s)
   where
     (nv, s) = break (== ':') ps
 
-closeBug :: [Flag] -> String -> String -> [Char] -> IO ()
+closeBug :: [Flag] -> String -> String -> String -> IO ()
 closeBug opts bid bcomp pkgver = do
   rawhide <- cmd "koji" ["latest-pkg", "rawhide", bcomp, "--quiet"]
   unless (null rawhide) $ do
@@ -144,7 +144,7 @@ closeBug opts bid bcomp pkgver = do
     when (nv == pkgver) $ do
       putStrLn $ "closing" +-+ bid ++ ":" +-+ nv +-+ "in rawhide"
       unless (DryRun `elem` opts) $
-        bugzillaModify $ ["--close=RAWHIDE", "--comment=" ++ nvr, bid]
+        bugzillaModify ["--close=RAWHIDE", "--comment=" ++ nvr, bid]
   where
     removeRelease = init . dropWhileEnd (/= '-')
 

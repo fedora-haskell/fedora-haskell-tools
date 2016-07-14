@@ -32,7 +32,7 @@ main = do
   (_dist, pkgs) <- getArgs >>= parseArgs
   pkgdeps <- mapM pkgDeps pkgs
   let sorted = sort pkgdeps
-  putStrLn $ unwords $ sorted
+  putStrLn $ unwords sorted
 
 parseArgs :: [String] -> IO (String, [String])
 parseArgs (dist:pkgs) | dist `elem` dists && not (null pkgs) =
@@ -62,7 +62,7 @@ sort ((p,deps):rest) =
 
 isDep :: [String] -> PackageDeps -> Bool
 isDep [] _ = False
-isDep deps (p, _) = (maybeSuffix p `elem` deps)
+isDep deps (p, _) = maybeSuffix p `elem` deps
   where
     maybeSuffix pkg | "ghc-" `isPrefixOf` pkg = pkg ++ "-devel"
                     | otherwise = pkg
