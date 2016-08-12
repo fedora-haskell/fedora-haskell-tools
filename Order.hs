@@ -16,8 +16,9 @@ module Main where
 import Control.Applicative ((<$>))
 
 import Data.List (isPrefixOf, (\\))
+import Data.Maybe (catMaybes)
 
-import System.Directory (doesDirectoryExist)
+import System.Directory (doesDirectoryExist, doesFileExist)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>))
@@ -31,7 +32,7 @@ data Command = Install | Mock | Koji | Pending | Changed | Built deriving (Eq)
 main :: IO ()
 main = do
   (dist, pkgs) <- getArgs >>= parseArgs
-  pkgdeps <- mapM (pkgDeps $ distBranch dist) pkgs
+  pkgdeps <- catMaybes <$> mapM (pkgDeps $ distBranch dist) pkgs
   let sorted = sort pkgdeps
   putStrLn $ unwords sorted
 
@@ -48,12 +49,17 @@ help = do
 
 type PackageDeps = (String, [String])
 
-pkgDeps :: String -> String -> IO PackageDeps
+pkgDeps :: String -> String -> IO (Maybe PackageDeps)
 pkgDeps branch pkg = do
-  exists <- doesDirectoryExist branch
-  let branchdir = if exists then branch else ""
-  deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", pkg </> branchdir </> pkg ++ ".spec"]
-  return (pkg, deps)
+  dirExists <- doesDirectoryExist branch
+  let branchdir = if dirExists then branch else ""
+      file = pkg </> branchdir </> pkg ++ ".spec"
+  fileExists <- doesFileExist file
+  if fileExists
+    then do
+    deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", file]
+    return $ Just (pkg, deps)
+    else return Nothing
 
 sort :: [PackageDeps] -> [String]
 sort [] = []
