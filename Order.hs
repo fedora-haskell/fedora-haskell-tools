@@ -17,6 +17,7 @@ import Control.Applicative ((<$>))
 
 import Data.List (isPrefixOf, (\\))
 
+import System.Directory (doesDirectoryExist)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>))
@@ -29,8 +30,8 @@ data Command = Install | Mock | Koji | Pending | Changed | Built deriving (Eq)
 
 main :: IO ()
 main = do
-  (_dist, pkgs) <- getArgs >>= parseArgs
-  pkgdeps <- mapM pkgDeps pkgs
+  (dist, pkgs) <- getArgs >>= parseArgs
+  pkgdeps <- mapM (pkgDeps $ distBranch dist) pkgs
   let sorted = sort pkgdeps
   putStrLn $ unwords sorted
 
@@ -47,9 +48,11 @@ help = do
 
 type PackageDeps = (String, [String])
 
-pkgDeps :: String -> IO PackageDeps
-pkgDeps pkg = do
-  deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", pkg </> "master" </> pkg ++ ".spec"]
+pkgDeps :: String -> String -> IO PackageDeps
+pkgDeps branch pkg = do
+  exists <- doesDirectoryExist branch
+  let branchdir = if exists then branch else ""
+  deps <- lines <$> cmd "rpmspec" ["-q", "--buildrequires", pkg </> branchdir </> pkg ++ ".spec"]
   return (pkg, deps)
 
 sort :: [PackageDeps] -> [String]
