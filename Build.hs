@@ -65,9 +65,7 @@ help = do
 
 -- allow "fhbuild CMD", "fhbuild CMD dir" or "fhbuild CMD DIST PKG..."
 parseArgs :: [String] -> IO ([String], Maybe FilePath)
-parseArgs (c:_) | c `notElem` commands = do
-                    hPutStrLn stderr $ "Unknown command '" ++ c ++ "'"
-                    help >> return ([], Nothing)
+parseArgs (c:_) | c `notElem` commands = giveUp $ "Unknown command '" ++ c ++ "'"
 parseArgs [c] = do
   (dist, pkg, dir) <- determinePkgBranch
   return (c:dist:[pkg], Just dir)
@@ -80,14 +78,16 @@ parseArgs [c, pkg] = do
     setCurrentDirectory cwd
     return (c:dist:[pkg'], Just dir)
     else return ([c, rawhide, pkg], Nothing)
-parseArgs (c:dist:pkgs) | dist `notElem` dists = do
-                            hPutStrLn stderr $ "Unknown dist '" ++ dist ++ "'"
-                            help >> return ([], Nothing)
-                        | not (null pkgs) =
-                            return (c:dist:map (removeSuffix "/") pkgs, Nothing)
+parseArgs (c:dist:pkgs) | dist `notElem` dists = giveUp $ "Unknown dist '" ++ dist ++ "'"
+                        | null pkgs = giveUp $ "Unknown dist '" ++ dist ++ "'"
                         | otherwise =
                             return (c:dist:map (removeSuffix "/") pkgs, Nothing)
 parseArgs _ = help >> return ([], Nothing)
+
+giveUp :: String -> IO ([String], Maybe FilePath)
+giveUp err = do
+  hPutStrLn stderr err
+  help >> return ([], Nothing)
 
 determinePkgBranch :: IO (String, String, FilePath) -- (branch, pkg, dir)
 determinePkgBranch = do
