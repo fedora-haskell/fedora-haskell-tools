@@ -133,6 +133,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
         cmd_ "git" ["pull", "-q"]
       nvr <- cmd "fedpkg" ["verrel"]
       let verrel = removePrefix (pkg ++ "-") nvr
+          release = tail $ dropWhile (/= '-') verrel
           tag = distTag dist
       case mode of
         Install -> do
@@ -167,7 +168,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
             cmdlog "fedpkg" ["-q", "local"]
             putStrLn $ nvr +-+ "built\n"
             opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
-            rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", wd </> "%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n", spec]
+            rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", wd </> "%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n", spec]
             ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
             unless (null ipkgs) $
               sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":ipkgs)
