@@ -69,6 +69,7 @@ parseArgs (c:_) | c `notElem` commands = giveUp $ "Unknown command '" ++ c ++ "'
 parseArgs [c] = do
   (dist, pkg, dir) <- determinePkgBranch
   return (c:dist:[pkg], Just dir)
+parseArgs [_, d ] | d `elem` dists = giveUp $ "Please specify a package."
 parseArgs [c, pkg] = do
   cwd <- getCurrentDirectory
   exists <- doesDirectoryExist pkg
