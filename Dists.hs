@@ -58,7 +58,7 @@ distUpdates _ = Nothing
 
 distOverride :: String -> Bool
 distOverride d | d == rawhide = False
-               | d == "f25" = False
+               | d == "f26" = False
 --               | d == "epel8" = False
                | otherwise = True
 
