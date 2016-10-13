@@ -16,18 +16,21 @@ module RPM (packageManager,
             repoquerySrc,
             rpmInstall) where
 
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Data.Maybe       (isJust, isNothing)
 import System.Directory (findExecutable)
 -- die is available in ghc-7.10 base-4.8
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 
-import Utils (cmd, sudo)
+import Utils (cmdStdErr, sudo)
 
 -- @since base 4.8.0.0
 die :: String -> IO a
 die err = hPutStrLn stderr err >> exitFailure
+
+warn :: String -> IO ()
+warn err = hPutStrLn stderr err
 
 requireProgram :: String -> IO ()
 requireProgram c = do
@@ -49,14 +52,23 @@ packageManager = do
 repoquery :: [String] -> String -> IO String
 repoquery args key = do
   havednf <- optionalProgram "dnf"
-  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "-q"]) else ("repoquery", [])
-  cmd prog (subcmd ++ args ++ [key])
+  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet"]) else ("repoquery", [])
+  repoqWrap prog (subcmd ++ args ++ [key])
+
+repoqWrap :: String -> [String] -> IO String
+repoqWrap cmd args = do
+  (out, err) <- cmdStdErr cmd args
+  -- workaround noisy dnf2 repoquery --quiet
+  -- ignore "Last metadata expiration check" warnings
+  unless (null err || head (words err) == "Last") $
+    warn err
+  return out
 
 repoquerySrc :: String -> IO String
 repoquerySrc key = do
   havednf <- optionalProgram "dnf"
-  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "-q", "--srpm", "--qf", "%{name}"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
-  cmd prog (subcmd ++ [key])
+  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet", "--srpm", "--qf", "%{name}"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
+  repoqWrap prog (subcmd ++ [key])
 
 rpmInstall :: [String] -> IO ()
 rpmInstall rpms = do

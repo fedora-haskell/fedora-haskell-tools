@@ -102,8 +102,8 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
           refresh = Refresh `elem` opts
       when (hkgver /= hkgver' || force || refresh) $ do
         updateCabalPackages
-        missing <- cmdStdErr "cblrpm" ["missingdeps", hkgver']
-        let state' = if null missing then "ok" else "deps"
+        (missing, err) <- cmdStdErr "cblrpm" ["missingdeps", hkgver']
+        let state' = if null missing && null err then "ok" else "deps"
         when ((hkgver, state) /= (hkgver', state') || force) $ do
           let statemsg = if null state || state == state' then state' else state +-+ "->" +-+ state'
           putStrLn $ if hkgver == hkgver'
