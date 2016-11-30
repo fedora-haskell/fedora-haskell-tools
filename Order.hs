@@ -69,8 +69,8 @@ sort ((p,deps):rest) =
 
 isDep :: [String] -> PackageDeps -> Bool
 isDep [] _ = False
-isDep deps (p, _) = maybeSuffix p `elem` deps
+isDep deps (p, _) = maybeSuffix p `elem` deps || p `elem` deps
   where
     maybeSuffix pkg | "ghc-" `isPrefixOf` pkg = pkg ++ "-devel"
-                    | otherwise = pkg
+                    | otherwise = "ghc-" ++ pkg ++ "-devel"
 
