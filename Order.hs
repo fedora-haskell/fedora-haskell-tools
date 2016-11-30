@@ -27,8 +27,6 @@ import System.IO (hPutStrLn, stderr)
 import Dists
 import Utils
 
-data Command = Install | Mock | Koji | Pending | Changed | Built deriving (Eq)
-
 main :: IO ()
 main = do
   (dist, pkgs) <- getArgs >>= parseArgs
@@ -51,7 +49,7 @@ type PackageDeps = (String, [String])
 
 pkgDeps :: String -> String -> IO (Maybe PackageDeps)
 pkgDeps branch pkg = do
-  dirExists <- doesDirectoryExist branch
+  dirExists <- doesDirectoryExist $ pkg </> branch
   let branchdir = if dirExists then branch else ""
       file = pkg </> branchdir </> pkg ++ ".spec"
   fileExists <- doesFileExist file
