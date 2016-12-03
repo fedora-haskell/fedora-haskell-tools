@@ -57,15 +57,12 @@ distUpdates d | distShort d == "f" = Just "updates"
 distUpdates _ = Nothing
 
 distOverride :: String -> Bool
-distOverride d | d == rawhide = False
-               | d == "f26" = False
---               | d == "epel8" = False
-               | otherwise = True
+distOverride d = d `notElem` [rawhide, "f26", "epel7"]
 
 distTag :: String -> String
-distTag d | d == rawhide = rawhide ++ "-ghc"
-             | otherwise = d ++ "-build"
+distTag d | d `elem` [rawhide, "epel7"] = d ++ "-ghc"
+          | otherwise = d ++ "-build"
 
 distTarget  :: String -> Maybe String
-distTarget d | d == rawhide = Just $ rawhide ++ "-ghc" -- Nothing
-                  | otherwise = Nothing
+distTarget d | d `elem` [rawhide, "epel7"] = Just $ d ++ "-ghc" -- Nothing
+             | otherwise = Nothing
