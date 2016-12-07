@@ -30,7 +30,7 @@ die :: String -> IO a
 die err = hPutStrLn stderr err >> exitFailure
 
 warn :: String -> IO ()
-warn err = hPutStrLn stderr err
+warn = hPutStrLn stderr
 
 requireProgram :: String -> IO ()
 requireProgram c = do

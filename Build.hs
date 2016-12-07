@@ -68,8 +68,8 @@ parseArgs :: [String] -> IO ([String], Maybe FilePath)
 parseArgs (c:_) | c `notElem` commands = giveUp $ "Unknown command '" ++ c ++ "'"
 parseArgs [c] = do
   (dist, pkg, dir) <- determinePkgBranch
-parseArgs [_, d ] | d `elem` dists = giveUp $ "Please specify a package."
   pure (c:dist:[pkg], Just dir)
+parseArgs [_, d ] | d `elem` dists = giveUp "Please specify a package."
 parseArgs [c, pkg] = do
   cwd <- getCurrentDirectory
   exists <- doesDirectoryExist pkg
