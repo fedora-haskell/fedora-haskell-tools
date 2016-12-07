@@ -68,7 +68,7 @@ parseArgs :: [String] -> IO ([String], Maybe FilePath)
 parseArgs (c:_) | c `notElem` commands = giveUp $ "Unknown command '" ++ c ++ "'"
 parseArgs [c] = do
   (dist, pkg, dir) <- determinePkgBranch
-  pure (c:dist:[pkg], Just dir)
+  return (c:dist:[pkg], Just dir)
 parseArgs [_, d ] | d `elem` dists = giveUp "Please specify a package."
 parseArgs [c, pkg] = do
   cwd <- getCurrentDirectory
@@ -77,41 +77,41 @@ parseArgs [c, pkg] = do
     setCurrentDirectory pkg
     (dist, pkg', dir) <- determinePkgBranch
     setCurrentDirectory cwd
-    pure (c:dist:[pkg'], Just dir)
-    else pure ([c, rawhide, pkg], Nothing)
+    return (c:dist:[pkg'], Just dir)
+    else return ([c, rawhide, pkg], Nothing)
 parseArgs (c:dist:pkgs) | dist `notElem` dists = giveUp $ "Unknown dist '" ++ dist ++ "'"
                         | null pkgs = giveUp $ "Unknown dist '" ++ dist ++ "'"
                         | otherwise =
-                            pure (c:dist:map (removeSuffix "/") pkgs, Nothing)
-parseArgs _ = help >> pure ([], Nothing)
+                            return (c:dist:map (removeSuffix "/") pkgs, Nothing)
+parseArgs _ = help >> return ([], Nothing)
 
 giveUp :: String -> IO ([String], Maybe FilePath)
 giveUp err = do
   hPutStrLn stderr err
-  help >> pure ([], Nothing)
+  help >> return ([], Nothing)
 
 determinePkgBranch :: IO (String, String, FilePath) -- (branch, pkg, dir)
 determinePkgBranch = do
   dir <- getCurrentDirectory
   let base = takeBaseName dir
   if base `elem` map distBranch dists
-    then pure (base, takeBaseName $ takeDirectory dir, dir)
+    then return (base, takeBaseName $ takeDirectory dir, dir)
     else do
     git <- doesDirectoryExist (dir </> ".git")
     if git
       then do
       branch <- gitBranch
-      pure (branch, base, dir)
+      return (branch, base, dir)
       else
       error "Not a git repo: cannot determine branch"
 
 build :: FilePath -> Command -> String -> Maybe FilePath -> Maybe String -> [String] -> IO ()
-build _ _ _ _ _ [] = pure ()
+build _ _ _ _ _ [] = return ()
 build topdir mode dist mdir mdep (pkg:rest) = do
   setCurrentDirectory topdir
   let dir = fromMaybe pkg mdir
       branch = distBranch dist
-  dirExists <- if isJust mdir then pure True else doesDirectoryExist dir
+  dirExists <- if isJust mdir then return True else doesDirectoryExist dir
   unless (mode `elem` [Pending, Changed, Built]) $
     putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
   unless dirExists $ do
@@ -221,7 +221,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
   b <- doesDirectoryExist $ top </> dir </> branch
-  pure $ top </> dir </> if b then branch else ""
+  return $ top </> dir </> if b then branch else ""
 
 maybePkgVer :: String -> Maybe String -> String
 maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver
@@ -242,7 +242,7 @@ derefPkg (pkg, mver) = do
   when (null res) $ do
     installed <- not <$> notInstalled (pkg, mver)
     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
-  pure (if null res then pkg else res, mver)
+  return (if null res then pkg else res, mver)
 
 derefSrcPkg :: String -> IO (Maybe String)
 derefSrcPkg pkg = do
@@ -253,9 +253,9 @@ derefSrcPkg pkg = do
     let nondevel = removeSuffix "-devel" pkg
     p <- pkgdb nondevel
     if isJust p
-      then pure p
+      then return p
       else pkgdb $ removePrefix "ghc-" nondevel
-    else pure $ Just res
+    else return $ Just res
 
 gitBranch :: IO String
 gitBranch =
@@ -264,7 +264,7 @@ gitBranch =
 pkgdb :: String -> IO (Maybe String)
 pkgdb pkg = do
   res <- words <$> shell ("pkgdb-cli list --nameonly" +-+ pkg +-+ "| grep" +-+ pkg ++ "$")
-  pure $ if pkg `elem` res then Just pkg else Nothing
+  return $ if pkg `elem` res then Just pkg else Nothing
 
 eqNVR :: String -> String -> Bool
 eqNVR p1 p2 =
