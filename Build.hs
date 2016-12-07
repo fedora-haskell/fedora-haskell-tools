@@ -16,7 +16,7 @@ module Main where
 
 import Control.Applicative ((<$>))
 import Control.Monad (filterM, unless, when)
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe
 import Data.List (intercalate, isPrefixOf, nub)
 
 import System.Directory (doesDirectoryExist, doesFileExist,
@@ -187,7 +187,12 @@ build topdir mode dist mdir mdep (pkg:rest) = do
             then error $ nvr +-+ "already built!"
             else do
             putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
-            cmdlog "fedpkg" $ "build": maybe [] (\ d -> "--target":[d]) (distTarget dist)
+            kojiout <- cmd "fedpkg" $ ["build", "--nowait"] ++ maybe [] (\ d -> "--target":[d]) (distTarget dist)
+            putStrLn kojiout
+            let task = parseKojiBuild $ lines kojiout
+            when (isNothing task)$ error "Could not parse koji task #!"
+            -- FIXME poll if lose network connection
+            cmdlog "koji" ["watch-task", fromJust task]
             logMsg $ nvr +-+ "built"
             when (distOverride dist) $ do
               user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
@@ -274,3 +279,8 @@ dependent :: String -> String -> String -> FilePath -> IO Bool
 dependent dep pkg branch topdir = do
   pkgpath <- pkgDir pkg branch topdir
   cmdBool "grep" ["-q", dep, pkgpath </> pkg ++ ".spec"]
+
+parseKojiBuild :: [String] -> Maybe String
+parseKojiBuild [] = Nothing
+parseKojiBuild (l:ls) | "Created task:" `isPrefixOf` l = Just $ removePrefix "Created task: " l
+                      | otherwise = parseKojiBuild ls
