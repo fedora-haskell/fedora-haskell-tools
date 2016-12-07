@@ -40,14 +40,14 @@ requireProgram c = do
 optionalProgram :: String -> IO Bool
 optionalProgram c = do
   mavail <- findExecutable c
-  return $ isJust mavail
+  pure $ isJust mavail
 
 packageManager :: IO String
 packageManager = do
   havednf <- optionalProgram "dnf"
   if havednf
-    then return "dnf"
-    else requireProgram "yum" >> return "yum"
+    then pure "dnf"
+    else requireProgram "yum" >> pure "yum"
 
 repoquery :: [String] -> String -> IO String
 repoquery args key = do
@@ -62,7 +62,7 @@ repoqWrap cmd args = do
   -- ignore "Last metadata expiration check" warnings
   unless (null err || head (words err) == "Last") $
     warn err
-  return out
+  pure out
 
 repoquerySrc :: String -> IO String
 repoquerySrc key = do

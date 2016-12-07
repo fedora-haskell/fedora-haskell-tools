@@ -44,19 +44,19 @@ cmdMaybe :: String -> [String] -> IO (Maybe String)
 cmdMaybe c as = do
   (ret, out, _err) <- readProcessWithExitCode c as ""
   case ret of
-    ExitSuccess -> return $ Just $ removeTrailingNewline out
-    ExitFailure _ -> return Nothing
+    ExitSuccess -> pure $ Just $ removeTrailingNewline out
+    ExitFailure _ -> pure Nothing
 
 cmdStdErr :: String -> [String] -> IO (String, String)
 cmdStdErr c as = do
   (_ret, out, err) <- readProcessWithExitCode c as ""
-  return $ (removeTrailingNewline out, removeTrailingNewline err)
+  pure (removeTrailingNewline out, removeTrailingNewline err)
 
 cmd_ :: String -> [String] -> IO ()
 cmd_ c as = do
   ret <- rawSystem c as
   case ret of
-    ExitSuccess -> return ()
+    ExitSuccess -> pure ()
     ExitFailure n -> error $ "\"" ++ c +-+ unwords as ++ "\" failed with exit code" +-+ show n
 
 -- dry-run
@@ -67,7 +67,7 @@ cmdAssert :: String -> String -> [String] -> IO ()
 cmdAssert msg c as = do
   ret <- rawSystem c as
   case ret of
-    ExitSuccess -> return ()
+    ExitSuccess -> pure ()
     ExitFailure _ -> error msg
 
 cmdlog :: String -> [String] -> IO ()
@@ -85,8 +85,8 @@ cmdBool :: String -> [String] -> IO Bool
 cmdBool c as = do
   ret <- rawSystem c as
   case ret of
-    ExitSuccess -> return True
-    ExitFailure _ -> return False
+    ExitSuccess -> pure True
+    ExitFailure _ -> pure False
 
 sudo :: String -> [String] -> IO ()
 sudo c as = cmdlog "sudo" (c:as)
@@ -97,7 +97,7 @@ shell c = cmd "sh" ["-c", c]
 kojiLatestPkg :: String -> String -> IO String
 kojiLatestPkg dist pkg = do
   res <- words <$> cmd "koji" ["latest-pkg", "--quiet", dist, pkg]
-  return $ if null res then "" else head res
+  pure $ if null res then "" else head res
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =
