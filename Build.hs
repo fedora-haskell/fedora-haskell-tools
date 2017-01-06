@@ -168,7 +168,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
             -- note "fedpkg --path dir local" saves .build.log in cwd
             cmdlog "fedpkg" ["-q", "local"]
             opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
-            rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", wd </> "%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n", spec]
+            rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n", spec]
             built <- doesFileExist $ head rpms
             when built $
               putStrLn $ nvr +-+ "built\n"
@@ -178,9 +178,9 @@ build topdir mode dist mdir mdep (pkg:rest) = do
             if built
               then do
               -- maybe filter out pandoc-pdf if not installed
-              setCurrentDirectory topdir
               rpmInstall rpms
-              else error $ "Build of " ++ head rpms ++ " failed!"
+              setCurrentDirectory topdir
+              else error $ "Build of " ++ nvr ++ " failed!"
         Mock -> do
           putStrLn $ "Mock building" +-+ nvr
           cmdlog "fedpkg" ["mockbuild"]
