@@ -173,9 +173,13 @@ build topdir mode dist mdir mdep (pkg:rest) = do
             ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
             unless (null ipkgs) $
               sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":ipkgs)
-            -- maybe filter out pandoc-pdf if not installed
-            setCurrentDirectory topdir
-            rpmInstall rpms
+            built <- doesFileExist $ head rpms
+            if built
+              then do
+              -- maybe filter out pandoc-pdf if not installed
+              setCurrentDirectory topdir
+              rpmInstall rpms
+              else error $ "Build of " ++ head rpms ++ " failed!"
         Mock -> do
           putStrLn $ "Mock building" +-+ nvr
           cmdlog "fedpkg" ["mockbuild"]
