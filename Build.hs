@@ -167,13 +167,14 @@ build topdir mode dist mdir mdep (pkg:rest) = do
             putStrLn $ "Building" +-+ nvr +-+ "(buildlog:" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
             -- note "fedpkg --path dir local" saves .build.log in cwd
             cmdlog "fedpkg" ["-q", "local"]
-            putStrLn $ nvr +-+ "built\n"
             opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
             rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", wd </> "%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n", spec]
+            built <- doesFileExist $ head rpms
+            when built $
+              putStrLn $ nvr +-+ "built\n"
             ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
             unless (null ipkgs) $
               sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":ipkgs)
-            built <- doesFileExist $ head rpms
             if built
               then do
               -- maybe filter out pandoc-pdf if not installed
