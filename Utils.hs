@@ -50,7 +50,7 @@ cmdMaybe c as = do
 cmdStdErr :: String -> [String] -> IO (String, String)
 cmdStdErr c as = do
   (_ret, out, err) <- readProcessWithExitCode c as ""
-  return $ (removeTrailingNewline out, removeTrailingNewline err)
+  return (removeTrailingNewline out, removeTrailingNewline err)
 
 cmd_ :: String -> [String] -> IO ()
 cmd_ c as = do
