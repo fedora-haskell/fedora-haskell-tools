@@ -13,7 +13,10 @@
 
 module Main where
 
+#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,2))
+#else
 import Control.Applicative ((<$>))
+#endif
 
 import Data.List (isPrefixOf, (\\))
 import Data.Maybe (catMaybes)

@@ -29,13 +29,15 @@ Executable fhbuild
     Other-modules: Dists,
                    RPM,
                    Utils
-    GHC-options:        -fwarn-missing-signatures -Wall
+    GHC-options:   -fwarn-missing-signatures -Wall
+    Extensions:    CPP
 
 Executable fhbz
     Main-is:       Bugzilla.hs
     Build-depends: base < 5,
                    time
     GHC-options:   -fwarn-missing-signatures -Wall
+    Extensions:    CPP
 
 Executable fhorder
     Main-is:       Order.hs
@@ -46,5 +48,6 @@ Executable fhorder
     Other-modules: Dists,
                    RPM,
                    Utils
-    GHC-options:        -fwarn-missing-signatures -Wall
+    GHC-options:   -fwarn-missing-signatures -Wall
+    Extensions:    CPP
 

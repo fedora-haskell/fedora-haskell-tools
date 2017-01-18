@@ -15,7 +15,10 @@
 
 module Utils where
 
+#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,2))
+#else
 import Control.Applicative ((<$>))
+#endif
 import Data.List (stripPrefix)
 import Data.Maybe (fromMaybe)
 import System.Exit (ExitCode (..))
