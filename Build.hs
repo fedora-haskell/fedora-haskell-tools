@@ -262,11 +262,11 @@ derefSrcPkg pkg = do
   if null res
      -- maybe package has never been built yet
     then do
-    let nondevel = removeSuffix "-devel" pkg
-    p <- pkgdb nondevel
+    let base = removeSuffix "-devel" pkg
+    p <- pkgdb base
     if isJust p
       then return p
-      else pkgdb $ removePrefix "ghc-" nondevel
+      else pkgdb $ removePrefix "ghc-" base
     else return $ Just res
 
 gitBranch :: IO String
