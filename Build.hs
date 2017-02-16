@@ -275,8 +275,10 @@ gitBranch =
 
 pkgdb :: String -> IO (Maybe String)
 pkgdb pkg = do
-  res <- words <$> shell ("pkgdb-cli list --nameonly" +-+ pkg +-+ "| grep" +-+ pkg ++ "$")
-  return $ if pkg `elem` res then Just pkg else Nothing
+  res <- fmap words <$> cmdMaybe "pkgdb-cli" ["list", "--nameonly", pkg]
+  return $ case res of
+    (Just ps) | pkg `elem` ps -> Just pkg
+    _ -> Nothing
 
 eqNVR :: String -> String -> Bool
 eqNVR p1 p2 =
