@@ -171,23 +171,25 @@ build topdir mode dist mdir mdep (pkg:rest) = do
               unless (null stillMissing) $ do
                 putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
                 rpmInstall stillMissing
-              putStrLn $ "Building" +-+ nvr +-+ "(buildlog:" +-+ wd </> ".build-" ++ verrel ++ ".log" ++ ")"
+              let logfile = ".build-" ++ verrel ++ ".log"
+              putStrLn $ "Building" +-+ nvr +-+ "(buildlog:" +-+ wd </> logfile  ++ ")"
               -- note "fedpkg --path dir local" saves .build.log in cwd
-              cmdlog "fedpkg" ["-q", "local"]
+              _out <- cmd "fedpkg" ["local"]
               opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
               rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n", spec]
               built <- doesFileExist $ head rpms
-              when built $
-                putStrLn $ nvr +-+ "built\n"
-              ipkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
-              unless (null ipkgs) $
-                sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":ipkgs)
               if built
                 then do
+                putStrLn $ nvr +-+ "built\n"
+                instpkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
+                unless (null instpkgs) $
+                  sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
                 -- maybe filter out pandoc-pdf if not installed
                 rpmInstall rpms
                 setCurrentDirectory topdir
-                else error $ "Build of " ++ nvr ++ " failed!"
+                else do
+                cmd_ "tail" [logfile]
+                error $ "Build of " ++ nvr ++ " failed!"
           Mock -> do
             putStrLn $ "Mock building" +-+ nvr
             cmdlog "fedpkg" ["mockbuild"]
