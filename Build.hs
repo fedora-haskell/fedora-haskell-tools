@@ -177,7 +177,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
               _out <- cmd "fedpkg" ["local"]
               opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
               rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n", spec]
-              built <- doesFileExist $ head rpms
+              built <- and <$> mapM doesFileExist rpms
               if built
                 then do
                 putStrLn $ nvr +-+ "built\n"
