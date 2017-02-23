@@ -172,7 +172,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
                 putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
                 rpmInstall stillMissing
               let logfile = ".build-" ++ verrel ++ ".log"
-              putStrLn $ "Building" +-+ nvr +-+ "(buildlog:" +-+ wd </> logfile  ++ ")"
+              putStrLn $ "Building" +-+ nvr
               -- note "fedpkg --path dir local" saves .build.log in cwd
               _out <- cmd "fedpkg" ["local"]
               opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
@@ -188,8 +188,9 @@ build topdir mode dist mdir mdep (pkg:rest) = do
                 rpmInstall rpms
                 setCurrentDirectory topdir
                 else do
-                cmd_ "tail" [logfile]
-                error $ "Build of " ++ nvr ++ " failed!"
+                putStrLn $ "Buildlog:" +-+ wd </> logfile
+                displayLogTail logfile
+                error_ $ "Build of " ++ nvr ++ " failed!"
           Mock -> do
             putStrLn $ "Mock building" +-+ nvr
             cmdlog "fedpkg" ["mockbuild"]
@@ -247,7 +248,7 @@ notInstalled (pkg, mver) =
 fhbuildMissing :: FilePath -> String -> String -> IO ()
 fhbuildMissing topdir dist dep = do
   base <- derefSrcPkg dep
-  maybe (error $ "No" +-+ dep +-+ "package available!")
+  maybe (error_ $ "No" +-+ dep +-+ "package available!")
     (\ p -> build topdir Install dist Nothing (Just dep) [p]) base
 
 derefPkg :: (String, Maybe String) -> IO (String, Maybe String)
@@ -300,3 +301,11 @@ parseKojiBuild :: [String] -> Maybe String
 parseKojiBuild [] = Nothing
 parseKojiBuild (l:ls) | "Created task:" `isPrefixOf` l = Just $ removePrefix "Created task: " l
                       | otherwise = parseKojiBuild ls
+
+displayLogTail :: FilePath -> IO ()
+displayLogTail f = do
+  ls <- lines <$> readFile f
+  let foot = 3
+      disp = 12
+      start = length ls - (disp + foot)
+  mapM_ putStrLn $ take disp $ drop start ls

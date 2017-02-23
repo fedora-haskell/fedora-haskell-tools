@@ -111,3 +111,6 @@ removeSuffix suffix orig =
   fromMaybe orig $ stripSuffix suffix orig
   where
     stripSuffix sf str = reverse <$> stripPrefix (reverse sf) (reverse str)
+
+error_ :: String -> a
+error_ = errorWithoutStackTrace
