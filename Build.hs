@@ -18,7 +18,7 @@ module Main where
 #else
 import Control.Applicative ((<$>))
 #endif
-import Control.Monad (filterM, unless, when)
+import Control.Monad (filterM, unless, void, when)
 import Data.Maybe
 import Data.List (intercalate, isPrefixOf, nub)
 
@@ -135,6 +135,9 @@ build topdir mode dist mdir mdep (pkg:rest) = do
         when (branch /= actual) $
           cmd_ "fedpkg" ["switch-branch", branch]
         cmd_ "git" ["pull", "-q"]
+      noupdate <- doesFileExist ".noupdate"
+      unless noupdate $
+        void $ cmdBool "cabal-rpm" ["update"]
       let spec = pkg ++ ".spec"
       hasSpec <- doesFileExist spec
       if not hasSpec

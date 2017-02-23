@@ -113,4 +113,8 @@ removeSuffix suffix orig =
     stripSuffix sf str = reverse <$> stripPrefix (reverse sf) (reverse str)
 
 error_ :: String -> a
+#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,9,0))
 error_ = errorWithoutStackTrace
+#else
+error_ = error
+#endif
