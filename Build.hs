@@ -211,21 +211,10 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
                     when dep $ do
                       putStrLn $ "Waiting for" +-+ nvr'
                       kojiWaitPkg tag nvr'
-                cmd_ "git" ["--no-pager", "log", "-1"]
-                putStrLn ""
-                putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
+                showChange latest nvr
                 cmd_ "git" ["push"]
-                kojiout <- cmd "fedpkg" $ ["build", "--nowait"] ++ maybe [] (\ d -> "--target":[d]) (distTarget dist)
-                putStrLn kojiout
-                let task = parseKojiTask $ lines kojiout
-                when (isNothing task)$ error "Could not parse koji task #!"
-                -- FIXME poll if lose network connection
-                cmdlog "koji" ["watch-task", fromJust task]
-                logMsg $ nvr +-+ "built"
-                when (distOverride dist) $ do
-                  user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
-                  -- FIXME: improve Notes with recursive info
-                  cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
+                fedpkgBuild dist nvr
+                bodhiOverride dist nvr
                 unless (null rest) $ do
                   dep <- dependent pkg (head rest) branch topdir
                   when dep $ do
@@ -264,11 +253,9 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
                   --kojiWaitPkg tag nvr
                   build topdir Chain dist Nothing Nothing rest
                 else do
-                cmd_ "git" ["--no-pager", "log", "-1"]
-                putStrLn ""
-                putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
+                showChange latest nvr
                 putStrLn "Repoquerying deps..."
-                brs <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec]
+                brs <- buildRequires spec
                 --print brs
                 -- FIXME sort into build order
                 let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ ["ghc-rpm-macros", "ghc-rpm-macros-extra", "ghc-Cabal-devel"])
@@ -287,17 +274,8 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
                 -- note "fedpkg --path dir local" saves .build.log in cwd
                 cmd_ "git" ["push"]
                 putStrLn ""
-                kojiout <- cmd "fedpkg" $ ["build", "--nowait"] ++ maybe [] (\ d -> "--target":[d]) (distTarget dist)
-                putStrLn kojiout
-                let task = parseKojiTask $ lines kojiout
-                when (isNothing task)$ error "Could not parse koji task #!"
-                -- FIXME poll if lose network connection
-                cmdlog "koji" ["watch-task", fromJust task]
-                logMsg $ nvr +-+ "built"
-                when (distOverride dist) $ do
-                  user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
-                  -- FIXME: improve Notes with recursive info
-                  cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
+                fedpkgBuild dist nvr
+                bodhiOverride dist nvr
                 unless (null rest) $ do
                   putStrLn ""
                   putStrLn $ show (length rest) +-+ "packages left"
@@ -314,6 +292,23 @@ maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver
 notInstalled :: (String, Maybe String) -> IO Bool
 notInstalled (pkg, mver) =
   not <$> cmdBool "rpm" ["--quiet", "-q", maybePkgVer pkg mver]
+showChange :: String -> String -> IO ()
+showChange latest nvr = do
+  cmd_ "git" ["--no-pager", "log", "-1"]
+  putStrLn ""
+  putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
+
+fedpkgBuild :: String -> String -> IO ()
+fedpkgBuild dist nvr = do
+  cmd_ "fedpkg" $ ["build", "--nowait"] ++ maybe [] (\ d -> "--target":[d]) (distTarget dist)
+  logMsg $ nvr +-+ "built"
+
+bodhiOverride :: String -> String -> IO ()
+bodhiOverride dist nvr =
+  when (distOverride dist) $ do
+    user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
+    -- FIXME: improve Notes with recursive info
+    cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
 
 -- dereference meta BRs
 whatProvides :: (String, Maybe String) -> IO (String, Maybe String)
@@ -324,6 +319,10 @@ whatProvides (pkg, mver) = do
     installed <- not <$> notInstalled (pkg, mver)
     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
   return (if null res then pkg else res, mver)
+
+buildRequires :: FilePath -> IO [String]
+buildRequires spec =
+  (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec]
 
 derefSrcPkg :: String -> IO (Maybe String)
 derefSrcPkg pkg = do
