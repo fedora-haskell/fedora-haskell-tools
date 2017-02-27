@@ -1,5 +1,5 @@
 Name:                fedora-haskell-tools
-Version:             0.1
+Version:             0.2
 Synopsis:            Building and tracking tools for Fedora Haskell
 Description:
     Tools for recursive building of Fedora Haskell packages.
@@ -25,6 +25,7 @@ Executable fhbuild
                    directory,
                    filepath,
                    process,
+                   rpm,
                    unix
     Other-modules: Dists,
                    RPM,

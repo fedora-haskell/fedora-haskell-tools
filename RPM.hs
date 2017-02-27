@@ -23,7 +23,9 @@ import System.Directory (findExecutable)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 
-import Utils (cmdStdErr, sudo)
+import RPM.NVR
+
+import Utils (cmdStdErr, singleLine, sudo)
 
 -- @since base 4.8.0.0
 die :: String -> IO a
@@ -62,13 +64,17 @@ repoqWrap cmd args = do
   -- ignore "Last metadata expiration check" warnings
   unless (null err || head (words err) == "Last") $
     warn err
-  return out
+  return $ singleLine out
 
-repoquerySrc :: String -> IO String
+repoquerySrc :: String -> IO (Maybe String)
 repoquerySrc key = do
   havednf <- optionalProgram "dnf"
-  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet", "--srpm", "--qf", "%{name}"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
-  repoqWrap prog (subcmd ++ [key])
+  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet", "-s"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
+  res <- repoqWrap prog (subcmd ++ [key])
+  if null res then return Nothing
+    else do
+    let nvr = read res :: NVR
+    return $ Just $ name nvr
 
 rpmInstall :: [String] -> IO ()
 rpmInstall rpms = do

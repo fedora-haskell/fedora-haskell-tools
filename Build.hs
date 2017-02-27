@@ -18,126 +18,109 @@ module Main where
 #else
 import Control.Applicative ((<$>))
 #endif
-import Control.Monad (filterM, unless, void, when)
+import Control.Monad (filterM, unless, {-void,-} when, (>=>))
 import Data.Maybe
-import Data.List (intercalate, isPrefixOf, nub)
+import Data.List (intercalate, isPrefixOf, nub, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, setCurrentDirectory)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
-import System.FilePath ((</>), dropExtension, takeBaseName, takeDirectory)
+import System.FilePath ((</>), dropExtension)
 import System.IO (hPutStrLn, stderr)
 
 import Dists
 import RPM
 import Utils
 
-data Command = Install | Mock | Koji | Pending | Changed | Built deriving (Eq)
+data Command = Install | Mock | Koji | Chain | Pending | Changed | Built deriving (Eq)
 
 main :: IO ()
 main = do
-  (com:dist:pkgs, mdir) <- getArgs >>= parseArgs
-  cwd <- getCurrentDirectory
-  build cwd (mode com) dist mdir Nothing pkgs
+  margs <- getArgs >>= parseArgs
+  case margs of
+    Nothing -> return ()
+    Just (com, dist, pkgs) -> do
+      cwd <- getCurrentDirectory
+      build cwd (mode com) dist Nothing Nothing pkgs
   where
     mode "install" = Install
     mode "mock" = Mock
     mode "koji" = Koji
+    mode "chain" = Chain
     mode "pending" = Pending
     mode "changed" = Changed
     mode "built" = Built
     mode _ = undefined
 
 commands :: [String]
-commands = ["install", "mock" , "koji", "pending", "changed", "built"]
+commands = ["install", "mock" , "koji", "chain", "pending", "changed", "built"]
 
 help :: IO ()
 help = do
   progName <- getProgName
-  hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [dist] [pkg] ...\n"
+  hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD DIST PKG...\n"
     ++ "\n"
     ++ "Commands:\n"
     ++ "  install\t- build locally and install\n"
     ++ "  mock\t\t- build in mock\n"
     ++ "  koji\t\t- build in Koji\n"
+    ++ "  chain\t\t- build deps recursively in Koji\n"
     ++ "  pending\t- show planned changes\n"
     ++ "  changed\t- show changed pkgs\n"
     ++ "  built\t\t- show pkgs whose NVR already built\n"
   exitWith (ExitFailure 1)
 
--- allow "fhbuild CMD", "fhbuild CMD dir" or "fhbuild CMD DIST PKG..."
-parseArgs :: [String] -> IO ([String], Maybe FilePath)
-parseArgs (c:_) | c `notElem` commands = giveUp $ "Unknown command '" ++ c ++ "'"
-parseArgs [c] = do
-  (dist, pkg, dir) <- determinePkgBranch
-  return (c:dist:[pkg], Just dir)
-parseArgs [_, d ] | d `elem` dists = giveUp "Please specify a package."
-parseArgs [c, pkg] = do
-  cwd <- getCurrentDirectory
-  exists <- doesDirectoryExist pkg
-  if exists then do
-    setCurrentDirectory pkg
-    (dist, pkg', dir) <- determinePkgBranch
-    setCurrentDirectory cwd
-    return (c:dist:[pkg'], Just dir)
-    else return ([c, rawhide, pkg], Nothing)
-parseArgs (c:dist:pkgs) | dist `notElem` dists = giveUp $ "Unknown dist '" ++ dist ++ "'"
-                        | null pkgs = giveUp $ "Unknown dist '" ++ dist ++ "'"
-                        | otherwise =
-                            return (c:dist:map (removeSuffix "/") pkgs, Nothing)
-parseArgs _ = help >> return ([], Nothing)
+type Arguments = Maybe (String, String, [String])
 
-giveUp :: String -> IO ([String], Maybe FilePath)
+parseArgs :: [String] -> IO Arguments
+parseArgs (c:dist:pkgs) | dist `notElem` dists = giveUp $ "Unknown dist '" ++ dist ++ "'"
+                        | null pkgs = giveUp "Please specify a package."
+                        | otherwise =
+                            return $ Just (c, dist, map (removeSuffix "/") pkgs)
+parseArgs _ = help >> return Nothing
+
+giveUp :: String -> IO Arguments
 giveUp err = do
   hPutStrLn stderr err
-  help >> return ([], Nothing)
+  help >> return Nothing
 
-determinePkgBranch :: IO (String, String, FilePath) -- (branch, pkg, dir)
-determinePkgBranch = do
-  dir <- getCurrentDirectory
-  let base = takeBaseName dir
-  if base `elem` map distBranch dists
-    then return (base, takeBaseName $ takeDirectory dir, dir)
-    else do
-    git <- doesDirectoryExist (dir </> ".git")
-    if git
-      then do
-      branch <- gitBranch
-      return (branch, base, dir)
-      else
-      error "Not a git repo: cannot determine branch"
-
-build :: FilePath -> Command -> String -> Maybe FilePath -> Maybe String -> [String] -> IO ()
+build :: FilePath -> Command -> String -> Maybe String -> Maybe (String, String) -> [String] -> IO ()
 build _ _ _ _ _ [] = return ()
-build topdir mode dist mdir mdep (pkg:rest) = do
+build topdir mode dist msubpkg mlast (pkg:rest) = do
   setCurrentDirectory topdir
-  let dir = fromMaybe pkg mdir
-      branch = distBranch dist
-  dirExists <- if isJust mdir then return True else doesDirectoryExist dir
+  let branch = distBranch dist
+  dirExists <- doesDirectoryExist pkg
   unless (mode `elem` [Pending, Changed, Built]) $
     putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
   unless dirExists $ do
-    let anon = ["-a" | mode /= Koji]
+    let anon = ["-a" | mode `notElem` [Koji, Chain]]
     cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
-  wd <- pkgDir dir branch ""
+  wd <- pkgDir pkg branch ""
   setCurrentDirectory wd
   retired <- doesFileExist "dead.package"
-  if retired then
-    when (mode `elem` [Install, Koji]) $ putStrLn "skipping dead.package"
+  if retired then do
+    unless (mode `elem` [Pending]) $
+      putStrLn "skipping dead.package"
+    build topdir mode dist Nothing Nothing rest
     else do
-    pkggit <- cmdBool "grep" ["-q", "pkgs.fedoraproject.org", ".git/config"]
+    pkggit <- do
+      gd <- doesFileExist ".git/config"
+      if gd then cmdBool "grep" ["-q", "pkgs.fedoraproject.org", ".git/config"]
+        else return False
     if not pkggit
-      then when (mode `elem` [Install, Koji]) (error $ "not a Fedora pkg git dir!:" +-+ wd)
+      then if mode `elem` [Install, Koji, Chain]
+           then error $ "not a Fedora pkg git dir!:" +-+ wd
+           else build topdir mode dist Nothing Nothing rest
       else do
       when dirExists $ do
         actual <- gitBranch
         when (branch /= actual) $
           cmd_ "fedpkg" ["switch-branch", branch]
         cmd_ "git" ["pull", "-q"]
-      noupdate <- doesFileExist ".noupdate"
-      unless noupdate $
-        void $ cmdBool "cabal-rpm" ["update"]
+      -- noupdate <- doesFileExist ".noupdate"
+      -- unless noupdate $
+      --   void $ cmdBool "cabal-rpm" ["update"]
       let spec = pkg ++ ".spec"
       hasSpec <- doesFileExist spec
       if not hasSpec
@@ -149,7 +132,7 @@ build topdir mode dist mdir mdep (pkg:rest) = do
             tag = distTag dist
         case mode of
           Install -> do
-            let req = fromMaybe pkg mdep
+            let req = fromMaybe pkg msubpkg
             installed <- cmdMaybe "rpm" ["-q", "--qf", "%{name}-%{version}-%{release}", req]
             if Just (req ++ "-" ++ verrel) == installed
               then putStrLn $ nvr +-+ "already installed!\n"
@@ -159,22 +142,21 @@ build topdir mode dist mdir mdep (pkg:rest) = do
               putStrLn ""
               putStrLn "repoquerying deps..."
               -- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> "pkg"
-              depvers <- (map (processDeps . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM derefPkg
+              depvers <- (map (processDeps . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM whatProvides
               missing <- nub <$> filterM notInstalled depvers
               -- FIXME sort into build order
               let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (map fst missing)
               unless (null hmissing) $ do
                 putStrLn "Missing:"
                 mapM_ putStrLn hmissing
-                mapM_ (fhbuildMissing topdir dist) hmissing
+                build topdir Install dist Nothing Nothing hmissing
                 setCurrentDirectory $ topdir </> wd
               stillMissing <- map (uncurry maybePkgVer) <$> filterM notInstalled missing
-              pkgmgr <- packageManager
-
               unless (null stillMissing) $ do
                 putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
                 rpmInstall stillMissing
               let logfile = ".build-" ++ verrel ++ ".log"
+              putStrLn ""
               putStrLn $ "Building" +-+ nvr
               -- note "fedpkg --path dir local" saves .build.log in cwd
               _out <- cmd "fedpkg" ["local"]
@@ -185,56 +167,141 @@ build topdir mode dist mdir mdep (pkg:rest) = do
                 then do
                 putStrLn $ nvr +-+ "built\n"
                 instpkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
-                unless (null instpkgs) $
-                  sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
-                -- maybe filter out pandoc-pdf if not installed
-                rpmInstall rpms
+                if (null instpkgs)
+                  -- maybe filter out pandoc-pdf if not installed
+                  then rpmInstall rpms
+                  else do
+                  pkgmgr <- packageManager
+                  -- sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
+                  sudo pkgmgr ("install":"-y":instpkgs)
                 setCurrentDirectory topdir
                 else do
                 putStrLn $ "Buildlog:" +-+ wd </> logfile
                 displayLogTail logfile
                 error_ $ "Build of " ++ nvr ++ " failed!"
+            build topdir Install dist Nothing Nothing rest
           Mock -> do
             putStrLn $ "Mock building" +-+ nvr
             cmdlog "fedpkg" ["mockbuild"]
+            build topdir Mock dist Nothing Nothing rest
           Koji -> do
-            cmd_ "git" ["--no-pager", "log", "-1"]
-            putStrLn ""
+            unless (null rest) $ do
+              putStrLn $ show (length rest) +-+ "packages left"
+              putStrLn ""
             latest <- kojiLatestPkg tag pkg
             if nvr == latest
-              then error $ nvr +-+ "already built!"
+              then do
+              putStrLn $ nvr +-+ "already built!"
+              kojiWaitPkg tag nvr
+              print mlast
+              build topdir Koji dist Nothing mlast rest
               else do
-              putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
-              kojiout <- cmd "fedpkg" $ ["build", "--nowait"] ++ maybe [] (\ d -> "--target":[d]) (distTarget dist)
-              putStrLn kojiout
-              let task = parseKojiBuild $ lines kojiout
-              when (isNothing task)$ error "Could not parse koji task #!"
-              -- FIXME poll if lose network connection
-              cmdlog "koji" ["watch-task", fromJust task]
-              logMsg $ nvr +-+ "built"
-              when (distOverride dist) $ do
-                user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
-                -- FIXME: improve Notes with recursive info
-                cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
-              unless (null rest) $ do
-                dep <- dependent pkg (head rest) branch topdir
-                when dep $
-                  cmdlog "koji" ["wait-repo", tag, "--build=" ++ nvr]
+              building <- kojiBuilding nvr
+              if building
+                then do
+                putStrLn $ nvr +-+ "is already building"
+                kojiWaitPkg tag nvr
+                build topdir Koji dist Nothing Nothing rest
+                else do
+                print mlast
+                case mlast of
+                  Nothing -> return ()
+                  Just (pkg', nvr') -> do
+                    dep <- dependent pkg' pkg branch topdir
+                    when dep $ do
+                      putStrLn $ "Waiting for" +-+ nvr'
+                      kojiWaitPkg tag nvr'
+                cmd_ "git" ["--no-pager", "log", "-1"]
                 putStrLn ""
-                putStrLn $ show (length rest) +-+ "packages left"
+                putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
+                cmd_ "git" ["push"]
+                kojiout <- cmd "fedpkg" $ ["build", "--nowait"] ++ maybe [] (\ d -> "--target":[d]) (distTarget dist)
+                putStrLn kojiout
+                let task = parseKojiTask $ lines kojiout
+                when (isNothing task)$ error "Could not parse koji task #!"
+                -- FIXME poll if lose network connection
+                cmdlog "koji" ["watch-task", fromJust task]
+                logMsg $ nvr +-+ "built"
+                when (distOverride dist) $ do
+                  user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
+                  -- FIXME: improve Notes with recursive info
+                  cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
+                unless (null rest) $ do
+                  dep <- dependent pkg (head rest) branch topdir
+                  when dep $ do
+                    putStrLn $ "Waiting for" +-+ nvr
+                    kojiWaitPkg tag nvr
+                  build topdir Koji dist Nothing (if dep then Just (pkg, nvr) else Nothing) rest
           Pending -> do
             latest <- kojiLatestPkg tag pkg
             unless (eqNVR nvr latest) $
               putStrLn $ latest +-+ "->" +-+ nvr
+            build topdir Pending dist Nothing Nothing rest
           Changed -> do
             latest <- kojiLatestPkg tag pkg
             unless (eqNVR nvr latest) $
               putStrLn pkg
+            build topdir Changed dist Nothing Nothing rest
           Built -> do
             latest <- kojiLatestPkg tag pkg
             when (eqNVR nvr latest) $
               putStrLn pkg
-      build topdir mode dist mdir mdep rest
+            build topdir Built dist Nothing Nothing rest
+          Chain -> do
+            latest <- kojiLatestPkg tag pkg
+            if nvr == latest
+              then do
+              putStrLn $ nvr +-+ "already built!"
+              unless (null rest) $ --do
+                --kojiWaitPkg tag nvr
+                build topdir Chain dist Nothing Nothing rest
+              else do
+              building <- kojiBuilding nvr
+              if building
+                then do
+                putStrLn $ nvr +-+ "is already building"
+                unless (null rest) $ --do
+                  --kojiWaitPkg tag nvr
+                  build topdir Chain dist Nothing Nothing rest
+                else do
+                cmd_ "git" ["--no-pager", "log", "-1"]
+                putStrLn ""
+                putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
+                putStrLn "Repoquerying deps..."
+                brs <- (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec]
+                --print brs
+                -- FIXME sort into build order
+                let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ ["ghc-rpm-macros", "ghc-rpm-macros-extra", "ghc-Cabal-devel"])
+                --print hdeps
+                srcs <- filter (`notElem` ["ghc"]) . catMaybes . nub <$> mapM derefSrcPkg hdeps
+                --print srcs
+                hmissing <- nub <$> filterM (notInKoji branch topdir tag) srcs
+                putStrLn ""
+                unless (null hmissing) $ do
+                  putStrLn "Missing:"
+                  mapM_ putStrLn hmissing
+                  build topdir Chain dist Nothing Nothing hmissing
+                  mapM_ (kojiLatestPkg tag >=> kojiWaitPkg tag) hmissing
+                  setCurrentDirectory $ topdir </> wd
+                  putStrLn ""
+                -- note "fedpkg --path dir local" saves .build.log in cwd
+                cmd_ "git" ["push"]
+                putStrLn ""
+                kojiout <- cmd "fedpkg" $ ["build", "--nowait"] ++ maybe [] (\ d -> "--target":[d]) (distTarget dist)
+                putStrLn kojiout
+                let task = parseKojiTask $ lines kojiout
+                when (isNothing task)$ error "Could not parse koji task #!"
+                -- FIXME poll if lose network connection
+                cmdlog "koji" ["watch-task", fromJust task]
+                logMsg $ nvr +-+ "built"
+                when (distOverride dist) $ do
+                  user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
+                  -- FIXME: improve Notes with recursive info
+                  cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
+                unless (null rest) $ do
+                  putStrLn ""
+                  putStrLn $ show (length rest) +-+ "packages left"
+                  build topdir Chain dist Nothing (Just (pkg, nvr)) rest
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
@@ -248,15 +315,11 @@ notInstalled :: (String, Maybe String) -> IO Bool
 notInstalled (pkg, mver) =
   not <$> cmdBool "rpm" ["--quiet", "-q", maybePkgVer pkg mver]
 
-fhbuildMissing :: FilePath -> String -> String -> IO ()
-fhbuildMissing topdir dist dep = do
-  base <- derefSrcPkg dep
-  maybe (error_ $ "No" +-+ dep +-+ "package available!")
-    (\ p -> build topdir Install dist Nothing (Just dep) [p]) base
-
-derefPkg :: (String, Maybe String) -> IO (String, Maybe String)
-derefPkg (pkg, mver) = do
-  res <- singleLine <$> repoquery ["--qf", "%{name}", "--whatprovides"] pkg
+-- dereference meta BRs
+whatProvides :: (String, Maybe String) -> IO (String, Maybe String)
+whatProvides (pkg, mver) = do
+  res <- repoquery ["--qf", "%{name}", "--whatprovides"] pkg
+  --print res
   when (null res) $ do
     installed <- not <$> notInstalled (pkg, mver)
     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
@@ -264,16 +327,17 @@ derefPkg (pkg, mver) = do
 
 derefSrcPkg :: String -> IO (Maybe String)
 derefSrcPkg pkg = do
-  res <- singleLine <$> repoquerySrc pkg
-  if null res
-     -- maybe package has never been built yet
-    then do
-    let base = removeSuffix "-devel" pkg
-    p <- pkgdb base
-    if isJust p
-      then return p
-      else pkgdb $ removePrefix "ghc-" base
-    else return $ Just res
+  res <- repoquerySrc pkg
+  --putStrLn $ pkg +-+ "->" +-+ show res
+  case res of
+    -- maybe package has never been built yet
+    Nothing -> do
+      let base = removeSuffix "-devel" pkg
+      p <- pkgdb base
+      if isJust p
+        then return p
+        else pkgdb $ removePrefix "ghc-" base
+    Just s -> return $ Just s
 
 gitBranch :: IO String
 gitBranch =
@@ -299,11 +363,6 @@ dependent :: String -> String -> String -> FilePath -> IO Bool
 dependent dep pkg branch topdir = do
   pkgpath <- pkgDir pkg branch topdir
   cmdBool "grep" ["-q", dep, pkgpath </> pkg ++ ".spec"]
-
-parseKojiBuild :: [String] -> Maybe String
-parseKojiBuild [] = Nothing
-parseKojiBuild (l:ls) | "Created task:" `isPrefixOf` l = Just $ removePrefix "Created task: " l
-                      | otherwise = parseKojiBuild ls
 
 displayLogTail :: FilePath -> IO ()
 displayLogTail f = do

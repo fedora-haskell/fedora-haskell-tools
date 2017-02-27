@@ -19,9 +19,10 @@ module Utils where
 #else
 import Control.Applicative ((<$>))
 #endif
-import Data.List (stripPrefix)
+import Data.List (isInfixOf, isPrefixOf, stripPrefix)
 import Data.Maybe (fromMaybe)
 import System.Exit (ExitCode (..))
+import System.FilePath ((</>))
 import System.Process (readProcess, readProcessWithExitCode, rawSystem)
 
 (+-+) :: String -> String -> String
@@ -101,6 +102,29 @@ kojiLatestPkg :: String -> String -> IO String
 kojiLatestPkg dist pkg = do
   res <- words <$> cmd "koji" ["latest-pkg", "--quiet", dist, pkg]
   return $ if null res then "" else head res
+
+kojiWaitPkg :: String -> String -> IO ()
+kojiWaitPkg dist pkg = --do
+  cmd_ "koji" ["wait-repo", dist, "--build=" ++ pkg]
+  --putStrLn ""
+
+kojiBuilding :: String -> IO Bool
+kojiBuilding build = do
+  tasks <- lines <$> cmd "koji" ["list-tasks", "--mine", "--quiet"]
+  return $ any (build `isInfixOf`) tasks
+
+parseKojiTask :: [String] -> Maybe String
+parseKojiTask [] = Nothing
+parseKojiTask (l:ls) | "Created task:" `isPrefixOf` l = Just $ removePrefix "Created task: " l
+                      | otherwise = parseKojiTask ls
+
+notInKoji :: String -> FilePath -> String -> String -> IO Bool
+notInKoji branch topdir tag pkg = do
+  latest <- kojiLatestPkg tag pkg
+  local <- cmd "fedpkg" ["--path", topdir </> pkg </> branch, "verrel"]
+  if latest == local
+    then kojiWaitPkg tag latest >> return False
+    else return True
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =
