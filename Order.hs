@@ -33,9 +33,8 @@ import Utils
 main :: IO ()
 main = do
   (dist, pkgs) <- getArgs >>= parseArgs
-  pkgdeps <- catMaybes <$> mapM (pkgDeps $ distBranch dist) pkgs
-  let sorted = sort pkgdeps
-  putStrLn $ unwords sorted
+  sorted <- sortPkgs dist pkgs
+  putStrLn $ unwords $ map fst sorted
 
 parseArgs :: [String] -> IO (String, [String])
 parseArgs (dist:pkgs) | dist `elem` dists && not (null pkgs) =
@@ -47,6 +46,11 @@ help = do
   progName <- getProgName
   hPutStrLn stderr $ "Usage:" +-+ progName +-+ "[dist] [pkg] ..."
   exitWith (ExitFailure 1)
+
+sortPkgs :: String -> [String] -> IO [PackageDeps]
+sortPkgs dist pkgs = do
+  pkgdeps <- catMaybes <$> mapM (pkgDeps $ distBranch dist) pkgs
+  return $ sort pkgdeps
 
 type PackageDeps = (String, [String])
 
@@ -62,10 +66,10 @@ pkgDeps branch pkg = do
     return $ Just (pkg, deps)
     else return Nothing
 
-sort :: [PackageDeps] -> [String]
+sort :: [PackageDeps] -> [PackageDeps]
 sort [] = []
-sort ((p,deps):rest) =
-  sort lesser ++ [p] ++ sort greater
+sort (pd@(_p,deps):rest) =
+  sort lesser ++ [pd] ++ sort greater
   where
     lesser = filter (isDep deps) rest
     greater = rest \\ lesser
