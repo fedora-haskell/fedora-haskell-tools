@@ -100,7 +100,7 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
   setCurrentDirectory wd
   retired <- doesFileExist "dead.package"
   if retired then do
-    unless (mode `elem` [Pending]) $
+    unless (mode == Pending) $
       putStrLn "skipping dead.package"
     build topdir mode dist Nothing Nothing rest
     else do
@@ -140,18 +140,17 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
               putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
               cmd_ "git" ["--no-pager", "log", "-1"]
               putStrLn ""
-              putStrLn "repoquerying deps..."
-              -- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> "pkg"
-              depvers <- (map (processDeps . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM whatProvides
-              missing <- nub <$> filterM notInstalled depvers
+              putStrLn "Repoquerying deps..."
+              brs <- buildRequires spec
+              missing <- catMaybes <$> (nub <$> filterM notInstalled brs >>= mapM derefSrcPkg)
               -- FIXME sort into build order
-              let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (map fst missing)
+              let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
               unless (null hmissing) $ do
                 putStrLn "Missing:"
                 mapM_ putStrLn hmissing
                 build topdir Install dist Nothing Nothing hmissing
                 setCurrentDirectory $ topdir </> wd
-              stillMissing <- map (uncurry maybePkgVer) <$> filterM notInstalled missing
+              stillMissing <- filterM notInstalled missing
               unless (null stillMissing) $ do
                 putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
                 rpmInstall stillMissing
@@ -167,7 +166,7 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
                 then do
                 putStrLn $ nvr +-+ "built\n"
                 instpkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
-                if (null instpkgs)
+                if null instpkgs
                   -- maybe filter out pandoc-pdf if not installed
                   then rpmInstall rpms
                   else do
@@ -289,9 +288,10 @@ pkgDir dir branch top = do
 maybePkgVer :: String -> Maybe String -> String
 maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver
 
-notInstalled :: (String, Maybe String) -> IO Bool
-notInstalled (pkg, mver) =
-  not <$> cmdBool "rpm" ["--quiet", "-q", maybePkgVer pkg mver]
+notInstalled :: String -> IO Bool
+notInstalled pkg =
+  not <$> cmdBool "rpm" ["--quiet", "-q", pkg]
+
 showChange :: String -> String -> IO ()
 showChange latest nvr = do
   cmd_ "git" ["--no-pager", "log", "-1"]
@@ -311,14 +311,14 @@ bodhiOverride dist nvr =
     cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
 
 -- dereference meta BRs
-whatProvides :: (String, Maybe String) -> IO (String, Maybe String)
-whatProvides (pkg, mver) = do
+whatProvides :: String -> IO String
+whatProvides pkg = do
   res <- repoquery ["--qf", "%{name}", "--whatprovides"] pkg
   --print res
   when (null res) $ do
-    installed <- not <$> notInstalled (pkg, mver)
+    installed <- not <$> notInstalled pkg
     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
-  return (if null res then pkg else res, mver)
+  return $ if null res then pkg else res
 
 buildRequires :: FilePath -> IO [String]
 buildRequires spec =
@@ -353,6 +353,7 @@ eqNVR :: String -> String -> Bool
 eqNVR p1 p2 =
   dropExtension p1 == dropExtension p2
 
+-- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> ("pkg", Just "X.Y")
 processDeps :: [String] -> (String, Maybe String)
 processDeps [p, "=", v] = (p, Just v)
 processDeps (p:_) = (p, Nothing)
