@@ -19,7 +19,7 @@ module Utils where
 #else
 import Control.Applicative ((<$>))
 #endif
-import Data.List (isInfixOf, isPrefixOf, stripPrefix)
+import Data.List (isInfixOf, {-isPrefixOf,-} stripPrefix)
 import Data.Maybe (fromMaybe)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
@@ -113,10 +113,10 @@ kojiBuilding build = do
   tasks <- lines <$> cmd "koji" ["list-tasks", "--mine", "--quiet"]
   return $ any (build `isInfixOf`) tasks
 
-parseKojiTask :: [String] -> Maybe String
-parseKojiTask [] = Nothing
-parseKojiTask (l:ls) | "Created task:" `isPrefixOf` l = Just $ removePrefix "Created task: " l
-                      | otherwise = parseKojiTask ls
+-- parseKojiTask :: [String] -> Maybe String
+-- parseKojiTask [] = Nothing
+-- parseKojiTask (l:ls) | "Created task:" `isPrefixOf` l = Just $ removePrefix "Created task: " l
+--                       | otherwise = parseKojiTask ls
 
 notInKoji :: String -> FilePath -> String -> String -> IO Bool
 notInKoji branch topdir tag pkg = do
