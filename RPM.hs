@@ -17,13 +17,12 @@ module RPM (packageManager,
             rpmInstall) where
 
 import Control.Monad (unless, when)
-import Data.Maybe       (isJust, isNothing)
+import Data.List (elemIndices)
+import Data.Maybe (isJust, isNothing)
 import System.Directory (findExecutable)
 -- die is available in ghc-7.10 base-4.8
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
-
-import RPM.NVR
 
 import Utils (cmdStdErr, singleLine, sudo)
 
@@ -51,6 +50,12 @@ packageManager = do
     then return "dnf"
     else requireProgram "yum" >> return "yum"
 
+rpmInstall :: [String] -> IO ()
+rpmInstall rpms = do
+  pkginstaller <- packageManager
+  let (inst, arg) = if pkginstaller == "dnf" then ("dnf", "install") else ("yum", "localinstall")
+  sudo inst $ ["-y", "--nogpgcheck", arg] ++ rpms
+
 repoquery :: [String] -> String -> IO String
 repoquery args key = do
   havednf <- optionalProgram "dnf"
@@ -72,12 +77,13 @@ repoquerySrc key = do
   let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet", "-s"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
   res <- repoqWrap prog (subcmd ++ [key])
   if null res then return Nothing
-    else do
-    let nvr = read res :: NVR
-    return $ Just $ name nvr
+    else return $ Just $ nvrToName res
 
-rpmInstall :: [String] -> IO ()
-rpmInstall rpms = do
-  pkginstaller <- packageManager
-  let (inst, arg) = if pkginstaller == "dnf" then ("dnf", "install") else ("yum", "localinstall")
-  sudo inst $ ["-y", "--nogpgcheck", arg] ++ rpms
+nvrToName :: String -> String
+nvrToName nvr =
+  if length (elemIndices '-' nvr) < 2
+    then error $ "malformed NVR string: '" ++ nvr ++ "'"
+    else reverse eman
+  where
+    (_, '-':tser) = break (== '-') $ reverse nvr
+    (_, '-':eman) = break (== '-') tser
