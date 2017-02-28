@@ -81,9 +81,9 @@ repoquerySrc key = do
 
 nvrToName :: String -> String
 nvrToName nvr =
-  if length (elemIndices '-' nvr) < 2
+  if length dashes < 2
     then error $ "malformed NVR string: '" ++ nvr ++ "'"
-    else reverse eman
+    else take nameDash nvr
   where
-    (_, '-':tser) = break (== '-') $ reverse nvr
-    (_, '-':eman) = break (== '-') tser
+    dashes = elemIndices '-' nvr
+    nameDash = last $ init $ dashes
