@@ -322,7 +322,7 @@ whatProvides pkg = do
 
 buildRequires :: FilePath -> IO [String]
 buildRequires spec =
-  (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec]
+  (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM whatProvides
 
 derefSrcPkg :: String -> IO (Maybe String)
 derefSrcPkg pkg = do
