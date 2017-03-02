@@ -42,7 +42,7 @@ main = do
     Nothing -> return ()
     Just (com, dist, pkgs) -> do
       cwd <- getCurrentDirectory
-      build cwd (mode com) dist Nothing Nothing pkgs
+      build cwd (mode com) dist Nothing Nothing False pkgs
   where
     mode "install" = Install
     mode "mock" = Mock
@@ -51,7 +51,7 @@ main = do
     mode "pending" = Pending
     mode "changed" = Changed
     mode "built" = Built
-    mode _ = undefined
+    mode _ = error "Unknown command"
 
 commands :: [String]
 commands = ["install", "mock" , "koji", "chain", "pending", "changed", "built"]
@@ -85,9 +85,9 @@ giveUp err = do
   hPutStrLn stderr err
   help >> return Nothing
 
-build :: FilePath -> Command -> String -> Maybe String -> Maybe (String, String) -> [String] -> IO ()
-build _ _ _ _ _ [] = return ()
-build topdir mode dist msubpkg mlast (pkg:rest) = do
+build :: FilePath -> Command -> String -> Maybe String -> Maybe (String, String) -> Bool -> [String] -> IO ()
+build _ _ _ _ _ _ [] = return ()
+build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
   setCurrentDirectory topdir
   let branch = distBranch dist
   dirExists <- doesDirectoryExist pkg
@@ -102,7 +102,7 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
   if retired then do
     unless (mode == Pending) $
       putStrLn "skipping dead.package"
-    build topdir mode dist Nothing Nothing rest
+    build topdir mode dist Nothing Nothing False rest
     else do
     pkggit <- do
       gd <- doesFileExist ".git/config"
@@ -111,7 +111,7 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
     if not pkggit
       then if mode `elem` [Install, Koji, Chain]
            then error $ "not a Fedora pkg git dir!:" +-+ wd
-           else build topdir mode dist Nothing Nothing rest
+           else build topdir mode dist Nothing Nothing False rest
       else do
       when dirExists $ do
         actual <- gitBranch
@@ -148,7 +148,7 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
               unless (null hmissing) $ do
                 putStrLn "Missing:"
                 mapM_ putStrLn hmissing
-                build topdir Install dist Nothing Nothing hmissing
+                build topdir Install dist Nothing Nothing False hmissing
                 setCurrentDirectory $ topdir </> wd
               stillMissing <- filterM notInstalled missing
               unless (null stillMissing) $ do
@@ -172,17 +172,17 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
                   else do
                   pkgmgr <- packageManager
                   -- sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
-                  sudo pkgmgr ("install":"-y":instpkgs)
+                  sudo pkgmgr ("install":"-y":rpms)
                 setCurrentDirectory topdir
                 else do
                 putStrLn $ "Buildlog:" +-+ wd </> logfile
                 displayLogTail logfile
                 error_ $ "Build of " ++ nvr ++ " failed!"
-            build topdir Install dist Nothing Nothing rest
+            build topdir Install dist Nothing Nothing False rest
           Mock -> do
             putStrLn $ "Mock building" +-+ nvr
             cmdlog "fedpkg" ["mockbuild"]
-            build topdir Mock dist Nothing Nothing rest
+            build topdir Mock dist Nothing Nothing False rest
           Koji -> do
             unless (null rest) $ do
               putStrLn $ show (length rest) +-+ "packages left"
@@ -193,14 +193,14 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
               putStrLn $ nvr +-+ "already built!"
               kojiWaitPkg tag nvr
               print mlast
-              build topdir Koji dist Nothing mlast rest
+              build topdir Koji dist Nothing mlast False rest
               else do
               building <- kojiBuilding pkg nvr
               if building
                 then do
                 putStrLn $ nvr +-+ "is already building"
                 kojiWaitPkg tag nvr
-                build topdir Koji dist Nothing Nothing rest
+                build topdir Koji dist Nothing Nothing False rest
                 else do
                 print mlast
                 case mlast of
@@ -212,29 +212,29 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
                       kojiWaitPkg tag nvr'
                 showChange latest nvr
                 cmd_ "git" ["push"]
-                fedpkgBuild dist nvr
+                fedpkgBuild dist nvr (if waitrepo then Just tag else Nothing)
                 bodhiOverride dist nvr
                 unless (null rest) $ do
                   dep <- dependent pkg (head rest) branch topdir
                   when dep $ do
                     putStrLn $ "Waiting for" +-+ nvr
                     kojiWaitPkg tag nvr
-                  build topdir Koji dist Nothing (if dep then Just (pkg, nvr) else Nothing) rest
+                  build topdir Koji dist Nothing (if dep then Just (pkg, nvr) else Nothing) False rest
           Pending -> do
             latest <- kojiLatestPkg tag pkg
             unless (eqNVR nvr latest) $
               putStrLn $ latest +-+ "->" +-+ nvr
-            build topdir Pending dist Nothing Nothing rest
+            build topdir Pending dist Nothing Nothing False rest
           Changed -> do
             latest <- kojiLatestPkg tag pkg
             unless (eqNVR nvr latest) $
               putStrLn pkg
-            build topdir Changed dist Nothing Nothing rest
+            build topdir Changed dist Nothing Nothing False rest
           Built -> do
             latest <- kojiLatestPkg tag pkg
             when (eqNVR nvr latest) $
               putStrLn pkg
-            build topdir Built dist Nothing Nothing rest
+            build topdir Built dist Nothing Nothing False rest
           Chain -> do
             latest <- kojiLatestPkg tag pkg
             if nvr == latest
@@ -242,7 +242,7 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
               putStrLn $ nvr +-+ "already built!"
               unless (null rest) $ --do
                 --kojiWaitPkg tag nvr
-                build topdir Chain dist Nothing Nothing rest
+                build topdir Chain dist Nothing Nothing False rest
               else do
               building <- kojiBuilding pkg nvr
               if building
@@ -250,7 +250,7 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
                 putStrLn $ nvr +-+ "is already building"
                 unless (null rest) $ --do
                   --kojiWaitPkg tag nvr
-                  build topdir Chain dist Nothing Nothing rest
+                  build topdir Chain dist Nothing Nothing False rest
                 else do
                 showChange latest nvr
                 putStrLn "Repoquerying deps..."
@@ -266,19 +266,18 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
                 unless (null hmissing) $ do
                   putStrLn "Missing:"
                   mapM_ putStrLn hmissing
-                  build topdir Chain dist Nothing Nothing hmissing
-                  mapM_ (kojiLatestPkg tag >=> kojiWaitPkg tag) hmissing
+                  build topdir Chain dist Nothing Nothing True hmissing
                   setCurrentDirectory $ topdir </> wd
                   putStrLn ""
                 -- note "fedpkg --path dir local" saves .build.log in cwd
                 cmd_ "git" ["push"]
                 putStrLn ""
-                fedpkgBuild dist nvr
+                fedpkgBuild dist nvr  (if waitrepo then Just tag else Nothing)
                 bodhiOverride dist nvr
                 unless (null rest) $ do
                   putStrLn ""
                   putStrLn $ show (length rest) +-+ "packages left"
-                  build topdir Chain dist Nothing (Just (pkg, nvr)) rest
+                  build topdir Chain dist Nothing (Just (pkg, nvr)) waitrepo rest
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
@@ -298,10 +297,11 @@ showChange latest nvr = do
   putStrLn ""
   putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
 
-fedpkgBuild :: String -> String -> IO ()
-fedpkgBuild dist nvr = do
-  cmd_ "fedpkg" $ ["build", "--nowait"] ++ maybe [] (\ d -> "--target":[d]) (distTarget dist)
+fedpkgBuild :: String -> String -> Maybe String -> IO ()
+fedpkgBuild dist nvr waittag = do
+  cmd_ "fedpkg" $ "build" : maybe [] (\ d -> "--target":[d]) (distTarget dist)
   logMsg $ nvr +-+ "built"
+  maybe (return ()) (\ tag -> kojiWaitPkg tag nvr) waittag
 
 bodhiOverride :: String -> String -> IO ()
 bodhiOverride dist nvr =

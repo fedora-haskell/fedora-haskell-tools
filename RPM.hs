@@ -86,4 +86,4 @@ nvrToName nvr =
     else take nameDash nvr
   where
     dashes = elemIndices '-' nvr
-    nameDash = last $ init $ dashes
+    nameDash = last $ init dashes
