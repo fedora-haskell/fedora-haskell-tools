@@ -108,10 +108,10 @@ kojiWaitPkg dist pkg = --do
   cmd_ "koji" ["wait-repo", dist, "--build=" ++ pkg]
   --putStrLn ""
 
-kojiBuilding :: String -> IO Bool
-kojiBuilding build = do
+kojiBuilding :: String -> String -> IO Bool
+kojiBuilding pkg build = do
   tasks <- lines <$> cmd "koji" ["list-tasks", "--mine", "--quiet"]
-  return $ any (build `isInfixOf`) tasks
+  return $ any (build `isInfixOf`) tasks || any (("/" ++ pkg ++ ":") `isInfixOf`) tasks
 
 -- parseKojiTask :: [String] -> Maybe String
 -- parseKojiTask [] = Nothing

@@ -195,7 +195,7 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
               print mlast
               build topdir Koji dist Nothing mlast rest
               else do
-              building <- kojiBuilding nvr
+              building <- kojiBuilding pkg nvr
               if building
                 then do
                 putStrLn $ nvr +-+ "is already building"
@@ -244,7 +244,7 @@ build topdir mode dist msubpkg mlast (pkg:rest) = do
                 --kojiWaitPkg tag nvr
                 build topdir Chain dist Nothing Nothing rest
               else do
-              building <- kojiBuilding nvr
+              building <- kojiBuilding pkg nvr
               if building
                 then do
                 putStrLn $ nvr +-+ "is already building"
