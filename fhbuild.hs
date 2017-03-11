@@ -1,6 +1,6 @@
 -- |
 -- Module      :  Build
--- Copyright   :  (C) 2014  Jens Petersen
+-- Copyright   :  (C) 2014-2017  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
 -- Stability   :  alpha
@@ -18,7 +18,7 @@ module Main where
 #else
 import Control.Applicative ((<$>))
 #endif
-import Control.Monad (filterM, unless, {-void,-} when, (>=>))
+import Control.Monad (filterM, unless, when)
 import Data.Maybe
 import Data.List (intercalate, isPrefixOf, nub, (\\))
 
@@ -29,9 +29,11 @@ import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), dropExtension)
 import System.IO (hPutStrLn, stderr)
 
-import Dists
-import RPM
-import Utils
+import Dists (dists, distBranch, distOverride, distTag, distTarget)
+import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji)
+import RPM (packageManager, rpmInstall, repoquery, repoquerySrc)
+import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdlog, error_, logMsg,
+              removePrefix, removeSuffix, shell, sudo)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built deriving (Eq)
 
@@ -157,6 +159,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               let logfile = ".build-" ++ verrel ++ ".log"
               putStrLn ""
               putStrLn $ "Building" +-+ nvr
+              putStrLn $ "To watch: tail -f" +-+ wd </> logfile
               -- note "fedpkg --path dir local" saves .build.log in cwd
               _out <- cmd "fedpkg" ["local"]
               opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
@@ -175,7 +178,6 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   sudo pkgmgr ("install":"-y":rpms)
                 setCurrentDirectory topdir
                 else do
-                putStrLn $ "Buildlog:" +-+ wd </> logfile
                 displayLogTail logfile
                 error_ $ "Build of " ++ nvr ++ " failed!"
             build topdir Install dist Nothing Nothing False rest

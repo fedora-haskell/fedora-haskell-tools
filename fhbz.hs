@@ -2,7 +2,7 @@
 
 -- |
 -- Module      :  Bugzilla
--- Copyright   :  (C) 2014  Jens Petersen
+-- Copyright   :  (C) 2014-2017  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
 --
@@ -30,12 +30,7 @@ import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               getOpt, usageInfo)
 import System.FilePath ((</>))
 
--- import System.Exit (ExitCode (..), exitWith)
--- import System.FilePath ((</>))
--- import System.IO (hPutStrLn, stderr)
-
--- import Dists
-import Utils
+import Utils ((+-+), cmd, cmd_, cmdStdErr, removePrefix, removeSuffix)
 
 data BugState = BugState {
   bugNo :: String,

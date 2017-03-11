@@ -1,6 +1,6 @@
 -- |
 -- Module      :  Dists
--- Copyright   :  (C) 2014  Jens Petersen
+-- Copyright   :  (C) 2014-2017  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
 -- Stability   :  alpha

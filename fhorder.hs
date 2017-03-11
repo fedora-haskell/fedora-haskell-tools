@@ -1,6 +1,6 @@
 -- |
 -- Module      :  Order
--- Copyright   :  (C) 2016  Jens Petersen
+-- Copyright   :  (C) 2016-2017  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
 --
@@ -26,9 +26,6 @@ import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
-
-import Dists
-import Utils
 
 main :: IO ()
 main = do
