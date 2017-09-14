@@ -28,10 +28,10 @@ import Data.Char (isNumber)
 import Utils ((+-+))
 
 dists :: [String]
-dists = [rawhide, "f26", "f25", "f24", "f23", "epel7"]
+dists = [rawhide, "f27", "f26", "f25", "epel7"]
 
 rawhide :: String
-rawhide = "f27"
+rawhide = "f28"
 
 distBranch :: String -> String
 distBranch d | d == rawhide = "master"
@@ -57,7 +57,7 @@ distUpdates d | distShort d == "f" = Just "updates"
 distUpdates _ = Nothing
 
 distOverride :: String -> Bool
-distOverride d = d `notElem` [rawhide, "f26" {-, "epel7"-}]
+distOverride d = d `notElem` [rawhide, "f28" {-, "epel7"-}]
 
 distTag :: String -> String
 distTag d {- | d == rawhide = "f26" ++ "-ghc" -}
