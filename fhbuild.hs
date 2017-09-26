@@ -33,7 +33,7 @@ import Dists (dists, distBranch, distOverride, distTag, distTarget)
 import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji)
 import RPM (packageManager, rpmInstall, repoquery, repoquerySrc)
 import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdlog, error_, logMsg,
-              removePrefix, removeSuffix, shell, sudo)
+              removePrefix, removeSuffix, sudo)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built deriving (Eq)
 
@@ -307,10 +307,9 @@ fedpkgBuild dist nvr waittag = do
 
 bodhiOverride :: String -> String -> IO ()
 bodhiOverride dist nvr =
-  when (distOverride dist) $ do
-    user <- shell "grep Subject: ~/.fedora.cert | sed -e 's@.*CN=\\(.*\\)/emailAddress=.*@\\1@'"
+  when (distOverride dist) $
     -- FIXME: improve Notes with recursive info
-    cmd_ "bodhi" ["-o", nvr, "-u", user, "-N", "Haskell stack"]
+    cmd_ "bodhi" ["overrides", "save", "--notes", "Haskell stack", nvr]
 
 -- dereference meta BRs
 whatProvides :: String -> IO String
