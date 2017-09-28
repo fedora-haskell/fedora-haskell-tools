@@ -30,8 +30,11 @@ import System.Process (readProcess, readProcessWithExitCode, rawSystem)
 s +-+ "" = s
 s +-+ t = s ++ " " ++ t
 
+cmdStdIn :: String -> [String] -> String -> IO String
+cmdStdIn c as inp = removeTrailingNewline <$> readProcess c as inp
+
 cmd :: String -> [String] -> IO String
-cmd c as = removeTrailingNewline <$> readProcess c as ""
+cmd c as = cmdStdIn c as ""
 
 removeTrailingNewline :: String -> String
 removeTrailingNewline "" = ""
@@ -56,6 +59,9 @@ cmdStdErr c as = do
   (_ret, out, err) <- readProcessWithExitCode c as ""
   return (removeTrailingNewline out, removeTrailingNewline err)
 
+cmdStdIn_ :: String -> [String] -> String -> IO ()
+cmdStdIn_ c as inp = cmdStdIn c as inp >> return ()
+
 cmd_ :: String -> [String] -> IO ()
 cmd_ c as = do
   ret <- rawSystem c as
@@ -74,11 +80,14 @@ cmdAssert msg c as = do
     ExitSuccess -> return ()
     ExitFailure _ -> error msg
 
-cmdlog :: String -> [String] -> IO ()
-cmdlog c as = do
+cmdlogStdIn :: String -> [String] -> String -> IO ()
+cmdlogStdIn c as inp = do
   date <- cmd "date" ["+%T"]
   putStrLn $ date +-+ c +-+ unwords as
-  cmd_ c as
+  cmdStdIn_ c as inp
+
+cmdlog :: String -> [String] -> IO ()
+cmdlog c as = cmdlogStdIn c as ""
 
 logMsg :: String -> IO ()
 logMsg msg = do
