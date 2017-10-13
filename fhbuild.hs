@@ -92,9 +92,9 @@ build _ _ _ _ _ _ [] = return ()
 build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
   setCurrentDirectory topdir
   let branch = distBranch dist
-  dirExists <- doesDirectoryExist pkg
   unless (mode `elem` [Pending, Changed, Built]) $
     putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
+  dirExists <- doesDirectoryExist pkg
   unless dirExists $ do
     let anon = ["-a" | mode `notElem` [Koji, Chain]]
     cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
