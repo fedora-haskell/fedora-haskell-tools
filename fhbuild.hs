@@ -186,6 +186,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
             cmdlog "fedpkg" ["mockbuild"]
             build topdir Mock dist Nothing Nothing False rest
           Koji -> do
+            putStrLn "'koji' mode is deprecated, please use 'chain'"
             unless (null rest) $ do
               putStrLn $ show (length rest) +-+ "packages left"
               putStrLn ""
