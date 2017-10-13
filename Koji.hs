@@ -22,14 +22,15 @@ import Control.Applicative ((<$>))
 import Data.List (isInfixOf)
 import System.FilePath ((</>))
 
+import Dists (Dist)
 import Utils (cmd, cmd_)
 
-kojiLatestPkg :: String -> String -> IO String
+kojiLatestPkg :: Dist -> String -> IO String
 kojiLatestPkg dist pkg = do
   res <- words <$> cmd "koji" ["latest-pkg", "--quiet", dist, pkg]
   return $ if null res then "" else head res
 
-kojiWaitPkg :: String -> String -> IO ()
+kojiWaitPkg :: Dist -> String -> IO ()
 kojiWaitPkg dist pkg = --do
   cmd_ "koji" ["wait-repo", dist, "--build=" ++ pkg]
   --putStrLn ""

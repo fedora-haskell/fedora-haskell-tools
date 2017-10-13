@@ -29,7 +29,7 @@ import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), dropExtension)
 import System.IO (hPutStrLn, stderr)
 
-import Dists (dists, distBranch, distOverride, distTag, distTarget)
+import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget)
 import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji)
 import RPM (packageManager, rpmInstall, repoquery, repoquerySrc)
 import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdlog, error_, logMsg,
@@ -73,7 +73,7 @@ help = do
     ++ "  built\t\t- show pkgs whose NVR already built\n"
   exitWith (ExitFailure 1)
 
-type Arguments = Maybe (String, String, [String])
+type Arguments = Maybe (String, Dist, [String])
 
 parseArgs :: [String] -> IO Arguments
 parseArgs (c:dist:pkgs) | dist `notElem` dists = giveUp $ "Unknown dist '" ++ dist ++ "'"
@@ -87,7 +87,7 @@ giveUp err = do
   hPutStrLn stderr err
   help >> return Nothing
 
-build :: FilePath -> Command -> String -> Maybe String -> Maybe (String, String) -> Bool -> [String] -> IO ()
+build :: FilePath -> Command -> Dist -> Maybe String -> Maybe (String, String) -> Bool -> [String] -> IO ()
 build _ _ _ _ _ _ [] = return ()
 build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
   setCurrentDirectory topdir
@@ -299,13 +299,13 @@ showChange latest nvr = do
   putStrLn ""
   putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
 
-fedpkgBuild :: String -> String -> Maybe String -> IO ()
+fedpkgBuild :: Dist -> String -> Maybe String -> IO ()
 fedpkgBuild dist nvr waittag = do
   cmd_ "fedpkg" $ "build" : maybe [] (\ d -> "--target":[d]) (distTarget dist)
   logMsg $ nvr +-+ "built"
   maybe (return ()) (\ tag -> kojiWaitPkg tag nvr) waittag
 
-bodhiOverride :: String -> String -> IO ()
+bodhiOverride :: Dist -> String -> IO ()
 bodhiOverride dist nvr =
   when (distOverride dist) $
     -- FIXME: improve Notes with recursive info
