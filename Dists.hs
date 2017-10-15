@@ -64,8 +64,8 @@ distOverride d = d `notElem` [rawhide, "f28" {-, "epel7"-}]
 
 distTag :: Dist -> String
 distTag d {- | d == rawhide = "f28" ++ "-ghc" -}
-          | d == "epel7" = d ++ "-ghc"
-          | otherwise = d ++ "-build"
+          {- | d == "epel7" = d ++ "-ghc" -}
+          {- | otherwise -} = d ++ "-build"
 
 distTarget  :: Dist -> Maybe String
 distTarget d | d `elem` [rawhide, "epel7"] = Nothing -- Just $ d ++ "-ghc"

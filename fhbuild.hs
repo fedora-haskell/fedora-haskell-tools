@@ -304,7 +304,7 @@ fedpkgBuild :: Dist -> String -> Maybe String -> IO ()
 fedpkgBuild dist nvr waittag = do
   cmd_ "fedpkg" $ "build" : maybe [] (\ d -> "--target":[d]) (distTarget dist)
   logMsg $ nvr +-+ "built"
-  maybe (return ()) (\ tag -> kojiWaitPkg tag nvr) waittag
+  maybe (return ()) (`kojiWaitPkg` nvr) waittag
 
 bodhiOverride :: Dist -> String -> IO ()
 bodhiOverride dist nvr =

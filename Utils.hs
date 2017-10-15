@@ -19,6 +19,7 @@ module Utils where
 #else
 import Control.Applicative ((<$>))
 #endif
+import Control.Monad (void)
 import Data.List (stripPrefix)
 import Data.Maybe (fromMaybe)
 import System.Exit (ExitCode (..))
@@ -59,7 +60,7 @@ cmdStdErr c as = do
   return (removeTrailingNewline out, removeTrailingNewline err)
 
 cmdStdIn_ :: String -> [String] -> String -> IO ()
-cmdStdIn_ c as inp = cmdStdIn c as inp >> return ()
+cmdStdIn_ c as inp = void $ cmdStdIn c as inp
 
 cmd_ :: String -> [String] -> IO ()
 cmd_ c as = do
