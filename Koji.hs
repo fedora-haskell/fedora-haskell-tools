@@ -52,3 +52,7 @@ notInKoji branch topdir tag pkg = do
   if latest == local
     then kojiWaitPkg tag latest >> return False
     else return True
+
+kojiListPkgs :: Dist -> IO [String]
+kojiListPkgs dist =
+  words <$> cmd "koji" ["list-pkgs", "--tag=" ++ dist]

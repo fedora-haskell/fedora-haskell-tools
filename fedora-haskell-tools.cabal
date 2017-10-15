@@ -1,5 +1,5 @@
 Name:                fedora-haskell-tools
-Version:             0.2
+Version:             0.3
 Synopsis:            Building and tracking tools for Fedora Haskell
 Description:
     Tools for recursive building of Fedora Haskell packages.
@@ -27,6 +27,7 @@ Executable fhbuild
                    process,
                    unix
     Other-modules: Dists,
+                   Koji,
                    RPM,
                    Utils
     GHC-options:   -fwarn-missing-signatures -Wall
@@ -36,5 +37,18 @@ Executable fhbz
     Main-is:       fhbz.hs
     Build-depends: base < 5,
                    time
+    GHC-options:   -fwarn-missing-signatures -Wall
+    Extensions:    CPP
+
+Executable fhpkg
+    Main-is:       fhpkg.hs
+    Build-depends: base < 5,
+                   directory,
+                   filepath,
+                   process,
+                   unix
+    Other-modules: Dists,
+                   Koji,
+                   Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
