@@ -13,6 +13,7 @@
 -- (at your option) any later version.
 
 -- Todo:
+-- cache dist package lists
 -- hackage data
 -- detect subpackages
 
@@ -38,7 +39,7 @@ import Dists (Dist, dists, distBranch)
 import Koji (kojiListPkgs)
 import Utils ((+-+), cmd, cmd_, cmdBool, cmdlog, removePrefix)
 
-data Command = Clone | Pull | List | Count deriving (Eq)
+data Command = Clone | Pull | List | Count | Hackage deriving (Eq)
 
 main :: IO ()
 main = do
@@ -48,16 +49,22 @@ main = do
     Just (com, mdist, pkgs) -> do
       cwd <- getCurrentDirectory
       ps <- if null pkgs then kojiListHaskell True mdist else return pkgs
-      action cwd (mode com) mdist ps
+      case mode com of
+        List -> mapM_ putStrLn ps
+        Count -> print $ length ps
+        Hackage -> return ()
+        Clone -> cloneOrPull cwd False mdist ps
+        Pull -> cloneOrPull cwd True mdist ps
   where
     mode "clone" = Clone
     mode "pull" = Pull
     mode "list" = List
     mode "count" = Count
+    mode "hackage" = Hackage
     mode _ = error "Unknown command"
 
 commands :: [String]
-commands = ["clone", "pull" , "list", "count"]
+commands = ["clone", "pull" , "list", "count", "hackage"]
 
 help :: IO ()
 help = do
@@ -69,6 +76,7 @@ help = do
     ++ "  pull\t\t- pull repos\n"
     ++ "  list\t\t- list packages\n"
     ++ "  count\t\t- count number of packages\n"
+    ++ "  hackage\t\t- generate Hackage distro date\n"
   exitWith (ExitFailure 1)
 
 type Package = String
@@ -99,18 +107,15 @@ kojiListHaskell verbose mdist = do
   bin <- words <$> cmd "dnf" ["repoquery", "--quiet", "--whatrequires", "libHS" ++ base ++ "-ghc" ++ ghcver ++ ".so()(64bit)", "--qf=%{source_name}"]
   return $ sort . nub $ bin ++ libs
 
-action :: FilePath -> Command -> Maybe Dist -> [Package] -> IO ()
-action _ _ _ [] = return ()
-action _ List _ pkgs = mapM_ putStrLn pkgs
-action _ Count _ pkgs = print $ length pkgs
-action topdir mode mdist (pkg:rest) = do
+cloneOrPull :: FilePath -> Bool -> Maybe Dist -> [Package] -> IO ()
+cloneOrPull _ _ _ [] = return ()
+cloneOrPull topdir pull mdist (pkg:rest) = do
   setCurrentDirectory topdir
   let branchGiven = isJust mdist
       branch = maybe "master" distBranch mdist
-  when (mode `elem` [Clone, Pull]) $
-    putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ " =="
+  putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ "=="
   -- muser <- getEnv "USER"
-  -- let anon = ["-a" | mode `notElem` [Koji, Chain]]
+  -- let anon = "-a"
   dirExists <- doesDirectoryExist pkg
   unless dirExists $
     cmd_ "fedpkg" $ ["clone"] ++ (if branchGiven then ["-b ", branch] else ["-B"]) ++ [pkg]
@@ -128,11 +133,11 @@ action topdir mode mdist (pkg:rest) = do
         actual <- gitBranch
         when (branch /= actual) $
           cmd_ "fedpkg" ["switch-branch", branch]
-        when (mode ==  Pull) $ cmdlog "git" ["pull"]
+        when pull $ cmdlog "git" ["pull"]
       let spec = pkg ++ ".spec"
       hasSpec <- doesFileExist spec
       unless hasSpec $ putStrLn "No spec file!"
-      action topdir mode mdist rest
+      cloneOrPull topdir pull mdist rest
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do

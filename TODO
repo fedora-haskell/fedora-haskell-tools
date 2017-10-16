@@ -4,10 +4,7 @@ use pkgdb-cli + cabal-sort for --all packages
 
 deps query tool
 
-# Issues
-- seems to fedpkg clone always now
-
-PARALLELIZE PARALLELIZE PARALLELIZE!!
+Parallelize
 
 # git
 - branch merging
@@ -22,7 +19,6 @@ PARALLELIZE PARALLELIZE PARALLELIZE!!
 - mockchain
 - fedpkg git integration
 - package sorting
-- cblrepo data integration
 - rebuilding
   - what can be built next
 - copr support
@@ -32,17 +28,12 @@ PARALLELIZE PARALLELIZE PARALLELIZE!!
 # updating
 - port update-pkg-ver
 
-# fedora-haskell-packages.sh
-- clone
-- pull --all
-
 # checking
 - Fedora x < Fedora x+1
 - git out of sync with koji, updates
 
 # Data generation and updating
 - packages and Hackage 
-- cblrepo
 - dependencies and consumers
 
 # Bugs
