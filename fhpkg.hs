@@ -37,9 +37,7 @@ import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch)
 import Koji (kojiListPkgs)
-import Utils ((+-+), cmd, cmd_, cmdBool, removePrefix)
-
-data Command = Clone | Pull | List | Count | Diff | Hackage deriving (Eq)
+import Utils ((+-+), cmd, cmd_, cmdBool, error_, removePrefix)
 
 main :: IO ()
 main = do
@@ -49,21 +47,14 @@ main = do
     Just (com, mdist, pkgs) -> do
       cwd <- getCurrentDirectory
       ps <- if null pkgs then kojiListHaskell True mdist else return pkgs
-      case mode com of
-        List -> mapM_ putStrLn ps
-        Count -> print $ length ps
-        Hackage -> return ()
-        Clone -> repoAction cwd mdist ps (return ())
-        Pull -> repoAction cwd mdist ps (cmd_ "git" ["pull", "--rebase"])
-        Diff -> repoAction cwd mdist ps (cmd_ "git" ["diff"])
-  where
-    mode "clone" = Clone
-    mode "pull" = Pull
-    mode "list" = List
-    mode "count" = Count
-    mode "diff" = Diff
-    mode "hackage" = Hackage
-    mode _ = error "Unknown command"
+      case com of
+        "list" -> mapM_ putStrLn ps
+        "count" -> print $ length ps
+        "hackage" -> putStrLn "Not yet implemented"
+        "clone" -> repoAction cwd mdist ps (return ())
+        "pull" -> repoAction cwd mdist ps (cmd_ "git" ["pull", "--rebase"])
+        "diff" -> repoAction cwd mdist ps (cmd_ "git" ["diff"])
+        _ -> error_ "Unknown command"
 
 commands :: [String]
 commands = ["clone", "pull" , "list", "count", "diff", "hackage"]
@@ -78,7 +69,7 @@ help = do
     ++ "  pull\t\t- pull repos\n"
     ++ "  list\t\t- list packages\n"
     ++ "  count\t\t- count number of packages\n"
-    ++ "  hackage\t\t- generate Hackage distro date\n"
+    ++ "  hackage\t- generate Hackage distro date\n"
   exitWith (ExitFailure 1)
 
 type Package = String
@@ -86,17 +77,23 @@ type Package = String
 type Arguments = Maybe (String, Maybe Dist, [Package])
 
 parseArgs :: [String] -> IO Arguments
-parseArgs [c] = return (Just (c, Nothing, []))
+parseArgs [c] =
+                if c `elem` commands
+                then return (Just (c, Nothing, []))
+                else giveUp $ "No such command '" ++ c ++ "'"
 parseArgs (c:dist:pkgs) | dist `notElem` dists = 
                           giveUp $ "Unknown dist '" ++ dist ++ "'"
+                        | c `notElem` commands =
+                          giveUp $ "No such command '" ++ c ++ "'"
                         | otherwise =
                           return $ Just (c, Just dist, pkgs)
-  where
-    giveUp :: String -> IO Arguments
-    giveUp err = do
-      hPutStrLn stderr err
-      help >> return Nothing
 parseArgs _ = help >> return Nothing
+
+giveUp :: String -> IO Arguments
+giveUp err = do
+  hPutStrLn stderr err
+  help >> return Nothing
+
 
 kojiListHaskell :: Bool -> Maybe Dist -> IO [Package]
 kojiListHaskell verbose mdist = do
