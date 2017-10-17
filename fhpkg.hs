@@ -37,9 +37,9 @@ import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch)
 import Koji (kojiListPkgs)
-import Utils ((+-+), cmd, cmd_, cmdBool, cmdlog, removePrefix)
+import Utils ((+-+), cmd, cmd_, cmdBool, removePrefix)
 
-data Command = Clone | Pull | List | Count | Hackage deriving (Eq)
+data Command = Clone | Pull | List | Count | Diff | Hackage deriving (Eq)
 
 main :: IO ()
 main = do
@@ -53,18 +53,20 @@ main = do
         List -> mapM_ putStrLn ps
         Count -> print $ length ps
         Hackage -> return ()
-        Clone -> cloneOrPull cwd False mdist ps
-        Pull -> cloneOrPull cwd True mdist ps
+        Clone -> repoAction cwd mdist ps (return ())
+        Pull -> repoAction cwd mdist ps (cmd_ "git" ["pull", "--rebase"])
+        Diff -> repoAction cwd mdist ps (cmd_ "git" ["diff"])
   where
     mode "clone" = Clone
     mode "pull" = Pull
     mode "list" = List
     mode "count" = Count
+    mode "diff" = Diff
     mode "hackage" = Hackage
     mode _ = error "Unknown command"
 
 commands :: [String]
-commands = ["clone", "pull" , "list", "count", "hackage"]
+commands = ["clone", "pull" , "list", "count", "diff", "hackage"]
 
 help :: IO ()
 help = do
@@ -107,9 +109,9 @@ kojiListHaskell verbose mdist = do
   bin <- words <$> cmd "dnf" ["repoquery", "--quiet", "--whatrequires", "libHS" ++ base ++ "-ghc" ++ ghcver ++ ".so()(64bit)", "--qf=%{source_name}"]
   return $ sort . nub $ bin ++ libs
 
-cloneOrPull :: FilePath -> Bool -> Maybe Dist -> [Package] -> IO ()
-cloneOrPull _ _ _ [] = return ()
-cloneOrPull topdir pull mdist (pkg:rest) = do
+repoAction :: FilePath -> Maybe Dist -> [Package] -> IO () -> IO ()
+repoAction _ _ [] _ = return ()
+repoAction topdir mdist (pkg:rest) action = do
   setCurrentDirectory topdir
   let branchGiven = isJust mdist
       branch = maybe "master" distBranch mdist
@@ -133,11 +135,11 @@ cloneOrPull topdir pull mdist (pkg:rest) = do
         actual <- gitBranch
         when (branch /= actual) $
           cmd_ "fedpkg" ["switch-branch", branch]
-        when pull $ cmdlog "git" ["pull"]
+        action
       let spec = pkg ++ ".spec"
       hasSpec <- doesFileExist spec
       unless hasSpec $ putStrLn "No spec file!"
-      cloneOrPull topdir pull mdist rest
+      repoAction topdir mdist rest action
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
