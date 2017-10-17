@@ -25,6 +25,7 @@ import Data.Maybe (fromMaybe)
 import System.Exit (ExitCode (..))
 import System.Process (readProcess, readProcessWithExitCode, rawSystem)
 
+infixr 4 +-+
 (+-+) :: String -> String -> String
 "" +-+ s = s
 s +-+ "" = s
