@@ -23,6 +23,7 @@ module Main where
 #else
 import Control.Applicative ((<$>))
 #endif
+import Control.Exception (bracket)
 import Control.Monad (unless, when)
 import Data.Maybe
 import Data.List (isPrefixOf, nub, sort)
@@ -37,7 +38,7 @@ import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch)
 import Koji (kojiListPkgs)
-import Utils ((+-+), cmd, cmd_, cmdBool, error_, removePrefix)
+import Utils ((+-+), cmd, cmd_, cmdBool, removePrefix)
 
 main :: IO ()
 main = do
@@ -45,19 +46,19 @@ main = do
   case margs of
     Nothing -> return ()
     Just (com, mdist, pkgs) -> do
-      cwd <- getCurrentDirectory
       ps <- if null pkgs then kojiListHaskell True mdist else return pkgs
       case com of
         "list" -> mapM_ putStrLn ps
         "count" -> print $ length ps
         "hackage" -> putStrLn "Not yet implemented"
-        "clone" -> repoAction cwd mdist ps (return ())
-        "pull" -> repoAction cwd mdist ps (cmd_ "git" ["pull", "--rebase"])
-        "diff" -> repoAction cwd mdist ps (cmd_ "git" ["diff"])
-        _ -> error_ "Unknown command"
+        "clone" -> repoAction mdist ps (return ())
+        "pull" -> repoAction mdist ps (cmd_ "git" ["pull", "--rebase"])
+        "diff" -> repoAction mdist ps (cmd_ "git" ["diff"])
+        "new" -> return ()
+        _ -> return ()
 
 commands :: [String]
-commands = ["clone", "pull" , "list", "count", "diff", "hackage"]
+commands = ["clone", "pull" , "list", "count", "diff", "new", "hackage"]
 
 help :: IO ()
 help = do
@@ -69,6 +70,7 @@ help = do
     ++ "  pull\t\t- pull repos\n"
     ++ "  list\t\t- list packages\n"
     ++ "  count\t\t- count number of packages\n"
+    ++ "  new\t\t- new unbuilt packages\n"
     ++ "  hackage\t- generate Hackage distro date\n"
   exitWith (ExitFailure 1)
 
@@ -106,37 +108,36 @@ kojiListHaskell verbose mdist = do
   bin <- words <$> cmd "dnf" ["repoquery", "--quiet", "--whatrequires", "libHS" ++ base ++ "-ghc" ++ ghcver ++ ".so()(64bit)", "--qf=%{source_name}"]
   return $ sort . nub $ bin ++ libs
 
-repoAction :: FilePath -> Maybe Dist -> [Package] -> IO () -> IO ()
-repoAction _ _ [] _ = return ()
-repoAction topdir mdist (pkg:rest) action = do
-  setCurrentDirectory topdir
-  let branchGiven = isJust mdist
-      branch = maybe "master" distBranch mdist
-  putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ "=="
-  -- muser <- getEnv "USER"
-  -- let anon = "-a"
-  dirExists <- doesDirectoryExist pkg
-  unless dirExists $
-    cmd_ "fedpkg" $ ["clone"] ++ (if branchGiven then ["-b ", branch] else ["-B"]) ++ [pkg]
-  wd <- pkgDir pkg branch ""
-  setCurrentDirectory wd
-  pkggit <- do
-    gd <- doesFileExist ".git/config"
-    if gd 
-      then cmdBool "grep" ["-q", "pkgs.fedoraproject.org", ".git/config"]
-      else return False
-  if not pkggit
-    then error $ "not a Fedora pkg git dir!:" +-+ wd
-    else do
-      when dirExists $ do
-        actual <- gitBranch
-        when (branch /= actual) $
-          cmd_ "fedpkg" ["switch-branch", branch]
-        action
-      let spec = pkg ++ ".spec"
-      hasSpec <- doesFileExist spec
-      unless hasSpec $ putStrLn "No spec file!"
-      repoAction topdir mdist rest action
+repoAction :: Maybe Dist -> [Package] -> IO () -> IO ()
+repoAction _ [] _ = return ()
+repoAction mdist (pkg:rest) action = do
+  bracket getCurrentDirectory setCurrentDirectory $ \ _ -> do
+    let branchGiven = isJust mdist
+        branch = maybe "master" distBranch mdist
+    putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ "=="
+    -- muser <- getEnv "USER"
+    -- let anon = "-a"
+    dirExists <- doesDirectoryExist pkg
+    unless dirExists $
+      cmd_ "fedpkg" $ ["clone"] ++ (if branchGiven then ["-b ", branch] else ["-B"]) ++ [pkg]
+    wd <- pkgDir pkg branch ""
+    setCurrentDirectory wd
+    pkggit <- do
+      gd <- doesFileExist ".git/config"
+      if gd
+        then cmdBool "grep" ["-q", "pkgs.fedoraproject.org", ".git/config"]
+        else return False
+    unless pkggit $
+      error $ "not a Fedora pkg git dir!:" +-+ wd
+    when dirExists $ do
+      actual <- gitBranch
+      when (branch /= actual) $
+        cmd_ "fedpkg" ["switch-branch", branch]
+      action
+    let spec = pkg ++ ".spec"
+    hasSpec <- doesFileExist spec
+    unless hasSpec $ putStrLn "No spec file!"
+  repoAction mdist rest action
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
