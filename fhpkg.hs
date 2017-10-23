@@ -106,6 +106,7 @@ kojiListHaskell verbose mdist = do
   ghcver <- cmd "ghc" ["--numeric-version"]
   when verbose $ putStrLn "Getting packages from repoquery"
   bin <- words <$> cmd "dnf" ["repoquery", "--quiet", "--whatrequires", "libHS" ++ base ++ "-ghc" ++ ghcver ++ ".so()(64bit)", "--qf=%{source_name}"]
+  when (null bin) $ error "No libHSbase consumers found!"
   return $ sort . nub $ bin ++ libs
 
 repoAction :: Maybe Dist -> [Package] -> IO () -> IO ()
@@ -134,9 +135,11 @@ repoAction mdist (pkg:rest) action = do
       when (branch /= actual) $
         cmd_ "fedpkg" ["switch-branch", branch]
       action
-    let spec = pkg ++ ".spec"
-    hasSpec <- doesFileExist spec
-    unless hasSpec $ putStrLn "No spec file!"
+    isDead <- doesFileExist "dead.package"
+    unless isDead $ do
+      let spec = pkg ++ ".spec"
+      hasSpec <- doesFileExist spec
+      unless hasSpec $ putStrLn "No spec file!"
   repoAction mdist rest action
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
