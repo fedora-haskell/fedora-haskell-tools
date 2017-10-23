@@ -54,11 +54,12 @@ main = do
         "clone" -> repoAction mdist ps (return ())
         "pull" -> repoAction mdist ps (cmd_ "git" ["pull", "--rebase"])
         "diff" -> repoAction mdist ps (cmd_ "git" ["diff"])
+        "verrel" -> repoAction mdist ps (cmd_ "fedpkg" ["verrel"])
         "new" -> return ()
         _ -> return ()
 
 commands :: [String]
-commands = ["clone", "pull" , "list", "count", "diff", "new", "hackage"]
+commands = ["clone", "pull" , "list", "count", "verrel", "diff", "new", "hackage"]
 
 help :: IO ()
 help = do
@@ -70,6 +71,7 @@ help = do
     ++ "  pull\t\t- pull repos\n"
     ++ "  list\t\t- list packages\n"
     ++ "  count\t\t- count number of packages\n"
+    ++ "  verrel\t\t- show nvr of packages\n"
     ++ "  new\t\t- new unbuilt packages\n"
     ++ "  hackage\t- generate Hackage distro date\n"
   exitWith (ExitFailure 1)
