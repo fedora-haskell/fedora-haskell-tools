@@ -136,12 +136,12 @@ repoAction mdist (pkg:rest) action = do
       actual <- gitBranch
       when (branch /= actual) $
         cmd_ "fedpkg" ["switch-branch", branch]
-      action
-    isDead <- doesFileExist "dead.package"
-    unless isDead $ do
-      let spec = pkg ++ ".spec"
-      hasSpec <- doesFileExist spec
-      unless hasSpec $ putStrLn "No spec file!"
+      isDead <- doesFileExist "dead.package"
+      unless isDead $ do
+        let spec = pkg ++ ".spec"
+        hasSpec <- doesFileExist spec
+        unless hasSpec $ putStrLn "No spec file!"
+        action
   repoAction mdist rest action
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
