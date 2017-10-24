@@ -29,7 +29,7 @@ import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Control.Monad (unless, when)
 import Data.Maybe
-import Data.List (isPrefixOf, nub, sort)
+import Data.List (isPrefixOf, nub, sort, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, setCurrentDirectory)
@@ -39,7 +39,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 --import System.Posix.Env (getEnv)
 
-import Dists (Dist, dists, distBranch)
+import Dists (Dist, dists, distBranch, releaseVersion)
 import Koji (kojiListPkgs)
 import Utils ((+-+), cmd, cmd_, cmdBool, removePrefix)
 
@@ -49,7 +49,7 @@ main = do
   case margs of
     Nothing -> return ()
     Just (com, mdist, pkgs) -> do
-      ps <- if null pkgs then kojiListHaskell True mdist else return pkgs
+      ps <- if null pkgs then repoqueryHaskell True mdist else return pkgs
       case com of
         "list" -> mapM_ putStrLn ps
         "count" -> print $ length ps
@@ -59,7 +59,7 @@ main = do
         "diff" -> repoAction True mdist ps (cmd_ "git" ["diff"])
         "verrel" -> repoAction False mdist ps (cmd_ "fedpkg" ["verrel"])
         "subpkgs" -> repoAction True mdist ps (cmd "fedpkg" ["gimmespec"] >>= \ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p])
-        "new" -> return ()
+        "new" -> newPackages mdist ps >>= mapM_ putStrLn
         _ -> return ()
 
 commands :: [String]
@@ -77,7 +77,7 @@ help = do
     ++ "  count\t\t- count number of packages\n"
     ++ "  verrel\t\t- show nvr of packages\n"
     ++ "  subpkgs\t\t- list subpackages\n"
---    ++ "  new\t\t- new unbuilt packages\n"
+    ++ "  new\t\t- new unbuilt packages\n"
     ++ "  hackage\t- generate Hackage distro date\n"
   exitWith (ExitFailure 1)
 
@@ -107,14 +107,25 @@ giveUp err = do
 kojiListHaskell :: Bool -> Maybe Dist -> IO [Package]
 kojiListHaskell verbose mdist = do
   when verbose $ putStrLn "Getting package list from Koji"
-  libs <- filter ("ghc-" `isPrefixOf`) <$> kojiListPkgs (fromMaybe "rawhide" mdist)
+  libs <- filter (\ p -> "ghc-" `isPrefixOf` p && p `notElem` ["ghc-rpm-macros", "ghc-srpm-macros"]) <$> kojiListPkgs (fromMaybe "rawhide" mdist)
   when (null libs) $ error "No library packages found"
+  return $ sort $ nub libs
+
+repoqueryHaskell :: Bool -> Maybe Dist -> IO [Package]
+repoqueryHaskell verbose mdist = do
+  -- fixme: should use repoquery instead:
   base <- cmd "ghc-pkg" ["--simple-output", "list", "base"]
   ghcver <- cmd "ghc" ["--numeric-version"]
+  let relver = maybe "rawhide" releaseVersion mdist
   when verbose $ putStrLn "Getting packages from repoquery"
-  bin <- words <$> cmd "dnf" ["repoquery", "--quiet", "--whatrequires", "libHS" ++ base ++ "-ghc" ++ ghcver ++ ".so()(64bit)", "--qf=%{source_name}"]
+  bin <- words <$> cmd "dnf" ["repoquery", "--quiet", "--releasever=" ++ relver, "--whatrequires", "libHS" ++ base ++ "-ghc" ++ ghcver ++ ".so()(64bit)", "--qf=%{source_name}"]
   when (null bin) $ error "No libHSbase consumers found!"
-  return $ sort . nub $ bin ++ libs
+  return $ sort $ nub bin
+
+newPackages :: Maybe Dist -> [Package] -> IO [Package]
+newPackages mdist ps = do
+  kps <- kojiListHaskell True mdist
+  return $ kps \\ ps
 
 repoAction :: Bool -> Maybe Dist -> [Package] -> IO () -> IO ()
 repoAction _ _ [] _ = return ()

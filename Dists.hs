@@ -23,6 +23,7 @@ module Dists (Dist,
               distTarget,
               distUpdates,
               distOverride,
+              releaseVersion,
               rawhide) where
 
 import Data.Char (isNumber)
@@ -70,3 +71,8 @@ distTag d {- | d == rawhide = "f28" ++ "-ghc" -}
 distTarget  :: Dist -> Maybe String
 distTarget d | d `elem` [rawhide, "epel7"] = Nothing -- Just $ d ++ "-ghc"
              | otherwise = Nothing
+
+releaseVersion :: Dist -> String
+releaseVersion "epel7" = "7"
+releaseVersion r | head r == 'f' = tail r
+releaseVersion _ = error "Unknown release"
