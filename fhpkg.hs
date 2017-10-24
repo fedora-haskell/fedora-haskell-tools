@@ -13,9 +13,13 @@
 -- (at your option) any later version.
 
 -- Todo:
--- cache dist package lists
--- hackage data
--- detect subpackages
+-- cache dist package lists?
+-- push hackage data
+-- list subpackages?
+-- compare branch versions
+-- compare with LTS
+-- arbitrary command
+-- query-format string
 
 module Main where
 
