@@ -53,7 +53,9 @@ main = do
       case com of
         "list" -> mapM_ putStrLn ps
         "count" -> print $ length ps
-        "hackage" -> putStrLn "Not yet implemented"
+        "hackage" -> do
+          unless (mdist == Just "f27") $ error "Hackage is currently for F27!"
+          repoqueryHackageCSV mdist ps
         "clone" -> do
           new <- newPackages mdist ps
           repoAction True mdist (new ++ ps) (return ())
@@ -112,6 +114,11 @@ kojiListHaskell verbose mdist = do
   libs <- filter (\ p -> "ghc-" `isPrefixOf` p && p `notElem` ["ghc-rpm-macros", "ghc-srpm-macros"]) <$> kojiListPkgs (fromMaybe "rawhide" mdist)
   when (null libs) $ error "No library packages found"
   return $ sort $ nub libs
+
+repoqueryHackageCSV :: Maybe Dist -> [Package] -> IO ()
+repoqueryHackageCSV mdist pkgs = do
+  let relver = maybe "rawhide" releaseVersion mdist
+  cmd_ "dnf" $ ["repoquery", "--quiet", "--releasever=" ++ relver, "-q", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{name}\""] ++ pkgs
 
 repoqueryHaskell :: Bool -> Maybe Dist -> IO [Package]
 repoqueryHaskell verbose mdist = do
