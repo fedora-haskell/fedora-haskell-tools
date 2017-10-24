@@ -156,7 +156,7 @@ repoAction header mdist (pkg:rest) action = do
     -- let anon = "-a"
     dirExists <- doesDirectoryExist pkg
     unless dirExists $
-      cmd_ "fedpkg" $ ["clone"] ++ (if branchGiven then ["-b ", branch] else ["-B"]) ++ [pkg]
+      cmd_ "fedpkg" $ ["clone"] ++ (if branchGiven then ["-b", branch] else ["-B"]) ++ [pkg]
     wd <- pkgDir pkg branch ""
     setCurrentDirectory wd
     pkggit <- do
