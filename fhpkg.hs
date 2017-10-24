@@ -54,11 +54,11 @@ main = do
         "list" -> mapM_ putStrLn ps
         "count" -> print $ length ps
         "hackage" -> putStrLn "Not yet implemented"
-        "clone" -> repoAction True mdist ps (\ _ -> return ())
-        "pull" -> repoAction True mdist ps (\ _ -> cmd_ "git" ["pull", "--rebase"])
-        "diff" -> repoAction True mdist ps (\ _ -> cmd_ "git" ["diff"])
-        "verrel" -> repoAction False mdist ps (\ _ -> cmd_ "fedpkg" ["verrel"])
-        "subpkgs" -> repoAction True mdist ps (\ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p ++ ".spec"])
+        "clone" -> repoAction True mdist ps (return ())
+        "pull" -> repoAction True mdist ps (cmd_ "git" ["pull", "--rebase"])
+        "diff" -> repoAction True mdist ps (cmd_ "git" ["diff"])
+        "verrel" -> repoAction False mdist ps (cmd_ "fedpkg" ["verrel"])
+        "subpkgs" -> repoAction True mdist ps (cmd "fedpkg" ["gimmespec"] >>= \ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p])
         "new" -> return ()
         _ -> return ()
 
@@ -116,7 +116,7 @@ kojiListHaskell verbose mdist = do
   when (null bin) $ error "No libHSbase consumers found!"
   return $ sort . nub $ bin ++ libs
 
-repoAction :: Bool -> Maybe Dist -> [Package] -> (Package -> IO ()) -> IO ()
+repoAction :: Bool -> Maybe Dist -> [Package] -> IO () -> IO ()
 repoAction _ _ [] _ = return ()
 repoAction header mdist (pkg:rest) action = do
   bracket getCurrentDirectory setCurrentDirectory $ \ _ -> do
@@ -147,7 +147,7 @@ repoAction header mdist (pkg:rest) action = do
         let spec = pkg ++ ".spec"
         hasSpec <- doesFileExist spec
         unless hasSpec $ putStrLn "No spec file!"
-        action pkg
+        action
   repoAction header mdist rest action
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
