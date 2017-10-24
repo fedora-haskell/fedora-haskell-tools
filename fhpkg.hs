@@ -54,7 +54,9 @@ main = do
         "list" -> mapM_ putStrLn ps
         "count" -> print $ length ps
         "hackage" -> putStrLn "Not yet implemented"
-        "clone" -> repoAction True mdist ps (return ())
+        "clone" -> do
+          new <- newPackages mdist ps
+          repoAction True mdist (new ++ ps) (return ())
         "pull" -> repoAction True mdist ps (cmd_ "git" ["pull", "--rebase"])
         "diff" -> repoAction True mdist ps (cmd_ "git" ["diff"])
         "verrel" -> repoAction False mdist ps (cmd_ "fedpkg" ["verrel"])
