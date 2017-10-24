@@ -15,7 +15,6 @@
 -- Todo:
 -- cache dist package lists?
 -- push hackage data
--- list subpackages?
 -- compare branch versions
 -- compare with LTS
 -- arbitrary command
@@ -55,15 +54,16 @@ main = do
         "list" -> mapM_ putStrLn ps
         "count" -> print $ length ps
         "hackage" -> putStrLn "Not yet implemented"
-        "clone" -> repoAction mdist ps (return ())
-        "pull" -> repoAction mdist ps (cmd_ "git" ["pull", "--rebase"])
-        "diff" -> repoAction mdist ps (cmd_ "git" ["diff"])
-        "verrel" -> repoAction mdist ps (cmd_ "fedpkg" ["verrel"])
+        "clone" -> repoAction True mdist ps (\ _ -> return ())
+        "pull" -> repoAction True mdist ps (\ _ -> cmd_ "git" ["pull", "--rebase"])
+        "diff" -> repoAction True mdist ps (\ _ -> cmd_ "git" ["diff"])
+        "verrel" -> repoAction False mdist ps (\ _ -> cmd_ "fedpkg" ["verrel"])
+        "subpkgs" -> repoAction True mdist ps (\ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p ++ ".spec"])
         "new" -> return ()
         _ -> return ()
 
 commands :: [String]
-commands = ["clone", "pull" , "list", "count", "verrel", "diff", "new", "hackage"]
+commands = ["clone", "count", "diff", "hackage", "list", "new", "pull" , "subpkgs", "verrel"]
 
 help :: IO ()
 help = do
@@ -76,7 +76,8 @@ help = do
     ++ "  list\t\t- list packages\n"
     ++ "  count\t\t- count number of packages\n"
     ++ "  verrel\t\t- show nvr of packages\n"
-    ++ "  new\t\t- new unbuilt packages\n"
+    ++ "  subpkgs\t\t- list subpackages\n"
+--    ++ "  new\t\t- new unbuilt packages\n"
     ++ "  hackage\t- generate Hackage distro date\n"
   exitWith (ExitFailure 1)
 
@@ -115,13 +116,14 @@ kojiListHaskell verbose mdist = do
   when (null bin) $ error "No libHSbase consumers found!"
   return $ sort . nub $ bin ++ libs
 
-repoAction :: Maybe Dist -> [Package] -> IO () -> IO ()
-repoAction _ [] _ = return ()
-repoAction mdist (pkg:rest) action = do
+repoAction :: Bool -> Maybe Dist -> [Package] -> (Package -> IO ()) -> IO ()
+repoAction _ _ [] _ = return ()
+repoAction header mdist (pkg:rest) action = do
   bracket getCurrentDirectory setCurrentDirectory $ \ _ -> do
     let branchGiven = isJust mdist
         branch = maybe "master" distBranch mdist
-    putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ "=="
+    when header $
+      putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ "=="
     -- muser <- getEnv "USER"
     -- let anon = "-a"
     dirExists <- doesDirectoryExist pkg
@@ -145,8 +147,8 @@ repoAction mdist (pkg:rest) action = do
         let spec = pkg ++ ".spec"
         hasSpec <- doesFileExist spec
         unless hasSpec $ putStrLn "No spec file!"
-        action
-  repoAction mdist rest action
+        action pkg
+  repoAction header mdist rest action
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
