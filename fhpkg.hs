@@ -14,7 +14,7 @@
 
 -- Todo:
 -- cache dist package lists?
--- push hackage data
+-- push subpackages to Hackage
 -- compare branch versions
 -- compare with LTS
 -- arbitrary command
@@ -49,7 +49,7 @@ main = do
   case margs of
     Nothing -> return ()
     Just (com, mdist, pkgs) -> do
-      ps <- if null pkgs then repoqueryHaskell True mdist else return pkgs
+      ps <- if null pkgs then repoqueryHaskell False mdist else return pkgs
       case com of
         "list" -> mapM_ putStrLn ps
         "count" -> print $ length ps
@@ -118,7 +118,15 @@ kojiListHaskell verbose mdist = do
 repoqueryHackageCSV :: Maybe Dist -> [Package] -> IO ()
 repoqueryHackageCSV mdist pkgs = do
   let relver = maybe "rawhide" releaseVersion mdist
-  cmd_ "dnf" $ ["repoquery", "--quiet", "--releasever=" ++ relver, "-q", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{name}\""] ++ pkgs
+  -- Hackage csv chokes on final newline so remove it
+  init . unlines . map (replace "\"ghc-" "\"")  . lines <$> (cmd "dnf" $ ["repoquery", "--quiet", "--releasever=" ++ relver, "-q", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{name}\""] ++ pkgs) >>= putStr
+
+replace :: Eq a => [a] -> [a] -> [a] -> [a]
+replace a b s@(x:xs) =
+  if isPrefixOf a s
+  then b ++ replace a b (drop (length a) s)
+  else x:replace a b xs
+replace _ _ [] = []
 
 repoqueryHaskell :: Bool -> Maybe Dist -> IO [Package]
 repoqueryHaskell verbose mdist = do
