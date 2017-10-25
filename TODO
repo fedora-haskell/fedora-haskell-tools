@@ -44,3 +44,5 @@ Parallelize
 # missing
 - which packages missing in dist to build package
 - include version checks
+
+# package ordering (sorting)
