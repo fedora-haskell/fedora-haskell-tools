@@ -119,11 +119,11 @@ repoqueryHackageCSV :: Maybe Dist -> [Package] -> IO ()
 repoqueryHackageCSV mdist pkgs = do
   let relver = maybe "rawhide" releaseVersion mdist
   -- Hackage csv chokes on final newline so remove it
-  init . unlines . map (replace "\"ghc-" "\"")  . lines <$> (cmd "dnf" $ ["repoquery", "--quiet", "--releasever=" ++ relver, "-q", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{name}\""] ++ pkgs) >>= putStr
+  init . unlines . map (replace "\"ghc-" "\"")  . lines <$> cmd "dnf" (["repoquery", "--quiet", "--releasever=" ++ relver, "-q", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{name}\""] ++ pkgs) >>= putStr
 
 replace :: Eq a => [a] -> [a] -> [a] -> [a]
 replace a b s@(x:xs) =
-  if isPrefixOf a s
+  if a `isPrefixOf` s
   then b ++ replace a b (drop (length a) s)
   else x:replace a b xs
 replace _ _ [] = []
