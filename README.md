@@ -1,4 +1,7 @@
 [![Build Status](https://travis-ci.org/fedora-haskell/fedora-haskell-tools.png)](https://travis-ci.org/fedora-haskell/fedora-haskell-tools)
+[![Hackage](http://img.shields.io/hackage/v/fedora-haskell-tools.png)](http://hackage.haskell.org/package/fedora-haskell-tools)
+[![Stackage LTS](http://stackage.org/package/fedora-haskell-tools/badge/lts)](http://stackage.org/lts/package/fedora-haskell-tools)
+[![Stackage Nightly](http://stackage.org/package/fedora-haskell-tools/badge/nightly)](http://stackage.org/nightly/package/fedora-haskell-tools)
 
 # Fedora Haskell Tools
 
