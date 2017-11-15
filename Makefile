@@ -1,5 +1,6 @@
 help:
-	@echo "devel targets: git-tag, sdist, version, git-push, upload, copy"
+	@echo -n "devel targets: git-tag sdist version git-push upload copy"
+	@if [ -f Makefile.local ]; then echo " local-help"; else echo ""; fi
 
 sdist:
 	./make-dist $(VERSION)
@@ -22,3 +23,5 @@ git-push:
 
 copy:
 	cp -p dist/$(NAME)-$(VERSION).tar.gz ~/fedora/haskell/$(NAME)/master
+
+-include Makefile.local
