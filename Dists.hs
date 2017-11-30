@@ -23,6 +23,7 @@ module Dists (Dist,
               distTarget,
               distUpdates,
               distOverride,
+              hackageRelease,
               releaseVersion,
               rawhide) where
 
@@ -36,6 +37,9 @@ dists = [rawhide, "f27", "f26", "f25", "epel7"]
 
 rawhide :: String
 rawhide = "f28"
+
+hackageRelease :: String
+hackageRelease = "f27"
 
 distBranch :: Dist -> String
 distBranch d | d == rawhide = "master"
@@ -73,6 +77,5 @@ distTarget d | d `elem` [rawhide, "epel7"] = Nothing -- Just $ d ++ "-ghc"
              | otherwise = Nothing
 
 releaseVersion :: Dist -> String
-releaseVersion "epel7" = "7"
-releaseVersion r | head r == 'f' = tail r
-releaseVersion _ = error "Unknown release"
+releaseVersion r | r == rawhide = "rawhide"
+releaseVersion r | otherwise = distVersion r

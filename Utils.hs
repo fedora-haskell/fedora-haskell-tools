@@ -112,6 +112,10 @@ removePrefix :: String -> String -> String
 removePrefix prefix orig =
   fromMaybe (error prefix +-+ "is not prefix of" +-+ orig) $ stripPrefix prefix orig
 
+maybeRemovePrefix :: String -> String -> String
+maybeRemovePrefix prefix orig =
+  fromMaybe orig $ stripPrefix prefix orig
+
 removeSuffix :: String -> String -> String
 removeSuffix suffix orig =
   fromMaybe orig $ stripSuffix suffix orig

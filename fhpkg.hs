@@ -29,7 +29,7 @@ import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Control.Monad (unless, when)
 import Data.Maybe
-import Data.List (isPrefixOf, nub, sort, (\\))
+import Data.List (isInfixOf, isPrefixOf, nub, sort, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, setCurrentDirectory)
@@ -39,38 +39,39 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 --import System.Posix.Env (getEnv)
 
-import Dists (Dist, dists, distBranch, releaseVersion)
+import Dists (Dist, dists, distBranch, hackageRelease, releaseVersion)
 import Koji (kojiListPkgs)
-import Utils ((+-+), cmd, cmd_, cmdBool, removePrefix)
-
-currentHackage :: Maybe String
-currentHackage = Just "f27"
+import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, maybeRemovePrefix,
+              removePrefix)
 
 main :: IO ()
 main = do
   margs <- getArgs >>= parseArgs
   case margs of
     Nothing -> return ()
-    Just (com, mdist, pkgs) -> do
+    Just (com, mdist, pkgs) ->
       case com of
         "list" -> withPackages mdist pkgs (mapM_ putStrLn)
         "count" -> withPackages mdist pkgs (print . length)
         "hackage" -> do
-          unless (isNothing mdist || mdist == currentHackage) $ error $ "Hackage is currently for" +-+ (fromJust currentHackage) ++ "!"
+          let currentHackage = Just hackageRelease
+          unless (isNothing mdist || mdist == currentHackage) $ error $ "Hackage is currently for" +-+ fromJust currentHackage ++ "!"
           withPackages currentHackage pkgs (repoqueryHackageCSV currentHackage)
         "clone" -> withPackages mdist pkgs $
-                   repoAction True mdist (return ())
+                   repoAction_ True mdist (return ())
         "clone-new" -> do
           new <- newPackages mdist
-          withPackages mdist new $ repoAction True mdist (return ())
+          withPackages mdist new $ repoAction_ True mdist (return ())
         "pull" -> withPackages mdist pkgs $
-                  repoAction True mdist (cmd_ "git" ["pull", "--rebase"])
+                  repoAction_ True mdist (cmd_ "git" ["pull", "--rebase"])
         "diff" -> withPackages mdist pkgs $
-                  repoAction True mdist (cmd_ "git" ["--no-pager", "diff"])
+                  repoAction_ True mdist (cmd_ "git" ["--no-pager", "diff"])
+        "diff-stackage" -> withPackages mdist pkgs $
+                  repoAction False mdist compareStackage
         "verrel" -> withPackages mdist pkgs $
-                    repoAction False mdist (cmd_ "fedpkg" ["verrel"])
+                    repoAction_ False mdist (cmd_ "fedpkg" ["verrel"])
         "subpkgs" -> withPackages mdist pkgs $
-                     repoAction True mdist (cmd "fedpkg" ["gimmespec"] >>= \ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p])
+                     repoAction True mdist (\ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p ++ ".spec"])
         "new" -> newPackages mdist >>= mapM_ putStrLn
         _ -> return ()
   where
@@ -78,8 +79,21 @@ main = do
     withPackages mdist pkgs act =
       (if null pkgs then repoqueryHaskell False mdist else return pkgs) >>= act
 
-commands :: [String]
-commands = ["clone", "clone-new", "count", "diff", "hackage", "list", "new", "pull" , "subpkgs", "verrel"]
+commands :: [(String, String)]
+commands = [("clone", "clone repos"),
+            ("clone-new", "clone new packages"),
+            ("count", "count number of packages"),
+            ("diff", "git diff"),
+            ("diff-stackage","compare with stackage"),
+            ("hackage", "generate Hackage distro data"),
+            ("list", "list packages"),
+            ("new", "new unbuilt packages"),
+            ("pull", "pull repos"),
+            ("subpkgs", "list subpackages"),
+            ("verrel", "show nvr of packages")]
+
+cmds :: [String]
+cmds = map fst commands
 
 help :: IO ()
 help = do
@@ -87,16 +101,10 @@ help = do
   hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [DIST]\n"
     ++ "\n"
     ++ "Commands:\n"
-    ++ "  clone\t\t- clone repos\n"
-    ++ "  clone-new\t- clone new packages\n"
-    ++ "  pull\t\t- pull repos\n"
-    ++ "  list\t\t- list packages\n"
-    ++ "  count\t\t- count number of packages\n"
-    ++ "  verrel\t- show nvr of packages\n"
-    ++ "  subpkgs\t- list subpackages\n"
-    ++ "  new\t\t- new unbuilt packages\n"
-    ++ "  hackage\t- generate Hackage distro date\n"
+  mapM_ (putStrLn . (\(c, desc) -> "  " ++ c ++ replicate (mx - length c) ' ' +-+ "-" +-+ desc)) commands
   exitWith (ExitFailure 1)
+  where
+    mx = maximum $ map length cmds
 
 type Package = String
 
@@ -104,12 +112,12 @@ type Arguments = Maybe (String, Maybe Dist, [Package])
 
 parseArgs :: [String] -> IO Arguments
 parseArgs [c] =
-                if c `elem` commands
+                if c `elem` cmds
                 then return (Just (c, Nothing, []))
                 else giveUp $ "No such command '" ++ c ++ "'"
 parseArgs (c:dist:pkgs) | dist `notElem` dists = 
                           giveUp $ "Unknown dist '" ++ dist ++ "'"
-                        | c `notElem` commands =
+                        | c `notElem` cmds =
                           giveUp $ "No such command '" ++ c ++ "'"
                         | otherwise =
                           return $ Just (c, Just dist, pkgs)
@@ -158,7 +166,7 @@ newPackages mdist = do
   kps <- kojiListHaskell True mdist
   return $ kps \\ ps
 
-repoAction :: Bool -> Maybe Dist -> IO () -> [Package] -> IO ()
+repoAction :: Bool -> Maybe Dist -> (Package -> IO ()) -> [Package] -> IO ()
 repoAction _ _ _ [] = return ()
 repoAction header mdist action (pkg:rest) = do
   bracket getCurrentDirectory setCurrentDirectory $ \ _ -> do
@@ -189,8 +197,11 @@ repoAction header mdist action (pkg:rest) = do
         let spec = pkg ++ ".spec"
         hasSpec <- doesFileExist spec
         unless hasSpec $ putStrLn "No spec file!"
-        action
+        action pkg
   repoAction header mdist action rest
+
+repoAction_ :: Bool -> Maybe Dist -> IO () -> [Package] -> IO ()
+repoAction_ header mdist action = repoAction header mdist (\ _ -> action)
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
@@ -201,3 +212,11 @@ gitBranch :: IO String
 gitBranch =
   (removePrefix "* " . head . filter (isPrefixOf "* ") . lines) <$> cmd "git" ["branch"]
 
+compareStackage :: Package -> IO ()
+compareStackage p = do
+  fp <- cmd "fedpkg" ["verrel"]
+  stkg <- cmdMaybe "stackage" ["package", "lts", maybeRemovePrefix "ghc-" p]
+  unless (isJust stkg && (fromJust stkg) `isInfixOf` fp) $ do
+    putStrLn fp
+    putStrLn $ "lts:" ++ replicate (length p - 4) ' ' +-+ fromMaybe "NA" stkg
+    putStrLn ""
