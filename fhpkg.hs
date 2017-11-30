@@ -61,7 +61,7 @@ main = do
         "clone" -> withPackages mdist pkgs $
                    repoAction True mdist (return ())
         "clone-new" -> do
-          new <- newPackages mdist pkgs
+          new <- newPackages mdist
           withPackages mdist new $ repoAction True mdist (return ())
         "pull" -> withPackages mdist pkgs $
                   repoAction True mdist (cmd_ "git" ["pull", "--rebase"])
@@ -71,7 +71,7 @@ main = do
                     repoAction False mdist (cmd_ "fedpkg" ["verrel"])
         "subpkgs" -> withPackages mdist pkgs $
                      repoAction True mdist (cmd "fedpkg" ["gimmespec"] >>= \ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p])
-        "new" -> newPackages mdist pkgs >>= mapM_ putStrLn
+        "new" -> newPackages mdist >>= mapM_ putStrLn
         _ -> return ()
   where
     withPackages :: Maybe Dist -> [Package] -> ([Package] -> IO ()) -> IO ()
@@ -152,8 +152,9 @@ repoqueryHaskell verbose mdist = do
   when (null bin) $ error "No libHSbase consumers found!"
   return $ sort $ nub bin
 
-newPackages :: Maybe Dist -> [Package] -> IO [Package]
-newPackages mdist ps = do
+newPackages :: Maybe Dist -> IO [Package]
+newPackages mdist = do
+  ps <- repoqueryHaskell True mdist
   kps <- kojiListHaskell True mdist
   return $ kps \\ ps
 
