@@ -43,31 +43,43 @@ import Dists (Dist, dists, distBranch, releaseVersion)
 import Koji (kojiListPkgs)
 import Utils ((+-+), cmd, cmd_, cmdBool, removePrefix)
 
+currentHackage :: Maybe String
+currentHackage = Just "f27"
+
 main :: IO ()
 main = do
   margs <- getArgs >>= parseArgs
   case margs of
     Nothing -> return ()
     Just (com, mdist, pkgs) -> do
-      ps <- if null pkgs then repoqueryHaskell False mdist else return pkgs
       case com of
-        "list" -> mapM_ putStrLn ps
-        "count" -> print $ length ps
+        "list" -> withPackages mdist pkgs (mapM_ putStrLn)
+        "count" -> withPackages mdist pkgs (print . length)
         "hackage" -> do
-          unless (mdist == Just "f27") $ error "Hackage is currently for F27!"
-          repoqueryHackageCSV mdist ps
-        "clone" -> do
-          new <- newPackages mdist ps
-          repoAction True mdist (new ++ ps) (return ())
-        "pull" -> repoAction True mdist ps (cmd_ "git" ["pull", "--rebase"])
-        "diff" -> repoAction True mdist ps (cmd_ "git" ["diff"])
-        "verrel" -> repoAction False mdist ps (cmd_ "fedpkg" ["verrel"])
-        "subpkgs" -> repoAction True mdist ps (cmd "fedpkg" ["gimmespec"] >>= \ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p])
-        "new" -> newPackages mdist ps >>= mapM_ putStrLn
+          unless (isNothing mdist || mdist == currentHackage) $ error $ "Hackage is currently for" +-+ (fromJust currentHackage) ++ "!"
+          withPackages currentHackage pkgs (repoqueryHackageCSV currentHackage)
+        "clone" -> withPackages mdist pkgs $
+                   repoAction True mdist (return ())
+        "clone-new" -> do
+          new <- newPackages mdist pkgs
+          withPackages mdist new $ repoAction True mdist (return ())
+        "pull" -> withPackages mdist pkgs $
+                  repoAction True mdist (cmd_ "git" ["pull", "--rebase"])
+        "diff" -> withPackages mdist pkgs $
+                  repoAction True mdist (cmd_ "git" ["--no-pager", "diff"])
+        "verrel" -> withPackages mdist pkgs $
+                    repoAction False mdist (cmd_ "fedpkg" ["verrel"])
+        "subpkgs" -> withPackages mdist pkgs $
+                     repoAction True mdist (cmd "fedpkg" ["gimmespec"] >>= \ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p])
+        "new" -> newPackages mdist pkgs >>= mapM_ putStrLn
         _ -> return ()
+  where
+    withPackages :: Maybe Dist -> [Package] -> ([Package] -> IO ()) -> IO ()
+    withPackages mdist pkgs act =
+      (if null pkgs then repoqueryHaskell False mdist else return pkgs) >>= act
 
 commands :: [String]
-commands = ["clone", "count", "diff", "hackage", "list", "new", "pull" , "subpkgs", "verrel"]
+commands = ["clone", "clone-new", "count", "diff", "hackage", "list", "new", "pull" , "subpkgs", "verrel"]
 
 help :: IO ()
 help = do
@@ -75,12 +87,13 @@ help = do
   hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [DIST]\n"
     ++ "\n"
     ++ "Commands:\n"
-    ++ "  clone\t- clone repos\n"
+    ++ "  clone\t\t- clone repos\n"
+    ++ "  clone-new\t- clone new packages\n"
     ++ "  pull\t\t- pull repos\n"
     ++ "  list\t\t- list packages\n"
     ++ "  count\t\t- count number of packages\n"
-    ++ "  verrel\t\t- show nvr of packages\n"
-    ++ "  subpkgs\t\t- list subpackages\n"
+    ++ "  verrel\t- show nvr of packages\n"
+    ++ "  subpkgs\t- list subpackages\n"
     ++ "  new\t\t- new unbuilt packages\n"
     ++ "  hackage\t- generate Hackage distro date\n"
   exitWith (ExitFailure 1)
@@ -119,7 +132,7 @@ repoqueryHackageCSV :: Maybe Dist -> [Package] -> IO ()
 repoqueryHackageCSV mdist pkgs = do
   let relver = maybe "rawhide" releaseVersion mdist
   -- Hackage csv chokes on final newline so remove it
-  init . unlines . map (replace "\"ghc-" "\"")  . lines <$> cmd "dnf" (["repoquery", "--quiet", "--releasever=" ++ relver, "-q", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{name}\""] ++ pkgs) >>= putStr
+  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> cmd "dnf" (["repoquery", "--quiet", "--releasever=" ++ relver, "--latest-limit=1", "-q", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ pkgs) >>= putStr
 
 replace :: Eq a => [a] -> [a] -> [a] -> [a]
 replace a b s@(x:xs) =
@@ -144,9 +157,9 @@ newPackages mdist ps = do
   kps <- kojiListHaskell True mdist
   return $ kps \\ ps
 
-repoAction :: Bool -> Maybe Dist -> [Package] -> IO () -> IO ()
-repoAction _ _ [] _ = return ()
-repoAction header mdist (pkg:rest) action = do
+repoAction :: Bool -> Maybe Dist -> IO () -> [Package] -> IO ()
+repoAction _ _ _ [] = return ()
+repoAction header mdist action (pkg:rest) = do
   bracket getCurrentDirectory setCurrentDirectory $ \ _ -> do
     let branchGiven = isJust mdist
         branch = maybe "master" distBranch mdist
@@ -176,7 +189,7 @@ repoAction header mdist (pkg:rest) action = do
         hasSpec <- doesFileExist spec
         unless hasSpec $ putStrLn "No spec file!"
         action
-  repoAction header mdist rest action
+  repoAction header mdist action rest
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
