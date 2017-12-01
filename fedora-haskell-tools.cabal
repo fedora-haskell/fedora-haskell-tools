@@ -1,8 +1,8 @@
 Name:                fedora-haskell-tools
-Version:             0.3
-Synopsis:            Building and tracking tools for Fedora Haskell
+Version:             0.4
+Synopsis:            Building and managing tools for Fedora Haskell
 Description:
-    Tools for recursive building of Fedora Haskell packages.
+    Tools for building and managing Fedora Haskell packages.
 Homepage:            https://github.com/fedora-haskell/fedora-haskell-tools
 Bug-reports:         https://github.com/fedora-haskell/fedora-haskell-tools/issues
 License:             GPL-3
