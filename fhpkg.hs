@@ -31,7 +31,11 @@ import Data.Maybe
 import Data.List (isInfixOf, isPrefixOf, nub, sort, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist,
-                         setCurrentDirectory, withCurrentDirectory)
+                         setCurrentDirectory,
+#if (defined(MIN_VERSION_directory) && MIN_VERSION_base(1,2,3))
+                         withCurrentDirectory
+#endif
+                        )
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>))
@@ -41,7 +45,12 @@ import System.IO (hPutStrLn, stderr)
 import Dists (Dist, dists, distBranch, hackageRelease, releaseVersion)
 import Koji (kojiListPkgs)
 import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, maybeRemovePrefix,
-              removePrefix)
+              removePrefix,
+#if (defined(MIN_VERSION_directory) && MIN_VERSION_base(1,2,3))
+#else
+              withCurrentDirectory
+#endif
+             )
 
 main :: IO ()
 main = do
