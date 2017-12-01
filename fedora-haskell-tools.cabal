@@ -37,6 +37,7 @@ Executable fhbz
     Main-is:       fhbz.hs
     Build-depends: base < 5,
                    time
+    Other-modules: Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
 

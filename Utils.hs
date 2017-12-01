@@ -25,6 +25,12 @@ import Data.Maybe (fromMaybe)
 import System.Exit (ExitCode (..))
 import System.Process (readProcess, readProcessWithExitCode, rawSystem)
 
+#if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
+#else
+import Control.Exception (bracket)
+import System.Directory ( getCurrentDirectory, setCurrentDirectory)
+#endif
+
 infixr 4 +-+
 (+-+) :: String -> String -> String
 "" +-+ s = s
