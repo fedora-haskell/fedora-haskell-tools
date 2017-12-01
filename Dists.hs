@@ -78,4 +78,4 @@ distTarget d | d `elem` [rawhide, "epel7"] = Nothing -- Just $ d ++ "-ghc"
 
 releaseVersion :: Dist -> String
 releaseVersion r | r == rawhide = "rawhide"
-releaseVersion r | otherwise = distVersion r
+releaseVersion r = distVersion r

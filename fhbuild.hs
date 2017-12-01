@@ -31,7 +31,7 @@ import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget)
 import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji)
-import RPM (packageManager, rpmInstall, repoquery, repoquerySrc)
+import RPM (packageManager, rpmInstall, repoquery, repoquerySrc, rpmspec)
 import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdlog, error_, logMsg,
               removePrefix, removeSuffix, sudo)
 
@@ -162,8 +162,8 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               putStrLn $ "To watch: tail -f" +-+ wd </> logfile
               -- note "fedpkg --path dir local" saves .build.log in cwd
               _out <- cmd "fedpkg" ["local"]
-              opkgs <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{name}\n", spec]
-              rpms <- lines <$> cmd "rpmspec" ["-q", "--queryformat", "%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n", spec]
+              opkgs <- lines <$> rpmspec [] (Just "%{name}\n") spec
+              rpms <- lines <$> rpmspec [] (Just ("%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n")) spec
               built <- and <$> mapM doesFileExist rpms
               if built
                 then do
@@ -324,7 +324,7 @@ whatProvides pkg = do
 
 buildRequires :: FilePath -> IO [String]
 buildRequires spec =
-  (map (head . words) . lines) <$> cmd "rpmspec" ["-q", "--buildrequires", spec] >>= mapM whatProvides
+  (map (head . words) . lines) <$> rpmspec ["--buildrequires"] Nothing spec >>= mapM whatProvides
 
 derefSrcPkg :: String -> IO (Maybe String)
 derefSrcPkg pkg = do

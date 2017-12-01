@@ -14,7 +14,8 @@
 module RPM (packageManager,
             repoquery,
             repoquerySrc,
-            rpmInstall) where
+            rpmInstall,
+            rpmspec) where
 
 import Control.Monad (unless, when)
 import Data.List (elemIndices)
@@ -24,7 +25,7 @@ import System.Directory (findExecutable)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 
-import Utils (cmdStdErr, singleLine, sudo)
+import Utils (cmd, cmdStdErr, singleLine, sudo)
 
 -- @since base 4.8.0.0
 die :: String -> IO a
@@ -63,8 +64,8 @@ repoquery args key = do
   repoqWrap prog (subcmd ++ args ++ [key])
 
 repoqWrap :: String -> [String] -> IO String
-repoqWrap cmd args = do
-  (out, err) <- cmdStdErr cmd args
+repoqWrap c args = do
+  (out, err) <- cmdStdErr c args
   -- workaround noisy dnf2 repoquery --quiet
   -- ignore "Last metadata expiration check" warnings
   unless (null err || head (words err) == "Last") $
@@ -87,3 +88,8 @@ nvrToName nvr =
   where
     dashes = elemIndices '-' nvr
     nameDash = last $ init dashes
+
+rpmspec :: [String] -> Maybe String -> FilePath -> IO String
+rpmspec args mqf spec = do
+  let qf = maybe [] (\ q -> ["--queryformat", q]) mqf
+  cmd "rpmspec" (["-q"] ++ args ++ qf ++ [spec])

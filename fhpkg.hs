@@ -44,6 +44,7 @@ import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch, hackageRelease, releaseVersion)
 import Koji (kojiListPkgs)
+import RPM (rpmspec)
 import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, maybeRemovePrefix,
               removePrefix,
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
@@ -75,13 +76,13 @@ main = do
         "diff" -> withPackages mdist pkgs $
                   repoAction_ True False mdist (cmd_ "git" ["--no-pager", "diff"])
         "diff-branch" -> withPackages mdist pkgs $
-                  repoAction_ False True mdist compareRawhide
+                  repoAction False True mdist compareRawhide
         "diff-stackage" -> withPackages mdist pkgs $
                   repoAction True True mdist compareStackage
         "verrel" -> withPackages mdist pkgs $
                     repoAction_ False True mdist (cmd_ "fedpkg" ["verrel"])
         "subpkgs" -> withPackages mdist pkgs $
-                     repoAction True True mdist (\ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p ++ ".spec"])
+                     repoAction True True mdist (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn)
         "new" -> newPackages mdist >>= mapM_ putStrLn
         _ -> return ()
   where
@@ -193,9 +194,9 @@ repoAction header needsSpec mdist action (pkg:rest) = do
     singleDir <- doesFileExist $ pkg </> ".git/config"
     unless singleDir $ do
       branchDir <- doesDirectoryExist $ pkg </> branch
-      unless branchDir $ do
+      unless branchDir $
         withCurrentDirectory pkg $
-          cmd_ "fedpkg" $ ["clone", "-b", branch, pkg, branch]
+          cmd_ "fedpkg" ["clone", "-b", branch, pkg, branch]
     wd <- pkgDir pkg branch ""
     setCurrentDirectory wd
     pkggit <- do
@@ -220,7 +221,7 @@ repoAction header needsSpec mdist action (pkg:rest) = do
 
 repoAction_ :: Bool -> Bool -> Maybe Dist -> IO () -> [Package] -> IO ()
 repoAction_ header needsSpec mdist action =
-  repoAction header needsSpec mdist (\ _ -> action)
+  repoAction header needsSpec mdist (const action)
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
@@ -235,18 +236,19 @@ compareStackage :: Package -> IO ()
 compareStackage p = do
   nvr <- cmd "fedpkg" ["verrel"]
   stkg <- cmdMaybe "stackage" ["package", "lts", maybeRemovePrefix "ghc-" p]
-  let same = isJust stkg && (fromJust stkg) `isInfixOf` nvr
+  let same = isJust stkg && fromJust stkg `isInfixOf` nvr
   putStrLn $ removePrefix (p ++ "-") nvr +-+ "(fedora)"
   putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(lts)"
 
 
-compareRawhide :: IO ()
-compareRawhide = do
-  nvr <- cmd "fedpkg" ["verrel"]
-  nvr' <- cmd "fedpkg" ["--path", "../master", "verrel"]
+compareRawhide :: Package -> IO ()
+compareRawhide p = do
+  nvr <- rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") (p ++ ".spec")
+  nvr' <- withCurrentDirectory "../master" $
+          rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") (p ++ ".spec")
   when (removeDisttag nvr /= removeDisttag nvr') $ do
     putStrLn nvr
     putStrLn nvr'
     putStrLn ""
   where
-    removeDisttag = reverse . tail . snd . break (== '.') . reverse
+    removeDisttag = reverse . tail . dropWhile (/= '.') . reverse
