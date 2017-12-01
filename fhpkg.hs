@@ -117,10 +117,10 @@ parseArgs [c] =
                 if c `elem` cmds
                 then return (Just (c, Nothing, []))
                 else giveUp $ "No such command '" ++ c ++ "'"
-parseArgs (c:dist:pkgs) | dist `notElem` dists = 
-                          giveUp $ "Unknown dist '" ++ dist ++ "'"
-                        | c `notElem` cmds =
+parseArgs (c:dist:pkgs) | c `notElem` cmds =
                           giveUp $ "No such command '" ++ c ++ "'"
+                        | dist `notElem` dists =
+                            return $ Just (c, Nothing, dist:pkgs)
                         | otherwise =
                           return $ Just (c, Just dist, pkgs)
 parseArgs _ = help >> return Nothing
