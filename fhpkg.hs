@@ -26,13 +26,12 @@ module Main where
 #else
 import Control.Applicative ((<$>))
 #endif
-import Control.Exception (bracket)
 import Control.Monad (unless, when)
 import Data.Maybe
 import Data.List (isInfixOf, isPrefixOf, nub, sort, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist,
-                         getCurrentDirectory, setCurrentDirectory)
+                         setCurrentDirectory, withCurrentDirectory)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>))
@@ -172,7 +171,7 @@ newPackages mdist = do
 repoAction :: Bool -> Bool -> Maybe Dist -> (Package -> IO ()) -> [Package] -> IO ()
 repoAction _ _ _ _ [] = return ()
 repoAction header needsSpec mdist action (pkg:rest) = do
-  bracket getCurrentDirectory setCurrentDirectory $ \ _ -> do
+  withCurrentDirectory "." $ do
     let branchGiven = isJust mdist
         branch = maybe "master" distBranch mdist
     when header $
