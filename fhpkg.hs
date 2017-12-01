@@ -181,6 +181,12 @@ repoAction header needsSpec mdist action (pkg:rest) = do
     dirExists <- doesDirectoryExist pkg
     unless dirExists $
       cmd_ "fedpkg" $ ["clone"] ++ (if branchGiven then ["-b", branch] else ["-B"]) ++ [pkg]
+    singleDir <- doesFileExist $ pkg </> ".git/config"
+    unless singleDir $ do
+      branchDir <- doesDirectoryExist $ pkg </> branch
+      unless branchDir $ do
+        withCurrentDirectory pkg $
+          cmd_ "fedpkg" $ ["clone", "-b", branch, pkg, branch]
     wd <- pkgDir pkg branch ""
     setCurrentDirectory wd
     pkggit <- do
