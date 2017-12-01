@@ -66,6 +66,8 @@ main = do
                   repoAction_ True False mdist (cmd_ "git" ["pull", "--rebase"])
         "diff" -> withPackages mdist pkgs $
                   repoAction_ True False mdist (cmd_ "git" ["--no-pager", "diff"])
+        "diff-branch" -> withPackages mdist pkgs $
+                  repoAction_ False True mdist compareRawhide
         "diff-stackage" -> withPackages mdist pkgs $
                   repoAction True True mdist compareStackage
         "verrel" -> withPackages mdist pkgs $
@@ -84,6 +86,7 @@ commands = [("clone", "clone repos"),
             ("clone-new", "clone new packages"),
             ("count", "count number of packages"),
             ("diff", "git diff"),
+            ("diff-branch","compare branch with master"),
             ("diff-stackage","compare with stackage"),
             ("hackage", "generate Hackage distro data"),
             ("list", "list packages"),
@@ -221,3 +224,15 @@ compareStackage p = do
   let same = isJust stkg && (fromJust stkg) `isInfixOf` nvr
   putStrLn $ removePrefix (p ++ "-") nvr +-+ "(fedora)"
   putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(lts)"
+
+
+compareRawhide :: IO ()
+compareRawhide = do
+  nvr <- cmd "fedpkg" ["verrel"]
+  nvr' <- cmd "fedpkg" ["--path", "../master", "verrel"]
+  when (removeDisttag nvr /= removeDisttag nvr') $ do
+    putStrLn nvr
+    putStrLn nvr'
+    putStrLn ""
+  where
+    removeDisttag = reverse . tail . snd . break (== '.') . reverse
