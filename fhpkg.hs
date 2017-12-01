@@ -32,7 +32,7 @@ import Data.List (isInfixOf, isPrefixOf, nub, sort, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          setCurrentDirectory,
-#if (defined(MIN_VERSION_directory) && MIN_VERSION_base(1,2,3))
+#if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
                          withCurrentDirectory
 #endif
                         )
@@ -46,7 +46,7 @@ import Dists (Dist, dists, distBranch, hackageRelease, releaseVersion)
 import Koji (kojiListPkgs)
 import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, maybeRemovePrefix,
               removePrefix,
-#if (defined(MIN_VERSION_directory) && MIN_VERSION_base(1,2,3))
+#if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
 #else
               withCurrentDirectory
 #endif

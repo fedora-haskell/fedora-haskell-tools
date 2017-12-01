@@ -129,7 +129,7 @@ error_ = errorWithoutStackTrace
 error_ = error
 #endif
 
-#if (defined(MIN_VERSION_directory) && MIN_VERSION_base(1,2,3))
+#if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
 #else
 withCurrentDirectory :: FilePath -> IO a -> IO a
 withCurrentDirectory dir action =
