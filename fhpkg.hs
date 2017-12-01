@@ -58,20 +58,20 @@ main = do
           unless (isNothing mdist || mdist == currentHackage) $ error $ "Hackage is currently for" +-+ fromJust currentHackage ++ "!"
           withPackages currentHackage pkgs (repoqueryHackageCSV currentHackage)
         "clone" -> withPackages mdist pkgs $
-                   repoAction_ True mdist (return ())
+                   repoAction_ True False mdist (return ())
         "clone-new" -> do
           new <- newPackages mdist
-          withPackages mdist new $ repoAction_ True mdist (return ())
+          withPackages mdist new $ repoAction_ True False mdist (return ())
         "pull" -> withPackages mdist pkgs $
-                  repoAction_ True mdist (cmd_ "git" ["pull", "--rebase"])
+                  repoAction_ True False mdist (cmd_ "git" ["pull", "--rebase"])
         "diff" -> withPackages mdist pkgs $
-                  repoAction_ True mdist (cmd_ "git" ["--no-pager", "diff"])
+                  repoAction_ True False mdist (cmd_ "git" ["--no-pager", "diff"])
         "diff-stackage" -> withPackages mdist pkgs $
-                  repoAction False mdist compareStackage
+                  repoAction True True mdist compareStackage
         "verrel" -> withPackages mdist pkgs $
-                    repoAction_ False mdist (cmd_ "fedpkg" ["verrel"])
+                    repoAction_ False True mdist (cmd_ "fedpkg" ["verrel"])
         "subpkgs" -> withPackages mdist pkgs $
-                     repoAction True mdist (\ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p ++ ".spec"])
+                     repoAction True True mdist (\ p -> cmd_ "rpmspec" ["-q", "--qf", "%{name}-%{version}\n", p ++ ".spec"])
         "new" -> newPackages mdist >>= mapM_ putStrLn
         _ -> return ()
   where
@@ -166,9 +166,9 @@ newPackages mdist = do
   kps <- kojiListHaskell True mdist
   return $ kps \\ ps
 
-repoAction :: Bool -> Maybe Dist -> (Package -> IO ()) -> [Package] -> IO ()
-repoAction _ _ _ [] = return ()
-repoAction header mdist action (pkg:rest) = do
+repoAction :: Bool -> Bool -> Maybe Dist -> (Package -> IO ()) -> [Package] -> IO ()
+repoAction _ _ _ _ [] = return ()
+repoAction header needsSpec mdist action (pkg:rest) = do
   bracket getCurrentDirectory setCurrentDirectory $ \ _ -> do
     let branchGiven = isJust mdist
         branch = maybe "master" distBranch mdist
@@ -197,11 +197,13 @@ repoAction header mdist action (pkg:rest) = do
         let spec = pkg ++ ".spec"
         hasSpec <- doesFileExist spec
         unless hasSpec $ putStrLn "No spec file!"
-        action pkg
-  repoAction header mdist action rest
+        unless (needsSpec && not hasSpec) $
+          action pkg
+  repoAction header needsSpec mdist action rest
 
-repoAction_ :: Bool -> Maybe Dist -> IO () -> [Package] -> IO ()
-repoAction_ header mdist action = repoAction header mdist (\ _ -> action)
+repoAction_ :: Bool -> Bool -> Maybe Dist -> IO () -> [Package] -> IO ()
+repoAction_ header needsSpec mdist action =
+  repoAction header needsSpec mdist (\ _ -> action)
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
@@ -214,9 +216,8 @@ gitBranch =
 
 compareStackage :: Package -> IO ()
 compareStackage p = do
-  fp <- cmd "fedpkg" ["verrel"]
+  nvr <- cmd "fedpkg" ["verrel"]
   stkg <- cmdMaybe "stackage" ["package", "lts", maybeRemovePrefix "ghc-" p]
-  unless (isJust stkg && (fromJust stkg) `isInfixOf` fp) $ do
-    putStrLn fp
-    putStrLn $ "lts:" ++ replicate (length p - 4) ' ' +-+ fromMaybe "NA" stkg
-    putStrLn ""
+  let same = isJust stkg && (fromJust stkg) `isInfixOf` nvr
+  putStrLn $ removePrefix (p ++ "-") nvr +-+ "(fedora)"
+  putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(lts)"
