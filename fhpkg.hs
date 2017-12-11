@@ -234,10 +234,10 @@ compareStackage p = do
 
 compareRawhide :: Package -> IO ()
 compareRawhide p = do
-  nvr <- rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") (p ++ ".spec")
+  nvr <- removeDisttag <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") (p ++ ".spec")
   nvr' <- withCurrentDirectory "../master" $
-          rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") (p ++ ".spec")
-  when (removeDisttag nvr /= removeDisttag nvr') $ do
+          removeDisttag <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") (p ++ ".spec")
+  when (nvr /= nvr') $ do
     putStrLn nvr
     putStrLn nvr'
     putStrLn ""
