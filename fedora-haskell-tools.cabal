@@ -50,6 +50,7 @@ Executable fhpkg
                    unix
     Other-modules: Dists,
                    Koji,
+                   RPM,
                    Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
