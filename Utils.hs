@@ -13,7 +13,21 @@
 -- the Free Software Foundation, either version 3 of the License, or
 -- (at your option) any later version.
 
-module Utils where
+module Utils (cmd,
+              cmd_,
+              cmdBool,
+              cmdlog,
+              cmdMaybe,
+              cmdStdErr,
+              error_,
+              logMsg,
+              maybeRemovePrefix,
+              removePrefix,
+              removeSuffix,
+              singleLine,
+              sudo,
+              withCurrentDirectory,
+              (+-+) ) where
 
 #if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,2))
 #else
@@ -26,9 +40,10 @@ import System.Exit (ExitCode (..))
 import System.Process (readProcess, readProcessWithExitCode, rawSystem)
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
+import System.Directory (withCurrentDirectory)
 #else
 import Control.Exception (bracket)
-import System.Directory ( getCurrentDirectory, setCurrentDirectory)
+import System.Directory (getCurrentDirectory, setCurrentDirectory)
 #endif
 
 infixr 4 +-+
@@ -76,16 +91,16 @@ cmd_ c as = do
     ExitSuccess -> return ()
     ExitFailure n -> error $ "\"" ++ c +-+ unwords as ++ "\" failed with exit code" +-+ show n
 
--- dry-run
-cmdN :: String -> [String] -> IO ()
-cmdN c as = putStrLn $ c +-+ show as
+-- -- dry-run
+--cmdN :: String -> [String] -> IO ()
+--cmdN c as = putStrLn $ c +-+ show as
 
-cmdAssert :: String -> String -> [String] -> IO ()
-cmdAssert msg c as = do
-  ret <- rawSystem c as
-  case ret of
-    ExitSuccess -> return ()
-    ExitFailure _ -> error msg
+--cmdAssert :: String -> String -> [String] -> IO ()
+--cmdAssert msg c as = do
+--  ret <- rawSystem c as
+--  case ret of
+--    ExitSuccess -> return ()
+--    ExitFailure _ -> error msg
 
 cmdlogStdIn :: String -> [String] -> String -> IO ()
 cmdlogStdIn c as inp = do
@@ -111,8 +126,8 @@ cmdBool c as = do
 sudo :: String -> [String] -> IO ()
 sudo c as = cmdlog "sudo" (c:as)
 
-shell :: String -> IO String
-shell c = cmd "sh" ["-c", c]
+--shell :: String -> IO String
+--shell c = cmd "sh" ["-c", c]
 
 removePrefix :: String -> String -> String
 removePrefix prefix orig =
