@@ -41,8 +41,8 @@ import System.IO (hPutStrLn, stderr)
 import Dists (Dist, dists, distBranch, hackageRelease, releaseVersion)
 import Koji (kojiListPkgs)
 import RPM (rpmspec)
-import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, maybeRemovePrefix,
-              removePrefix, withCurrentDirectory)
+import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
+              maybeRemovePrefix, removePrefix, withCurrentDirectory)
 
 main :: IO ()
 main = do
@@ -234,12 +234,17 @@ compareStackage p = do
 
 compareRawhide :: Package -> IO ()
 compareRawhide p = do
-  nvr <- removeDisttag <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") (p ++ ".spec")
-  nvr' <- withCurrentDirectory "../master" $
-          removeDisttag <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") (p ++ ".spec")
-  when (nvr /= nvr') $ do
+  let spec = p ++ ".spec"
+  nvr <- removeDisttag <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
+  nvr' <- withCurrentDirectory "../master" $ do
+    haveSpec <- doesFileExist spec
+    unless haveSpec $ cmdSilent "git" ["pull"]
+    removeDisttag <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
+  if (nvr == nvr')
+    then putStrLn nvr
+    else do
     putStrLn nvr
     putStrLn nvr'
-    putStrLn ""
+  putStrLn ""
   where
     removeDisttag = reverse . tail . dropWhile (/= '.') . reverse

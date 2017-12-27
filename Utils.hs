@@ -18,6 +18,7 @@ module Utils (cmd,
               cmdBool,
               cmdlog,
               cmdMaybe,
+              cmdSilent,
               cmdStdErr,
               error_,
               logMsg,
@@ -122,6 +123,14 @@ cmdBool c as = do
   case ret of
     ExitSuccess -> return True
     ExitFailure _ -> return False
+
+-- hide stdout
+cmdSilent :: String -> [String] -> IO ()
+cmdSilent c args = do
+  (ret, _, err) <- readProcessWithExitCode c args ""
+  case ret of
+    ExitSuccess -> return ()
+    ExitFailure n -> error $ "\"" ++ c +-+ unwords args ++ "\"" +-+ "failed with status" +-+ show n ++ "\n" ++ err
 
 sudo :: String -> [String] -> IO ()
 sudo c as = cmdlog "sudo" (c:as)
