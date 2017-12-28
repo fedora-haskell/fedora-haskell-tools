@@ -31,7 +31,7 @@ import Data.Maybe
 import Data.List (isInfixOf, isPrefixOf, nub, sort, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist,
-                         setCurrentDirectory)
+                         getHomeDirectory, setCurrentDirectory)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>))
