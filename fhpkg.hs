@@ -155,11 +155,9 @@ replace _ _ [] = []
 repoqueryHaskell :: Bool -> Maybe Dist -> IO [Package]
 repoqueryHaskell verbose mdist = do
   -- fixme: should use repoquery instead:
-  base <- cmd "ghc-pkg" ["--simple-output", "list", "base"]
-  ghcver <- cmd "ghc" ["--numeric-version"]
   let relver = maybe "rawhide" releaseVersion mdist
   when verbose $ putStrLn "Getting packages from repoquery"
-  bin <- words <$> cmd "dnf" ["repoquery", "--quiet", "--releasever=" ++ relver, "--whatrequires", "libHS" ++ base ++ "-ghc" ++ ghcver ++ ".so()(64bit)", "--qf=%{source_name}"]
+  bin <- words <$> cmd "dnf" ["repoquery", "--quiet", "--releasever=" ++ relver, "--whatrequires", "libHSbase-*-ghc*.so()(64bit)", "--qf=%{source_name}"]
   when (null bin) $ error "No libHSbase consumers found!"
   return $ sort $ nub bin
 
