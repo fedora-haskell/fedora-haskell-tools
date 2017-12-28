@@ -74,6 +74,8 @@ main = do
                   repoAction True True mdist compareStackage
         "verrel" -> withPackages mdist pkgs $
                     repoAction_ False True mdist (cmd_ "fedpkg" ["verrel"])
+        "prep" -> withPackages mdist pkgs $
+                    repoAction_ True True mdist (cmd_ "fedpkg" ["prep"])
         "subpkgs" -> withPackages mdist pkgs $
                      repoAction True True mdist (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn)
         "new" -> newPackages mdist >>= mapM_ putStrLn
@@ -93,6 +95,7 @@ commands = [("clone", "clone repos"),
             ("hackage", "generate Hackage distro data"),
             ("list", "list packages"),
             ("new", "new unbuilt packages"),
+            ("prep", "fedpkg prep"),
             ("pull", "pull repos"),
             ("update", "cabal-rpm update"),
             ("subpkgs", "list subpackages"),
