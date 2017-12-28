@@ -179,9 +179,11 @@ repoAction header needsSpec mdist action (pkg:rest) = do
       putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ "=="
     -- muser <- getEnv "USER"
     -- let anon = "-a"
+    home <- getHomeDirectory
+    haveSSH <- doesFileExist $ home </> ".ssh/id_rsa"
     dirExists <- doesDirectoryExist pkg
     unless dirExists $
-      cmd_ "fedpkg" $ ["clone"] ++ (if branchGiven then ["-b", branch] else ["-B"]) ++ [pkg]
+      cmd_ "fedpkg" $ ["clone"] ++ ["-a" | not haveSSH] ++ (if branchGiven then ["-b", branch] else ["-B"]) ++ [pkg]
     singleDir <- doesFileExist $ pkg </> ".git/config"
     unless singleDir $ do
       branchDir <- doesDirectoryExist $ pkg </> branch
