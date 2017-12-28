@@ -257,6 +257,7 @@ compareRawhide p = do
 
 updatePackage :: Package -> IO ()
 updatePackage pkg = do
-  hckg <- cmdBool "grep" ["-q", "hackage.haskell.org", pkg ++ ".spec"]
-  when hckg $
-    cmd_ "cabal-rpm" ["update"]
+  hckg <- cmdBool "grep" ["-q", "hackage.haskell.org/package" </> pkg, pkg ++ ".spec"]
+  if hckg
+    then cmd_ "cabal-rpm" ["update"]
+    else putStrLn "skipping since not hackage"
