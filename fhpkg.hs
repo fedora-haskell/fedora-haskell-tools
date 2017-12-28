@@ -64,8 +64,6 @@ main = do
           withPackages mdist new $ repoAction_ True False mdist (return ())
         "pull" -> withPackages mdist pkgs $
                   repoAction_ True False mdist (cmd_ "git" ["pull", "--rebase"])
-        "update" -> withPackages mdist pkgs $
-                  repoAction_ True True mdist (cmd_ "cabal-rpm" ["update"])
         "diff" -> withPackages mdist pkgs $
                   repoAction_ True False mdist (cmd_ "git" ["--no-pager", "diff"])
         "diff-branch" -> withPackages mdist pkgs $
@@ -74,6 +72,8 @@ main = do
                   repoAction True True mdist compareStackage
         "verrel" -> withPackages mdist pkgs $
                     repoAction_ False True mdist (cmd_ "fedpkg" ["verrel"])
+        "update" -> withPackages mdist pkgs $
+                  repoAction True True mdist updatePackage
         "prep" -> withPackages mdist pkgs $
                     repoAction_ True True mdist (cmd_ "fedpkg" ["prep"])
         "subpkgs" -> withPackages mdist pkgs $
@@ -254,3 +254,9 @@ compareRawhide p = do
   putStrLn ""
   where
     removeDisttag = reverse . tail . dropWhile (/= '.') . reverse
+
+updatePackage :: Package -> IO ()
+updatePackage pkg = do
+  hckg <- cmdBool "grep" ["-q", "hackage.haskell.org", pkg ++ ".spec"]
+  when hckg $
+    cmd_ "cabal-rpm" ["update"]
