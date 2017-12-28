@@ -195,7 +195,7 @@ repoAction header needsSpec mdist action (pkg:rest) = do
     pkggit <- do
       gd <- doesFileExist ".git/config"
       if gd
-        then cmdBool "grep" ["-q", "pkgs.fedoraproject.org", ".git/config"]
+        then cmdBool "grep" ["-q", "-e", "\\(pkgs\\|src\\).fedoraproject.org", ".git/config"]
         else return False
     unless pkggit $
       error $ "not a Fedora pkg git dir!:" +-+ wd
