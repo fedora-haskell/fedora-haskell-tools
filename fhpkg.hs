@@ -65,7 +65,7 @@ main = do
         "pull" -> withPackages mdist pkgs $
                   repoAction_ True False mdist (cmd_ "git" ["pull", "--rebase"])
         "update" -> withPackages mdist pkgs $
-                  repoAction_ True True mdist (cmd_ "cblrpm" ["update"])
+                  repoAction_ True True mdist (cmd_ "cabal-rpm" ["update"])
         "diff" -> withPackages mdist pkgs $
                   repoAction_ True False mdist (cmd_ "git" ["--no-pager", "diff"])
         "diff-branch" -> withPackages mdist pkgs $
@@ -94,7 +94,7 @@ commands = [("clone", "clone repos"),
             ("list", "list packages"),
             ("new", "new unbuilt packages"),
             ("pull", "pull repos"),
-            ("update", "cblrpm update"),
+            ("update", "cabal-rpm update"),
             ("subpkgs", "list subpackages"),
             ("verrel", "show nvr of packages")]
 
