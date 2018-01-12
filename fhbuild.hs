@@ -161,7 +161,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               putStrLn $ "Building" +-+ nvr
               putStrLn $ "To watch: tail -f" +-+ wd </> logfile
               -- note "fedpkg --path dir local" saves .build.log in cwd
-              _out <- cmd "fedpkg" ["local"]
+              cmd_ "fedpkg" ["local"]
               opkgs <- lines <$> rpmspec [] (Just "%{name}\n") spec
               rpms <- lines <$> rpmspec [] (Just ("%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n")) spec
               built <- and <$> mapM doesFileExist rpms
