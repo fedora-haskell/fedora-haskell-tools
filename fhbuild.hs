@@ -32,8 +32,8 @@ import System.IO (hPutStrLn, stderr)
 import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget)
 import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji)
 import RPM (packageManager, rpmInstall, repoquery, repoquerySrc, rpmspec)
-import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdlog, error_, logMsg,
-              removePrefix, removeSuffix, sudo)
+import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
+              error_, logMsg, removePrefix, removeSuffix, sudo)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built deriving (Eq)
 
@@ -108,7 +108,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
     else do
     pkggit <- do
       gd <- doesFileExist ".git/config"
-      if gd then cmdBool "grep" ["-q", "pkgs.fedoraproject.org", ".git/config"]
+      if gd then checkFedoraPkgGit
         else return False
     if not pkggit
       then if mode `elem` [Install, Koji, Chain]

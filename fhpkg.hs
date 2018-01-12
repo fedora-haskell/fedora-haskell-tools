@@ -41,7 +41,7 @@ import System.IO (hPutStrLn, stderr)
 import Dists (Dist, dists, distBranch, hackageRelease, releaseVersion)
 import Koji (kojiListPkgs)
 import RPM (rpmspec)
-import Utils ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
+import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
               maybeRemovePrefix, removePrefix, withCurrentDirectory)
 
 main :: IO ()
@@ -199,7 +199,7 @@ repoAction header needsSpec mdist action (pkg:rest) = do
     pkggit <- do
       gd <- doesFileExist ".git/config"
       if gd
-        then cmdBool "grep" ["-q", "-e", "\\(pkgs\\|src\\).fedoraproject.org", ".git/config"]
+        then checkFedoraPkgGit
         else return False
     unless pkggit $
       error $ "not a Fedora pkg git dir!:" +-+ wd

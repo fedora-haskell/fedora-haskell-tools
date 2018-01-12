@@ -13,7 +13,8 @@
 -- the Free Software Foundation, either version 3 of the License, or
 -- (at your option) any later version.
 
-module Utils (cmd,
+module Utils (checkFedoraPkgGit,
+              cmd,
               cmd_,
               cmdBool,
               cmdlog,
@@ -167,3 +168,7 @@ withCurrentDirectory dir action =
     setCurrentDirectory dir
     action
 #endif
+
+checkFedoraPkgGit :: IO Bool
+checkFedoraPkgGit =
+  cmdBool "grep" ["-q", "-e", "\\(pkgs\\|src\\).fedoraproject.org", ".git/config"]
