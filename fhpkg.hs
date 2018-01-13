@@ -40,7 +40,7 @@ import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch, hackageRelease, releaseVersion)
 import Koji (kojiListPkgs)
-import RPM (rpmspec)
+import RPM (repoquery, rpmspec)
 import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
               maybeRemovePrefix, removePrefix, withCurrentDirectory)
 
@@ -149,7 +149,7 @@ repoqueryHackageCSV :: Maybe Dist -> [Package] -> IO ()
 repoqueryHackageCSV mdist pkgs = do
   let relver = maybe "rawhide" releaseVersion mdist
   -- Hackage csv chokes on final newline so remove it
-  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> cmd "dnf" (["repoquery", "--quiet", "--disablerepo=*", "--enablerepo=fedora", "--enablerepo=updates", "--releasever=" ++ relver, "--latest-limit=1", "-q", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ pkgs) >>= putStr
+  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery relver (["--disablerepo=*", "--enablerepo=fedora", "--enablerepo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ pkgs) >>= putStr
 
 replace :: Eq a => [a] -> [a] -> [a] -> [a]
 replace a b s@(x:xs) =
@@ -163,7 +163,7 @@ repoqueryHaskell verbose mdist = do
   -- fixme: should use repoquery instead:
   let relver = maybe "rawhide" releaseVersion mdist
   when verbose $ putStrLn "Getting packages from repoquery"
-  bin <- words <$> cmd "dnf" ["repoquery", "--quiet", "--releasever=" ++ relver, "--whatrequires", "libHSbase-*-ghc*.so()(64bit)", "--qf=%{source_name}"]
+  bin <- words <$> repoquery relver ["--qf=%{source_name}", "--whatrequires", "libHSbase-*-ghc*.so()(64bit)"]
   when (null bin) $ error "No libHSbase consumers found!"
   return $ sort $ nub bin
 

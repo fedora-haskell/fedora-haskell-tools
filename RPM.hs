@@ -17,22 +17,18 @@ module RPM (packageManager,
             rpmInstall,
             rpmspec) where
 
-import Control.Monad (unless, when)
-import Data.List (elemIndices)
+import Control.Monad (when)
 import Data.Maybe (isJust, isNothing)
 import System.Directory (findExecutable)
 -- die is available in ghc-7.10 base-4.8
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 
-import Utils (cmd, cmdStdErr, singleLine, sudo)
+import Utils (cmd, sudo)
 
 -- @since base 4.8.0.0
 die :: String -> IO a
 die err = hPutStrLn stderr err >> exitFailure
-
-warn :: String -> IO ()
-warn = hPutStrLn stderr
 
 requireProgram :: String -> IO ()
 requireProgram c = do
@@ -57,37 +53,28 @@ rpmInstall rpms = do
   let (inst, arg) = if pkginstaller == "dnf" then ("dnf", "install") else ("yum", "localinstall")
   sudo inst $ ["-y", "--nogpgcheck", arg] ++ rpms
 
-repoquery :: [String] -> String -> IO String
-repoquery args key = do
+repoquery :: String -> [String] -> IO String
+repoquery relver args = do
   havednf <- optionalProgram "dnf"
-  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet"]) else ("repoquery", [])
-  repoqWrap prog (subcmd ++ args ++ [key])
+  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet", "--releasever=" ++ relver]) else ("repoquery", ["--releasever=" ++ relver])
+  cmd prog (subcmd ++ args)
 
-repoqWrap :: String -> [String] -> IO String
-repoqWrap c args = do
-  (out, err) <- cmdStdErr c args
-  -- workaround noisy dnf2 repoquery --quiet
-  -- ignore "Last metadata expiration check" warnings
-  unless (null err || head (words err) == "Last") $
-    warn err
-  return $ singleLine out
+-- repoqWrap :: String -> [String] -> IO String
+-- repoqWrap c args = do
+--   (out, err) <- cmdStdErr c args
+--   -- workaround noisy dnf2 repoquery --quiet
+--   -- ignore "Last metadata expiration check" warnings
+--   unless (null err || head (words err) == "Last") $
+--     warn err
+--   return $ singleLine out
 
 repoquerySrc :: String -> IO (Maybe String)
 repoquerySrc key = do
   havednf <- optionalProgram "dnf"
-  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet", "-s"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
-  res <- repoqWrap prog (subcmd ++ [key])
+  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet", "--qf=%{source_name}"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
+  res <- cmd prog (subcmd ++ [key])
   if null res then return Nothing
-    else return $ Just $ nvrToName res
-
-nvrToName :: String -> String
-nvrToName nvr =
-  if length dashes < 2
-    then error $ "malformed NVR string: '" ++ nvr ++ "'"
-    else take nameDash nvr
-  where
-    dashes = elemIndices '-' nvr
-    nameDash = last $ init dashes
+    else return $ Just res
 
 rpmspec :: [String] -> Maybe String -> FilePath -> IO String
 rpmspec args mqf spec = do

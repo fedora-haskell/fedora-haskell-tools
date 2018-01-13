@@ -29,7 +29,8 @@ import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), dropExtension)
 import System.IO (hPutStrLn, stderr)
 
-import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget)
+import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget,
+              releaseVersion)
 import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji)
 import RPM (packageManager, rpmInstall, repoquery, repoquerySrc, rpmspec)
 import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
@@ -132,6 +133,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
         let verrel = removePrefix (pkg ++ "-") nvr
             release = tail $ dropWhile (/= '-') verrel
             tag = distTag dist
+            relver = releaseVersion dist
         case mode of
           Install -> do
             let req = fromMaybe pkg msubpkg
@@ -142,8 +144,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
               cmd_ "git" ["--no-pager", "log", "-1"]
               putStrLn ""
-              putStrLn "Repoquerying deps..."
-              brs <- buildRequires spec
+              brs <- buildRequires relver spec
               missing <- catMaybes <$> (nub <$> filterM notInstalled brs >>= mapM derefSrcPkg)
               -- FIXME sort into build order
               let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
@@ -248,8 +249,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   build topdir Chain dist Nothing Nothing False rest
                 else do
                 showChange latest nvr
-                putStrLn "Repoquerying deps..."
-                brs <- buildRequires spec
+                brs <- buildRequires relver spec
                 --print brs
                 -- FIXME sort into build order
                 let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ ["ghc-rpm-macros", "ghc-rpm-macros-extra", "ghc-Cabal-devel"])
@@ -305,18 +305,19 @@ bodhiOverride dist nvr =
     cmd_ "bodhi" ["overrides", "save", "--notes", "Haskell stack", nvr]
 
 -- dereference meta BRs
-whatProvides :: String -> IO String
-whatProvides pkg = do
-  res <- repoquery ["--qf", "%{name}", "--whatprovides"] pkg
+whatProvides :: String -> String -> IO String
+whatProvides relver pkg = do
+  res <- repoquery relver ["--qf", "%{name}", "--whatprovides", pkg]
   --print res
   when (null res) $ do
     installed <- not <$> notInstalled pkg
     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
   return $ if null res then pkg else res
 
-buildRequires :: FilePath -> IO [String]
-buildRequires spec =
-  (map (head . words) . lines) <$> rpmspec ["--buildrequires"] Nothing spec >>= mapM whatProvides
+buildRequires :: String -> FilePath -> IO [String]
+buildRequires relver spec = do
+  putStrLn "Repoquerying buildrequires..."
+  (map (head . words) . lines) <$> rpmspec ["--buildrequires"] Nothing spec >>= mapM (whatProvides relver)
 
 derefSrcPkg :: String -> IO (Maybe String)
 derefSrcPkg pkg = do
