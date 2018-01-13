@@ -33,7 +33,7 @@ import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget)
 import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji)
 import RPM (packageManager, rpmInstall, repoquery, repoquerySrc, rpmspec)
 import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
-              error_, logMsg, removePrefix, removeSuffix, sudo)
+              logMsg, removePrefix, removeSuffix, sudo)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built deriving (Eq)
 
@@ -156,30 +156,22 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               unless (null stillMissing) $ do
                 putStrLn $ "Installing:" +-+ intercalate ", " stillMissing
                 rpmInstall stillMissing
-              let logfile = ".build-" ++ verrel ++ ".log"
               putStrLn ""
               putStrLn $ "Building" +-+ nvr
-              putStrLn $ "To watch: tail -f" +-+ wd </> logfile
               -- note "fedpkg --path dir local" saves .build.log in cwd
               cmd_ "fedpkg" ["local"]
-              opkgs <- lines <$> rpmspec [] (Just "%{name}\n") spec
-              rpms <- lines <$> rpmspec [] (Just ("%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n")) spec
-              built <- and <$> mapM doesFileExist rpms
-              if built
-                then do
-                putStrLn $ nvr +-+ "built\n"
-                instpkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
-                if null instpkgs
-                  -- maybe filter out pandoc-pdf if not installed
-                  then rpmInstall rpms
-                  else do
-                  pkgmgr <- packageManager
-                  -- sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
-                  sudo pkgmgr ("install":"-y":rpms)
-                setCurrentDirectory topdir
+              opkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
+              rpms <- lines <$> rpmspec ["--builtrpms"] (Just ("%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n")) spec
+              putStrLn $ nvr +-+ "built\n"
+              instpkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
+              if null instpkgs
+                -- maybe filter out pandoc-pdf if not installed
+                then rpmInstall rpms
                 else do
-                displayLogTail logfile
-                error_ $ "Build of " ++ nvr ++ " failed!"
+                pkgmgr <- packageManager
+                -- sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
+                sudo pkgmgr ("install":"-y":rpms)
+              setCurrentDirectory topdir
             build topdir Install dist Nothing Nothing False rest
           Mock -> do
             putStrLn $ "Mock building" +-+ nvr
