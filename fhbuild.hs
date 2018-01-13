@@ -32,7 +32,7 @@ import System.IO (hPutStrLn, stderr)
 import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget,
               releaseVersion)
 import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji)
-import RPM (packageManager, rpmInstall, repoquery, repoquerySrc, rpmspec)
+import RPM (packageManager, rpmInstall, repoquerySrc, rpmspec)
 import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
               logMsg, removePrefix, removeSuffix, sudo)
 
@@ -144,8 +144,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
               cmd_ "git" ["--no-pager", "log", "-1"]
               putStrLn ""
-              brs <- buildRequires relver spec
-              missing <- catMaybes <$> (nub <$> filterM notInstalled brs >>= mapM derefSrcPkg)
+              missing <- catMaybes <$> nub <$> (buildRequires spec >>= filterM notInstalled >>= mapM (derefSrcPkg relver))
               -- FIXME sort into build order
               let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
               unless (null hmissing) $ do
@@ -249,12 +248,12 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   build topdir Chain dist Nothing Nothing False rest
                 else do
                 showChange latest nvr
-                brs <- buildRequires relver spec
+                brs <- buildRequires spec
                 --print brs
                 -- FIXME sort into build order
                 let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ ["ghc-rpm-macros", "ghc-rpm-macros-extra", "ghc-Cabal-devel"])
                 --print hdeps
-                srcs <- filter (`notElem` ["ghc"]) . catMaybes . nub <$> mapM derefSrcPkg hdeps
+                srcs <- filter (`notElem` ["ghc"]) . catMaybes . nub <$> mapM (derefSrcPkg relver) hdeps
                 --print srcs
                 hmissing <- nub <$> filterM (notInKoji branch topdir tag) srcs
                 putStrLn ""
@@ -304,24 +303,25 @@ bodhiOverride dist nvr =
     -- FIXME: improve Notes with recursive info
     cmd_ "bodhi" ["overrides", "save", "--notes", "Haskell stack", nvr]
 
--- dereference meta BRs
-whatProvides :: String -> String -> IO String
-whatProvides relver pkg = do
-  res <- repoquery relver ["--qf", "%{name}", "--whatprovides", pkg]
-  --print res
-  when (null res) $ do
-    installed <- not <$> notInstalled pkg
-    unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
-  return $ if null res then pkg else res
+-- -- dereference meta BRs
+-- whatProvides :: String -> String -> IO String
+-- whatProvides relver pkg = do
+--   res <- repoquery relver ["--qf", "%{name}", "--whatprovides", pkg]
+--   --print res
+--   when (null res) $ do
+--     installed <- not <$> notInstalled pkg
+--     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
+--   return $ if null res then pkg else res
 
-buildRequires :: String -> FilePath -> IO [String]
-buildRequires relver spec = do
+buildRequires :: FilePath -> IO [String]
+buildRequires spec = do
   putStrLn "Repoquerying buildrequires..."
-  (map (head . words) . lines) <$> rpmspec ["--buildrequires"] Nothing spec >>= mapM (whatProvides relver)
+  (map (head . words) . lines) <$> rpmspec ["--buildrequires"] Nothing spec
+--    >>= mapM (whatProvides relver)
 
-derefSrcPkg :: String -> IO (Maybe String)
-derefSrcPkg pkg = do
-  res <- repoquerySrc pkg
+derefSrcPkg :: String -> String -> IO (Maybe String)
+derefSrcPkg relver pkg = do
+  res <- repoquerySrc relver pkg
   --putStrLn $ pkg +-+ "->" +-+ show res
   case res of
     -- maybe package has never been built yet

@@ -56,8 +56,8 @@ rpmInstall rpms = do
 repoquery :: String -> [String] -> IO String
 repoquery relver args = do
   havednf <- optionalProgram "dnf"
-  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet", "--releasever=" ++ relver]) else ("repoquery", ["--releasever=" ++ relver])
-  cmd prog (subcmd ++ args)
+  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet"]) else ("repoquery", [])
+  cmd prog (subcmd ++ ["--releasever=" ++ relver] ++ args)
 
 -- repoqWrap :: String -> [String] -> IO String
 -- repoqWrap c args = do
@@ -68,11 +68,11 @@ repoquery relver args = do
 --     warn err
 --   return $ singleLine out
 
-repoquerySrc :: String -> IO (Maybe String)
-repoquerySrc key = do
+repoquerySrc :: String -> String -> IO (Maybe String)
+repoquerySrc relver key = do
   havednf <- optionalProgram "dnf"
-  let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet", "--qf=%{source_name}"]) else ("repoquery", ["--qf", "%{base_package_name}", "--whatprovides"])
-  res <- cmd prog (subcmd ++ [key])
+  let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}", "--whatprovides"]
+  res <- repoquery relver (srcflag ++ [key])
   if null res then return Nothing
     else return $ Just res
 
