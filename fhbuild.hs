@@ -148,13 +148,14 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
               cmd_ "git" ["--no-pager", "log", "-1"]
               putStrLn ""
-              missing <- catMaybes <$> nub <$> (buildRequires spec >>= filterM notInstalled >>= mapM (derefSrcPkg relver))
+              missing <- nub <$> (buildRequires spec >>= filterM notInstalled)
               -- FIXME sort into build order
               let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
-              unless (null hmissing) $ do
+              sourcepkgs <- catMaybes . nub <$> mapM (derefSrcPkg relver) hmissing
+              unless (null sourcepkgs) $ do
                 putStrLn "Missing:"
-                mapM_ putStrLn hmissing
-                build topdir Install dist Nothing Nothing False hmissing
+                mapM_ putStrLn sourcepkgs
+                build topdir Install dist Nothing Nothing False sourcepkgs
                 setCurrentDirectory $ topdir </> wd
               stillMissing <- filterM notInstalled missing
               unless (null stillMissing) $ do
@@ -321,15 +322,15 @@ bodhiOverride dist nvr =
 --   return $ if null res then pkg else res
 
 buildRequires :: FilePath -> IO [String]
-buildRequires spec = do
-  putStrLn "Repoquerying buildrequires..."
+buildRequires spec =
   (map (head . words) . lines) <$> rpmspec ["--buildrequires"] Nothing spec
 --    >>= mapM (whatProvides relver)
 
 derefSrcPkg :: String -> String -> IO (Maybe String)
 derefSrcPkg relver pkg = do
+  putStrLn $ "Repoquerying" +-+ pkg
   res <- repoquerySrc relver pkg
-  --putStrLn $ pkg +-+ "->" +-+ show res
+  putStrLn $ pkg +-+ "->" +-+ show res
   case res of
     -- maybe package has never been built yet
     Nothing -> do

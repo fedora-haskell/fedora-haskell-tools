@@ -71,8 +71,8 @@ repoquery relver args = do
 repoquerySrc :: String -> String -> IO (Maybe String)
 repoquerySrc relver key = do
   havednf <- optionalProgram "dnf"
-  let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}", "--whatprovides"]
-  res <- repoquery relver (srcflag ++ [key])
+  let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}"]
+  res <- repoquery relver (srcflag ++ ["--whatprovides", key])
   if null res then return Nothing
     else return $ Just res
 
