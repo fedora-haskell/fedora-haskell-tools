@@ -101,6 +101,10 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
     cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
   wd <- pkgDir pkg branch ""
   setCurrentDirectory wd
+  failing <- doesFileExist ".fhbuild-fail"
+  when (failing && mode /= Pending) $ do
+    putStrLn "skipped: found '.fhbuild-fail' file"
+    exitWith (ExitFailure 1)
   retired <- doesFileExist "dead.package"
   if retired then do
     unless (mode == Pending) $
@@ -159,7 +163,10 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               putStrLn ""
               putStrLn $ "Building" +-+ nvr
               -- note "fedpkg --path dir local" saves .build.log in cwd
-              cmd_ "fedpkg" ["local"]
+              success <- cmdBool "fedpkg" ["local"]
+              unless success $ do
+                cmdlog "touch" [".fhbuild-fail"]
+                exitWith (ExitFailure 1)
               opkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
               rpms <- lines <$> rpmspec ["--builtrpms"] (Just ("%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n")) spec
               putStrLn $ nvr +-+ "built\n"
