@@ -19,6 +19,7 @@ module Utils (checkFedoraPkgGit,
               cmdBool,
               cmdlog,
               cmdMaybe,
+              cmdN,
               cmdSilent,
               cmdStdErr,
               error_,
@@ -93,9 +94,9 @@ cmd_ c as = do
     ExitSuccess -> return ()
     ExitFailure n -> error $ "\"" ++ c +-+ unwords as ++ "\" failed with exit code" +-+ show n
 
--- -- dry-run
---cmdN :: String -> [String] -> IO ()
---cmdN c as = putStrLn $ c +-+ unwords as
+-- dry-run
+cmdN :: String -> [String] -> IO ()
+cmdN c as = putStrLn $ c +-+ unwords as
 
 --cmdAssert :: String -> String -> [String] -> IO ()
 --cmdAssert msg c as = do
