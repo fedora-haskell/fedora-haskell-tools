@@ -246,7 +246,7 @@ compareRawhide p = do
     haveSpec <- doesFileExist spec
     unless haveSpec $ cmdSilent "git" ["pull"]
     removeDisttag <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
-  if (nvr == nvr')
+  if nvr == nvr'
     then putStrLn nvr
     else do
     putStrLn nvr

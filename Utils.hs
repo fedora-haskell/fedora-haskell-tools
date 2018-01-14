@@ -95,7 +95,7 @@ cmd_ c as = do
 
 -- -- dry-run
 --cmdN :: String -> [String] -> IO ()
---cmdN c as = putStrLn $ c +-+ show as
+--cmdN c as = putStrLn $ c +-+ unwords as
 
 --cmdAssert :: String -> String -> [String] -> IO ()
 --cmdAssert msg c as = do
