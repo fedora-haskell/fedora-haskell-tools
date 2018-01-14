@@ -102,7 +102,8 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
   wd <- pkgDir pkg branch ""
   setCurrentDirectory wd
   ignore <- doesFileExist ".fhbuild-ignore"
-  unless ignore $ do
+  if ignore && mode `elem` [Install, Koji, Chain, Mock] then putStrLn "ignored"
+    else do
     failing <- doesFileExist ".fhbuild-fail"
     when (failing && mode /= Pending) $ do
       putStrLn "skipped: found '.fhbuild-fail' file"
