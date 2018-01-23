@@ -74,6 +74,8 @@ main = do
                     repoAction_ False True mdist (cmd_ "fedpkg" ["verrel"])
         "update" -> withPackages mdist pkgs $
                   repoAction True True mdist updatePackage
+        "refresh" -> withPackages mdist pkgs $
+                  repoAction_ True True mdist (cmd_ "cabal-rpm" ["refresh"])
         "prep" -> withPackages mdist pkgs $
                     repoAction_ True True mdist (cmd_ "fedpkg" ["prep"])
         "subpkgs" -> withPackages mdist pkgs $
@@ -98,6 +100,7 @@ commands = [("clone", "clone repos"),
             ("prep", "fedpkg prep"),
             ("pull", "pull repos"),
             ("update", "cabal-rpm update"),
+            ("refresh", "cabal-rpm refresh"),
             ("subpkgs", "list subpackages"),
             ("verrel", "show nvr of packages")]
 
