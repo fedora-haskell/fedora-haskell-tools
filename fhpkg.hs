@@ -66,6 +66,8 @@ main = do
                   repoAction_ True False mdist (cmd_ "git" ["pull", "--rebase"])
         "diff" -> withPackages mdist pkgs $
                   repoAction_ True False mdist (cmd_ "git" ["--no-pager", "diff"])
+        "diff-origin" -> withPackages mdist pkgs $
+                  repoAction_ True False mdist (cmd_ "git" ["--no-pager", "diff", "origin"])
         "diff-branch" -> withPackages mdist pkgs $
                   repoAction False True mdist compareRawhide
         "diff-stackage" -> withPackages mdist pkgs $
@@ -92,6 +94,7 @@ commands = [("clone", "clone repos"),
             ("clone-new", "clone new packages"),
             ("count", "count number of packages"),
             ("diff", "git diff"),
+            ("diff-origin", "git diff origin"),
             ("diff-branch","compare branch with master"),
             ("diff-stackage","compare with stackage"),
             ("hackage", "generate Hackage distro data"),
