@@ -65,7 +65,7 @@ main = do
         "pull" -> withPackages mdist pkgs $
                   repoAction_ True False mdist (cmd_ "git" ["pull", "--rebase"])
         "diff" -> withPackages mdist pkgs $
-                  repoAction_ True False mdist (cmd_ "git" ["--no-pager", "diff"])
+                  repoAction_ False False mdist (cmd_ "git" ["--no-pager", "diff"])
         "diff-origin" -> withPackages mdist pkgs $
                   repoAction_ True False mdist (cmd_ "git" ["--no-pager", "diff", "origin"])
         "diff-branch" -> withPackages mdist pkgs $
