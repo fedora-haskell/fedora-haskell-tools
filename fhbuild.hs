@@ -191,14 +191,13 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
             Koji -> do
               putStrLn "'koji' mode is deprecated, please use 'chain'"
               unless (null rest) $ do
-                putStrLn $ show (length rest) +-+ "packages left"
+                putStrLn $ show (length rest) +-+ "more packages"
                 putStrLn ""
               latest <- kojiLatestPkg tag pkg
               if nvr == latest
                 then do
                 putStrLn $ nvr +-+ "already built!"
                 kojiWaitPkg tag nvr
-                print mlast
                 build topdir Koji dist Nothing mlast False rest
                 else do
                 building <- kojiBuilding pkg nvr
@@ -208,7 +207,6 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   kojiWaitPkg tag nvr
                   build topdir Koji dist Nothing Nothing False rest
                   else do
-                  print mlast
                   case mlast of
                     Nothing -> return ()
                     Just (pkg', nvr') -> do
