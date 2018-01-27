@@ -259,8 +259,9 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   showChange latest nvr
                   brs <- buildRequires spec
                   --print brs
-                  ghcDir <- pkgDir "ghc" branch topdir
-                  ghcLibs <- filter (\ dp -> "ghc-" `isPrefixOf` dp && ("-devel" `isSuffixOf` dp)) . words <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
+                  ghcLibs <- do
+                    ghcDir <- pkgDir "ghc" branch topdir
+                    filter (\ dp -> "ghc-" `isPrefixOf` dp && ("-devel" `isSuffixOf` dp)) . words <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
                   -- FIXME sort into build order
                   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
                   --print hdeps
