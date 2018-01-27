@@ -72,9 +72,11 @@ repoquerySrc :: String -> String -> IO (Maybe String)
 repoquerySrc relver key = do
   havednf <- optionalProgram "dnf"
   let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}"]
-  res <- repoquery relver (srcflag ++ ["--whatprovides", key])
-  if null res then return Nothing
-    else return $ Just res
+  res <- words <$> repoquery relver (srcflag ++ ["--whatprovides", key])
+  return $ case res of
+    [p] -> Just p
+    ps | key `elem` ps -> Just key
+    _ -> Nothing
 
 rpmspec :: [String] -> Maybe String -> FilePath -> IO String
 rpmspec args mqf spec = do
