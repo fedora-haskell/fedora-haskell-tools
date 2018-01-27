@@ -40,6 +40,7 @@ dists = [rawhide, "f27", "f26", "f25", "epel7"]
 rawhide :: String
 rawhide = "f28"
 
+sidetag :: Maybe String
 sidetag = Just "ghc"
 
 hackageRelease :: String
