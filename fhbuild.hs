@@ -31,7 +31,7 @@ import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget,
               releaseVersion)
-import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji)
+import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji, pkgDir)
 import RPM (packageManager, rpmInstall, repoquerySrc, rpmspec)
 import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
               logMsg, removePrefix, removeSuffix, sudo)
@@ -283,11 +283,6 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                     putStrLn ""
                     putStrLn $ show (length rest) +-+ "packages left"
                     build topdir Chain dist Nothing (Just (pkg, nvr)) waitrepo rest
-
-pkgDir :: String -> String -> FilePath -> IO FilePath
-pkgDir dir branch top = do
-  b <- doesDirectoryExist $ top </> dir </> branch
-  return $ top </> dir </> if b then branch else ""
 
 maybePkgVer :: String -> Maybe String -> String
 maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver

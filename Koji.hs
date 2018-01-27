@@ -20,6 +20,7 @@ module Koji where
 import Control.Applicative ((<$>))
 #endif
 import Data.List (isInfixOf)
+import System.Directory (doesDirectoryExist)
 import System.FilePath ((</>))
 
 import Dists (Dist)
@@ -48,7 +49,8 @@ kojiBuilding pkg build = do
 notInKoji :: String -> FilePath -> String -> String -> IO Bool
 notInKoji branch topdir tag pkg = do
   latest <- kojiLatestPkg tag pkg
-  local <- cmd "fedpkg" ["--path", topdir </> pkg </> branch, "verrel"]
+  pkgpath <- pkgDir pkg branch topdir
+  local <- cmd "fedpkg" ["--path", pkgpath, "verrel"]
   if latest == local
     then kojiWaitPkg tag latest >> return False
     else return True
@@ -56,3 +58,8 @@ notInKoji branch topdir tag pkg = do
 kojiListPkgs :: Dist -> IO [String]
 kojiListPkgs dist =
   words <$> cmd "koji" ["list-pkgs", "--tag=" ++ dist]
+
+pkgDir :: String -> String -> FilePath -> IO FilePath
+pkgDir dir branch top = do
+  b <- doesDirectoryExist $ top </> dir </> branch
+  return $ top </> dir </> if b then branch else ""
