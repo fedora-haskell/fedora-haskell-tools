@@ -28,6 +28,8 @@ module Dists (Dist,
               rawhide) where
 
 import Data.Char (isNumber)
+import Data.Maybe (fromMaybe, maybe)
+
 import Utils ((+-+))
 
 type Dist = String
@@ -37,6 +39,8 @@ dists = [rawhide, "f27", "f26", "f25", "epel7"]
 
 rawhide :: String
 rawhide = "f28"
+
+sidetag = Just "ghc"
 
 hackageRelease :: String
 hackageRelease = "f27"
@@ -68,13 +72,10 @@ distOverride :: Dist -> Bool
 distOverride d = d `notElem` [rawhide, "f28" {-, "epel7"-}]
 
 distTag :: Dist -> String
-distTag d {- | d == rawhide = "f28" ++ "-ghc" -}
-          {- | d == "epel7" = d ++ "-ghc" -}
-          {- | otherwise -} = d ++ "-build"
+distTag d = d ++ "-" ++ fromMaybe "build" sidetag
 
 distTarget  :: Dist -> Maybe String
-distTarget d | d `elem` [rawhide, "epel7"] = Nothing -- Just $ d ++ "-ghc"
-             | otherwise = Nothing
+distTarget d = maybe Nothing (\ suff -> Just $ d ++ "-" ++ suff) sidetag
 
 releaseVersion :: Dist -> String
 releaseVersion r | r == rawhide = "rawhide"
