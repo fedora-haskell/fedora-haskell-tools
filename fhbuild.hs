@@ -20,7 +20,7 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Monad (filterM, unless, when)
 import Data.Maybe
-import Data.List (intercalate, isPrefixOf, nub, (\\))
+import Data.List (intercalate, isPrefixOf, isSuffixOf, nub, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, setCurrentDirectory)
@@ -259,8 +259,10 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   showChange latest nvr
                   brs <- buildRequires spec
                   --print brs
+                  ghcDir <- pkgDir "ghc" branch topdir
+                  ghcLibs <- filter (\ dp -> "ghc-" `isPrefixOf` dp && ("-devel" `isSuffixOf` dp)) . words <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
                   -- FIXME sort into build order
-                  let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ ["ghc-rpm-macros", "ghc-rpm-macros-extra", "ghc-Cabal-devel"])
+                  let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
                   --print hdeps
                   srcs <- filter (`notElem` ["ghc"]) . catMaybes . nub <$> mapM (derefSrcPkg relver) hdeps
                   --print srcs
