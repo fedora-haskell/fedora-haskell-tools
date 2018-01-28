@@ -75,8 +75,8 @@ distOverride d = d `notElem` [rawhide, "f28" {-, "epel7"-}]
 distTag :: Dist -> String
 distTag d = d ++ "-" ++ fromMaybe "build" sidetag
 
-distTarget  :: Dist -> Maybe String
-distTarget d = maybe Nothing (\ suff -> Just $ d ++ "-" ++ suff) sidetag
+distTarget  :: Dist -> String
+distTarget d = maybe d (\ suff -> d ++ "-" ++ suff) sidetag
 
 releaseVersion :: Dist -> String
 releaseVersion r | r == rawhide = "rawhide"

@@ -300,7 +300,11 @@ showChange latest nvr = do
 
 fedpkgBuild :: Dist -> String -> Maybe String -> IO ()
 fedpkgBuild dist nvr waittag = do
-  cmd_ "fedpkg" $ "build" : maybe [] (\ d -> "--target":[d]) (distTarget dist)
+  giturl <- cmd "fedpkg" ["giturl"]
+  success <- cmdBool "koji" $ ["build", "--fail-fast", distTarget dist, giturl]
+  unless success $ do
+    cmdlog "touch" [".fhbuild-fail"]
+    exitWith (ExitFailure 1)
   logMsg $ nvr +-+ "built"
   maybe (return ()) (`kojiWaitPkg` nvr) waittag
 
