@@ -337,24 +337,12 @@ derefSrcPkg relver pkg = do
   --putStrLn $ pkg +-+ "->" +-+ show res
   case res of
     -- maybe package has never been built yet
-    Nothing -> do
-      let base = removeSuffix "-devel" pkg
-      p <- pkgdb base
-      if isJust p
-        then return p
-        else pkgdb $ removePrefix "ghc-" base
+    Nothing -> return $ removeSuffix "-devel" pkg
     Just s -> return $ Just s
 
 gitBranch :: IO String
 gitBranch =
   (removePrefix "* " . head . filter (isPrefixOf "* ") . lines) <$> cmd "git" ["branch"]
-
-pkgdb :: String -> IO (Maybe String)
-pkgdb pkg = do
-  res <- fmap words <$> cmdMaybe "pkgdb-cli" ["list", "--nameonly", pkg]
-  return $ case res of
-    (Just ps) | pkg `elem` ps -> Just pkg
-    _ -> Nothing
 
 eqNVR :: String -> String -> Bool
 eqNVR p1 p2 =
