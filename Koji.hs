@@ -19,22 +19,26 @@ module Koji where
 #else
 import Control.Applicative ((<$>))
 #endif
+import Control.Monad (unless)
 import Data.List (isInfixOf)
 import System.Directory (doesDirectoryExist)
 import System.FilePath ((</>))
 
 import Dists (Dist)
-import Utils (cmd, cmd_)
+import Utils (cmd, cmd_, cmdBool)
 
 kojiLatestPkg :: Dist -> String -> IO String
 kojiLatestPkg dist pkg = do
   res <- words <$> cmd "koji" ["latest-pkg", "--quiet", dist, pkg]
   return $ if null res then "" else head res
 
-kojiWaitPkg :: Dist -> String -> IO ()
-kojiWaitPkg dist pkg = --do
-  cmd_ "koji" ["wait-repo", dist, "--build=" ++ pkg]
-  --putStrLn ""
+kojiWaitPkg :: FilePath -> Dist -> String -> IO ()
+kojiWaitPkg topdir dist pkg = do
+  let fhbuilt = topdir </> ".fhbuilt"
+  already <- cmdBool "grep" ["-q", pkg, fhbuilt]
+  unless already $ do
+    cmd_ "koji" ["wait-repo", dist, "--build=" ++ pkg]
+    appendFile fhbuilt $ pkg ++ "\n"
 
 kojiBuilding :: String -> String -> IO Bool
 kojiBuilding pkg build = do
@@ -52,7 +56,7 @@ notInKoji branch topdir tag pkg = do
   pkgpath <- pkgDir pkg branch topdir
   local <- cmd "fedpkg" ["--path", pkgpath, "verrel"]
   if latest == local
-    then kojiWaitPkg tag latest >> return False
+    then kojiWaitPkg topdir tag latest >> return False
     else return True
 
 kojiListPkgs :: Dist -> IO [String]
