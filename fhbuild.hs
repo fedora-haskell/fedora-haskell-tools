@@ -154,7 +154,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 missing <- nub <$> (buildRequires spec >>= filterM notInstalled)
                 -- FIXME sort into build order
                 let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
-                srcs <- catMaybes . nub <$> mapM (derefSrcPkg relver) hmissing
+                srcs <- nub <$> mapM (derefSrcPkg relver) hmissing
                 unless (null srcs) $ do
                   putStrLn "Missing:"
                   mapM_ putStrLn srcs
@@ -169,8 +169,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 -- note "fedpkg --path dir local" saves .build.log in cwd
                 success <- cmdBool "fedpkg" ["local"]
                 unless success $ do
-                  cmdlog "touch" [".fhbuild-fail"]
-                  exitWith (ExitFailure 1)
+                  fhbuildFail
                 opkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
                 rpms <- lines <$> rpmspec ["--builtrpms"] (Just ("%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n")) spec
                 putStrLn $ nvr +-+ "built\n"
@@ -265,7 +264,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   -- FIXME sort into build order
                   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
                   --print hdeps
-                  srcs <- filter (`notElem` ["ghc"]) . catMaybes . nub <$> mapM (derefSrcPkg relver) hdeps
+                  srcs <- filter (`notElem` ["ghc"]) . nub <$> mapM (derefSrcPkg relver) hdeps
                   --print srcs
                   hmissing <- nub <$> filterM (notInKoji branch topdir tag) srcs
                   putStrLn ""
@@ -301,10 +300,9 @@ showChange latest nvr = do
 fedpkgBuild :: Dist -> String -> Maybe String -> IO ()
 fedpkgBuild dist nvr waittag = do
   giturl <- cmd "fedpkg" ["giturl"]
-  success <- cmdBool "koji" $ ["build", "--fail-fast", distTarget dist, giturl]
-  unless success $ do
-    cmdlog "touch" [".fhbuild-fail"]
-    exitWith (ExitFailure 1)
+  success <- cmdBool "koji" ["build", "--fail-fast", distTarget dist, giturl]
+  unless success $
+    fhbuildFail
   logMsg $ nvr +-+ "built"
   maybe (return ()) (`kojiWaitPkg` nvr) waittag
 
@@ -330,15 +328,16 @@ buildRequires spec =
   (map (head . words) . lines) <$> rpmspec ["--buildrequires"] Nothing spec
 --    >>= mapM (whatProvides relver)
 
-derefSrcPkg :: String -> String -> IO (Maybe String)
+derefSrcPkg :: String -> String -> IO String
 derefSrcPkg relver pkg = do
   putStrLn $ "Repoquerying" +-+ pkg
   res <- repoquerySrc relver pkg
   --putStrLn $ pkg +-+ "->" +-+ show res
   case res of
-    -- maybe package has never been built yet
-    Nothing -> return $ removeSuffix "-devel" pkg
-    Just s -> return $ Just s
+    Nothing -> do
+      putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
+      fhbuildFail
+    Just s -> return s
 
 gitBranch :: IO String
 gitBranch =
@@ -366,3 +365,8 @@ displayLogTail f = do
       disp = 12
       start = length ls - (disp + foot)
   mapM_ putStrLn $ take disp $ drop start ls
+
+fhbuildFail :: IO a
+fhbuildFail = do
+  cmdlog "touch" [".fhbuild-fail"]
+  exitWith (ExitFailure 1)
