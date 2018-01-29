@@ -154,7 +154,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 missing <- nub <$> (buildRequires spec >>= filterM notInstalled)
                 -- FIXME sort into build order
                 let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
-                srcs <- nub <$> mapM (derefSrcPkg relver) hmissing
+                srcs <- nub <$> mapM (derefSrcPkg topdir relver) hmissing
                 unless (null srcs) $ do
                   putStrLn "Missing:"
                   mapM_ putStrLn srcs
@@ -260,11 +260,11 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   --print brs
                   ghcLibs <- do
                     ghcDir <- pkgDir "ghc" branch topdir
-                    filter (\ dp -> "ghc-" `isPrefixOf` dp && ("-devel" `isSuffixOf` dp)) . words <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
+                    filter isHaskellDevelPkg . words <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
                   -- FIXME sort into build order
                   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
                   --print hdeps
-                  srcs <- filter (`notElem` ["ghc"]) . nub <$> mapM (derefSrcPkg relver) hdeps
+                  srcs <- filter (`notElem` ["ghc"]) . nub <$> mapM (derefSrcPkg topdir relver) hdeps
                   --print srcs
                   hmissing <- nub <$> filterM (notInKoji branch topdir tag) srcs
                   putStrLn ""
@@ -328,16 +328,22 @@ buildRequires spec =
   (map (head . words) . lines) <$> rpmspec ["--buildrequires"] Nothing spec
 --    >>= mapM (whatProvides relver)
 
-derefSrcPkg :: String -> String -> IO String
-derefSrcPkg relver pkg = do
-  putStrLn $ "Repoquerying" +-+ pkg
-  res <- repoquerySrc relver pkg
-  --putStrLn $ pkg +-+ "->" +-+ show res
-  case res of
-    Nothing -> do
-      putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
-      fhbuildFail
-    Just s -> return s
+derefSrcPkg :: FilePath -> String -> String -> IO String
+derefSrcPkg topdir relver pkg =
+  if isHaskellDevelPkg pkg
+  then
+    do let base = removeSuffix "-devel" pkg
+       dirExists <- doesDirectoryExist $ topdir </> base
+       if dirExists then return base else derefSrcPkg topdir relver base
+  else
+    do putStrLn $ "Repoquerying" +-+ pkg
+       res <- repoquerySrc relver pkg
+       putStrLn $ pkg +-+ "->" +-+ show res
+       case res of
+         Nothing ->
+           do putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
+              fhbuildFail
+         Just s -> return s
 
 gitBranch :: IO String
 gitBranch =
@@ -370,3 +376,6 @@ fhbuildFail :: IO a
 fhbuildFail = do
   cmdlog "touch" [".fhbuild-fail"]
   exitWith (ExitFailure 1)
+
+isHaskellDevelPkg :: String -> Bool
+isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg)
