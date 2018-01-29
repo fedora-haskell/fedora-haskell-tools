@@ -20,10 +20,12 @@ module RPM (packageManager,
 import Control.Monad (when)
 import Data.Maybe (isJust, isNothing)
 import System.Directory (findExecutable)
+import System.FilePath ((</>))
 -- die is available in ghc-7.10 base-4.8
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 
+import Dists (Dist, distTag)
 import Utils (cmd, sudo)
 
 -- @since base 4.8.0.0
@@ -68,11 +70,11 @@ repoquery relver args = do
 --     warn err
 --   return $ singleLine out
 
-repoquerySrc :: String -> String -> IO (Maybe String)
-repoquerySrc relver key = do
+repoquerySrc :: Dist -> String -> String -> IO (Maybe String)
+repoquerySrc dist relver key = do
   havednf <- optionalProgram "dnf"
   let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}"]
-  res <- words <$> repoquery relver (srcflag ++ ["--whatprovides", key])
+  res <- words <$> repoquery relver (srcflag ++ ["--repofrompath", "koji,http://kojipkgs.fedoraproject.org/repos" </> distTag dist </> "latest/x86_64/", "--whatprovides", key])
   return $ case res of
     [p] -> Just p
     ps | key `elem` ps -> Just key

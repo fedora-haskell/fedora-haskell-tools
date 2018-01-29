@@ -154,7 +154,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 missing <- nub <$> (buildRequires spec >>= filterM notInstalled)
                 -- FIXME sort into build order
                 let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
-                srcs <- nub <$> mapM (derefSrcPkg topdir relver) hmissing
+                srcs <- nub <$> mapM (derefSrcPkg topdir dist relver) hmissing
                 unless (null srcs) $ do
                   putStrLn "Missing:"
                   mapM_ putStrLn srcs
@@ -264,7 +264,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   -- FIXME sort into build order
                   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
                   --print hdeps
-                  srcs <- filter (`notElem` ["ghc"]) . nub <$> mapM (derefSrcPkg topdir relver) hdeps
+                  srcs <- filter (`notElem` ["ghc"]) . nub <$> mapM (derefSrcPkg topdir dist relver) hdeps
                   --print srcs
                   hmissing <- nub <$> filterM (notInKoji branch topdir tag) srcs
                   putStrLn ""
@@ -328,16 +328,16 @@ buildRequires spec =
   (map (head . words) . lines) <$> rpmspec ["--buildrequires"] Nothing spec
 --    >>= mapM (whatProvides relver)
 
-derefSrcPkg :: FilePath -> String -> String -> IO String
-derefSrcPkg topdir relver pkg =
+derefSrcPkg :: FilePath -> Dist -> String -> String -> IO String
+derefSrcPkg topdir dist relver pkg =
   if isHaskellDevelPkg pkg
   then
     do let base = removeSuffix "-devel" pkg
        dirExists <- doesDirectoryExist $ topdir </> base
-       if dirExists then return base else derefSrcPkg topdir relver base
+       if dirExists then return base else derefSrcPkg topdir dist relver base
   else
     do putStrLn $ "Repoquerying" +-+ pkg
-       res <- repoquerySrc relver pkg
+       res <- repoquerySrc dist relver pkg
        putStrLn $ pkg +-+ "->" +-+ show res
        case res of
          Nothing ->

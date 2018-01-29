@@ -24,6 +24,8 @@ Parallelize
 - copr support
 - parallel/async building
 - cache passwd for bodhi
+- do not downgrade versions
+- --liberal (allow failures)
 
 # updating
 - port update-pkg-ver
