@@ -33,12 +33,17 @@ kojiLatestPkg dist pkg = do
   return $ if null res then "" else head res
 
 kojiWaitPkg :: FilePath -> Dist -> String -> IO ()
-kojiWaitPkg topdir dist pkg = do
+kojiWaitPkg topdir dist nvr = do
   let fhbuilt = topdir </> ".fhbuilt"
-  already <- cmdBool "grep" ["-q", pkg, fhbuilt]
+  already <- kojiCheckFHBuilt topdir nvr
   unless already $ do
-    cmd_ "koji" ["wait-repo", dist, "--build=" ++ pkg]
-    appendFile fhbuilt $ pkg ++ "\n"
+    cmd_ "koji" ["wait-repo", dist, "--build=" ++ nvr]
+    appendFile fhbuilt $ nvr ++ "\n"
+
+kojiCheckFHBuilt :: FilePath -> String -> IO Bool
+kojiCheckFHBuilt topdir nvr = do
+  let fhbuilt = topdir </> ".fhbuilt"
+  cmdBool "grep" ["-q", nvr, fhbuilt]
 
 kojiBuilding :: String -> String -> IO Bool
 kojiBuilding pkg build = do

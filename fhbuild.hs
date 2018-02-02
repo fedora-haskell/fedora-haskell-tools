@@ -31,7 +31,8 @@ import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget,
               releaseVersion)
-import Koji (kojiBuilding, kojiLatestPkg, kojiWaitPkg, notInKoji, pkgDir)
+import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
+             notInKoji, pkgDir)
 import RPM (packageManager, rpmInstall, repoquerySrc, rpmspec)
 import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
               logMsg, removePrefix, removeSuffix, sudo)
@@ -239,7 +240,10 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 putStrLn pkg
               build topdir Built dist Nothing Nothing False rest
             Chain -> do
-              latest <- kojiLatestPkg tag pkg
+              fhbuilt <- kojiCheckFHBuilt topdir nvr
+              latest <- if fhbuilt
+                         then return nvr
+                         else kojiLatestPkg tag pkg
               if nvr == latest
                 then do
                 putStrLn $ nvr +-+ "already built!"
@@ -251,8 +255,8 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 if building
                   then do
                   putStrLn $ nvr +-+ "is already building"
-                  unless (null rest) $ --do
-                    --kojiWaitPkg topdir tag nvr
+                  kojiWaitPkg topdir tag nvr
+                  unless (null rest) $
                     build topdir Chain dist Nothing Nothing False rest
                   else do
                   showChange latest nvr
