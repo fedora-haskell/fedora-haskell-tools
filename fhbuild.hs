@@ -87,7 +87,7 @@ parseArgs _ = help >> return Nothing
 giveUp :: String -> IO Arguments
 giveUp err = do
   hPutStrLn stderr err
-  help >> return Nothing
+  return Nothing
 
 build :: FilePath -> Command -> Dist -> Maybe String -> Maybe (String, String) -> Bool -> [String] -> IO ()
 build _ _ _ _ _ _ [] = return ()
