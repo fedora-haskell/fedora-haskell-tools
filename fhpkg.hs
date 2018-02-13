@@ -64,6 +64,8 @@ main = do
           withPackages mdist new $ repoAction_ True False mdist (return ())
         "pull" -> withPackages mdist pkgs $
                   repoAction_ True False mdist (cmd_ "git" ["pull", "--rebase"])
+        "push" -> withPackages mdist pkgs $
+                  repoAction_ True False mdist (cmd_ "git" ["push"])
         "diff" -> withPackages mdist pkgs $
                   repoAction_ False False mdist (cmd_ "git" ["--no-pager", "diff"])
         "diff-origin" -> withPackages mdist pkgs $
@@ -101,7 +103,8 @@ commands = [("clone", "clone repos"),
             ("list", "list packages"),
             ("new", "new unbuilt packages"),
             ("prep", "fedpkg prep"),
-            ("pull", "pull repos"),
+            ("pull", "git pull repos"),
+            ("push", "git push repos"),
             ("update", "cabal-rpm update"),
             ("refresh", "cabal-rpm refresh"),
             ("subpkgs", "list subpackages"),
