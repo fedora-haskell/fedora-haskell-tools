@@ -41,7 +41,7 @@ rawhide :: String
 rawhide = "f28"
 
 sidetag :: Maybe String
-sidetag = Just "ghc"
+sidetag = Nothing -- Just "ghc"
 
 hackageRelease :: String
 hackageRelease = "f27"
