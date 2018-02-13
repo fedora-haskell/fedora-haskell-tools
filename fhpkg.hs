@@ -82,6 +82,9 @@ main = do
                   repoAction_ True True mdist (cmd_ "cabal-rpm" ["refresh"])
         "prep" -> withPackages mdist pkgs $
                     repoAction_ True True mdist (cmd_ "fedpkg" ["prep"])
+        "commit" -> withPackages mdist pkgs $
+                    -- need to handle passing commit message
+                    repoAction_ True True mdist (commitChanges "")
         "subpkgs" -> withPackages mdist pkgs $
                      repoAction True True mdist (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn)
         "new" -> newPackages mdist >>= mapM_ putStrLn
@@ -103,6 +106,7 @@ commands = [("clone", "clone repos"),
             ("list", "list packages"),
             ("new", "new unbuilt packages"),
             ("prep", "fedpkg prep"),
+            ("commit", "fedpkg commit"),
             ("pull", "git pull repos"),
             ("push", "git push repos"),
             ("update", "cabal-rpm update"),
@@ -270,3 +274,10 @@ updatePackage pkg = do
   if hckg
     then cmd_ "cabal-rpm" ["update"]
     else putStrLn "skipping since not hackage"
+
+commitChanges :: String -> IO ()
+commitChanges msg = do
+  chgs <- cmd "git" ["diff"]
+  if null chgs
+    then putStrLn "no changes"
+    else cmd_ "fedpkg" ["commit", "-m", msg]
