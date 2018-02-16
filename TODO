@@ -26,6 +26,7 @@ Parallelize
 - cache passwd for bodhi
 - do not downgrade versions
 - --liberal (allow failures)
+- reconnect to koji when disconnected (build or wait-repo)
 
 # updating
 - port update-pkg-ver

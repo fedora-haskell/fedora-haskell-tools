@@ -37,7 +37,8 @@ import RPM (packageManager, rpmInstall, repoquerySrc, rpmspec)
 import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
               logMsg, removePrefix, removeSuffix, sudo)
 
-data Command = Install | Mock | Koji | Chain | Pending | Changed | Built deriving (Eq)
+data Command = Install | Mock | Koji | Chain | Pending | Changed | Built | Bump
+             deriving (Eq)
 
 main :: IO ()
 main = do
@@ -55,10 +56,12 @@ main = do
     mode "pending" = Pending
     mode "changed" = Changed
     mode "built" = Built
+    mode "bump" = Bump
     mode _ = error "Unknown command"
 
 commands :: [String]
-commands = ["install", "mock" , "koji", "chain", "pending", "changed", "built"]
+commands = ["install", "mock" , "koji", "chain", "pending", "changed", "built", 
+            "bump"]
 
 help :: IO ()
 help = do
@@ -73,6 +76,7 @@ help = do
     ++ "  pending\t- show planned changes\n"
     ++ "  changed\t- show changed pkgs\n"
     ++ "  built\t\t- show pkgs whose NVR already built\n"
+    ++ "  bump\t\t- bump release for NVRs already built\n"
   exitWith (ExitFailure 1)
 
 type Arguments = Maybe (String, Dist, [String])
@@ -239,6 +243,13 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               when (eqNVR nvr latest) $
                 putStrLn pkg
               build topdir Built dist Nothing Nothing False rest
+            Bump -> do
+              latest <- kojiLatestPkg tag pkg
+              when (eqNVR nvr latest) $ do
+                putStrLn pkg
+                cmd_ "rpmdev-bumpspec" ["-c", "rebuild", spec]
+                cmd_ "fedpkg" ["commit", "-m", "bump release"]
+              build topdir Bump dist Nothing Nothing False rest
             Chain -> do
               fhbuilt <- kojiCheckFHBuilt topdir nvr
               latest <- if fhbuilt
@@ -377,8 +388,8 @@ displayLogTail f = do
   mapM_ putStrLn $ take disp $ drop start ls
 
 fhbuildFail :: IO a
-fhbuildFail = do
-  cmdlog "touch" [".fhbuild-fail"]
+fhbuildFail = --do
+  --cmdlog "touch" [".fhbuild-fail"]
   exitWith (ExitFailure 1)
 
 isHaskellDevelPkg :: String -> Bool
