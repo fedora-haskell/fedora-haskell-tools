@@ -1,3 +1,22 @@
+* 0.5 (2018-02-16)
+- fhpkg
+  - add commands for prep, refresh, diff-origin, push, and commit
+  - only update hackages
+  - only use main Fedora repos for repoquery
+  - do not repoquery ghc's libs
+- be precise with fedora and hackage urls
+- reimplement and improve repoquery
+- fhbuild
+  - output stdout for local build
+  - use rpmspec --builtrpms
+  - was doing double repoquery
+  - skip building packages with .fhbuild-fail and .fhbuild-ignore
+  - use koji build --fail-fast
+  - no longer use pkgdb
+  - save built nvrs to .fhbuilt cache file and check pkg dir before repoquery
+  - repoquery koji build repo
+  - add bump command
+
 * 0.4 (2017-12-05)
 - new commands: clone-new, diff-stackage, diff-branch
 - fix hackage distro data output
