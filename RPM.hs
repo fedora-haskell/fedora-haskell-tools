@@ -61,15 +61,6 @@ repoquery relver args = do
   let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet"]) else ("repoquery", [])
   cmd prog (subcmd ++ ["--releasever=" ++ relver] ++ args)
 
--- repoqWrap :: String -> [String] -> IO String
--- repoqWrap c args = do
---   (out, err) <- cmdStdErr c args
---   -- workaround noisy dnf2 repoquery --quiet
---   -- ignore "Last metadata expiration check" warnings
---   unless (null err || head (words err) == "Last") $
---     warn err
---   return $ singleLine out
-
 repoquerySrc :: Dist -> String -> String -> IO (Maybe String)
 repoquerySrc dist relver key = do
   havednf <- optionalProgram "dnf"
