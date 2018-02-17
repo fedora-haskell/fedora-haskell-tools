@@ -17,6 +17,10 @@ module RPM (packageManager,
             rpmInstall,
             rpmspec) where
 
+#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,2))
+#else
+import Control.Applicative ((<$>))
+#endif
 import Control.Monad (when)
 import Data.Maybe (isJust, isNothing)
 import System.Directory (findExecutable)
