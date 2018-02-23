@@ -26,9 +26,10 @@ module Main where
 #else
 import Control.Applicative ((<$>))
 #endif
+import Control.Arrow ((&&&))
 import Control.Monad (unless, when)
 import Data.Maybe
-import Data.List (isInfixOf, isPrefixOf, nub, sort, (\\))
+import Data.List (isInfixOf, isPrefixOf, nub, partition, sort, (\\))
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getHomeDirectory, setCurrentDirectory)
@@ -42,14 +43,15 @@ import Dists (Dist, dists, distBranch, hackageRelease, releaseVersion)
 import Koji (kojiListPkgs)
 import RPM (repoquery, rpmspec)
 import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
-              maybeRemovePrefix, removePrefix, withCurrentDirectory)
+              maybeRemovePrefix, removePrefix, removeSuffix,
+              withCurrentDirectory)
 
 main :: IO ()
 main = do
   margs <- getArgs >>= parseArgs
   case margs of
     Nothing -> return ()
-    Just (com, mdist, pkgs) ->
+    Just (com, opts, mdist, pkgs) ->
       case com of
         "list" -> withPackages mdist pkgs (mapM_ putStrLn)
         "count" -> withPackages mdist pkgs (print . length)
@@ -58,35 +60,35 @@ main = do
           unless (isNothing mdist || mdist == currentHackage) $ error $ "Hackage is currently for" +-+ fromJust currentHackage ++ "!"
           withPackages currentHackage pkgs (repoqueryHackageCSV currentHackage)
         "clone" -> withPackages mdist pkgs $
-                   repoAction_ True False mdist (return ())
+                   repoAction_ True False mdist opts (return ())
         "clone-new" -> do
           new <- newPackages mdist
-          withPackages mdist new $ repoAction_ True False mdist (return ())
+          withPackages mdist new $ repoAction_ True False mdist opts (return ())
         "pull" -> withPackages mdist pkgs $
-                  repoAction_ True False mdist (cmd_ "git" ["pull", "--rebase"])
+                  repoAction_ True False mdist opts (cmd_ "git" ["pull", "--rebase"])
         "push" -> withPackages mdist pkgs $
-                  repoAction_ True False mdist (cmd_ "git" ["push"])
+                  repoAction_ True False mdist opts (cmd_ "git" ["push"])
         "diff" -> withPackages mdist pkgs $
-                  repoAction_ False False mdist (cmd_ "git" ["--no-pager", "diff"])
+                  repoAction_ False False mdist opts (cmd_ "git" ["--no-pager", "diff"])
         "diff-origin" -> withPackages mdist pkgs $
-                  repoAction_ True False mdist (cmd_ "git" ["--no-pager", "diff", "origin"])
+                  repoAction_ True False mdist opts (cmd_ "git" ["--no-pager", "diff", "origin"])
         "diff-branch" -> withPackages mdist pkgs $
-                  repoAction False True mdist compareRawhide
+                  repoAction False True mdist opts compareRawhide
         "diff-stackage" -> withPackages mdist pkgs $
-                  repoAction True True mdist compareStackage
+                  repoAction True True mdist opts compareStackage
         "verrel" -> withPackages mdist pkgs $
-                    repoAction_ False True mdist (cmd_ "fedpkg" ["verrel"])
+                    repoAction_ False True mdist opts (cmd_ "fedpkg" ["verrel"])
         "update" -> withPackages mdist pkgs $
-                  repoAction True True mdist updatePackage
+                  repoAction True True mdist opts updatePackage
         "refresh" -> withPackages mdist pkgs $
-                  repoAction_ True True mdist (cmd_ "cabal-rpm" ["refresh"])
+                  repoAction_ True True mdist opts (cmd_ "cabal-rpm" ["refresh"])
         "prep" -> withPackages mdist pkgs $
-                    repoAction_ True True mdist (cmd_ "fedpkg" ["prep"])
+                    repoAction_ True True mdist opts (cmd_ "fedpkg" ["prep"])
         "commit" -> withPackages mdist pkgs $
                     -- need to handle passing commit message
-                    repoAction_ True True mdist (commitChanges "")
+                    repoAction_ True True mdist opts (commitChanges "")
         "subpkgs" -> withPackages mdist pkgs $
-                     repoAction True True mdist (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn)
+                     repoAction True True mdist opts (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn)
         "new" -> newPackages mdist >>= mapM_ putStrLn
         _ -> return ()
   where
@@ -94,28 +96,36 @@ main = do
     withPackages mdist pkgs act =
       (if null pkgs then repoqueryHaskell False mdist else return pkgs) >>= act
 
-commands :: [(String, String)]
-commands = [("clone", "clone repos"),
-            ("clone-new", "clone new packages"),
-            ("count", "count number of packages"),
-            ("diff", "git diff"),
-            ("diff-origin", "git diff origin"),
-            ("diff-branch","compare branch with master"),
-            ("diff-stackage","compare with stackage"),
-            ("hackage", "generate Hackage distro data"),
-            ("list", "list packages"),
-            ("new", "new unbuilt packages"),
-            ("prep", "fedpkg prep"),
-            ("commit", "fedpkg commit"),
-            ("pull", "git pull repos"),
-            ("push", "git push repos"),
-            ("update", "cabal-rpm update"),
-            ("refresh", "cabal-rpm refresh"),
-            ("subpkgs", "list subpackages"),
-            ("verrel", "show nvr of packages")]
+-- name, summary, options
+data Command = Cmd { cmdName :: String
+                   , cmdOptions :: [Option]
+                   , cmdDescription :: String
+                   }
 
-cmds :: [String]
-cmds = map fst commands
+commands :: [Command]
+commands = [ Cmd "clone" ['B'] "clone repos"
+           , Cmd "clone-new" ['B'] "clone new packages"
+           , Cmd "count" [] "count number of packages"
+           , Cmd "diff" [] "git diff"
+           , Cmd "diff-origin" [] "git diff origin"
+           , Cmd "diff-branch" [] "compare branch with master"
+           , Cmd "diff-stackage" [] "compare with stackage"
+           , Cmd "hackage" [] "generate Hackage distro data"
+           , Cmd "list" [] "list packages"
+           , Cmd "new" [] "new unbuilt packages"
+           , Cmd "prep" [] "fedpkg prep"
+           , Cmd "commit" [] "fedpkg commit"
+           , Cmd "pull" [] "git pull repos"
+           , Cmd "push" [] "git push repos"
+           , Cmd "update" [] "cabal-rpm update"
+           , Cmd "refresh" [] "cabal-rpm refresh"
+           , Cmd "subpkgs" [] "list subpackages"
+           , Cmd "verrel" [] "show nvr of packages"]
+
+cmdOpts :: [(String, [Option])]
+cmdOpts = map (cmdName &&& cmdOptions) commands
+
+cmds = map fst cmdOpts
 
 help :: IO ()
 help = do
@@ -123,33 +133,47 @@ help = do
   hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [DIST]\n"
     ++ "\n"
     ++ "Commands:\n"
-  mapM_ (putStrLn . (\(c, desc) -> "  " ++ c ++ replicate (mx - length c) ' ' +-+ "-" +-+ desc)) commands
+  mapM_ (putStrLn . renderCmd) commands
   exitWith (ExitFailure 1)
   where
     mx = maximum $ map length cmds
+    renderCmd :: Command -> String
+    renderCmd (Cmd c opts desc) =
+      "  " ++ cmdOpts ++ replicate (mx - length cmdOpts) ' ' +-+ "-" +-+ desc
+      where
+        cmdOpts = c ++ if null opts then "" else " [-" ++ opts ++ "]"
 
 type Package = String
 
-type Arguments = Maybe (String, Maybe Dist, [Package])
+type Arguments = Maybe (String, [Option], Maybe Dist, [Package])
+
+type Option = Char
+
+getOpts :: [String] -> ([Option], [String])
+getOpts as =
+  let (optss, args) = partition (\ as -> head as == '-') as in
+  (concatMap (removePrefix "-") optss, map (removeSuffix "/") args)
 
 parseArgs :: [String] -> IO Arguments
-parseArgs [c] =
-                if c `elem` cmds
-                then return (Just (c, Nothing, []))
-                else giveUp $ "No such command '" ++ c ++ "'"
-parseArgs (c:dist:pkgs) | c `notElem` cmds =
-                          giveUp $ "No such command '" ++ c ++ "'"
-                        | dist `notElem` dists =
-                            return $ Just (c, Nothing, dist:pkgs)
-                        | otherwise =
-                          return $ Just (c, Just dist, pkgs)
-parseArgs _ = help >> return Nothing
+parseArgs as =
+  let (opts, args) = getOpts as in
+    case args of
+      [] -> help >> return Nothing
+      (c:_) | any (`notElem` optCmd c) opts -> giveUp $ "Unknown option '-" ++ opts ++ "' for command '" ++ c ++ "'"
+      [c] -> return (Just (c, opts, Nothing, []))
+      (c:dist:pkgs) | dist `notElem` dists ->
+                        return $ Just (c, opts, Nothing, dist:pkgs)
+                    | otherwise ->
+                        return $ Just (c, opts, Just dist, pkgs)
+  where
+    giveUp :: String -> IO Arguments
+    giveUp err = do
+      hPutStrLn stderr err
+      help >> return Nothing
 
-giveUp :: String -> IO Arguments
-giveUp err = do
-  hPutStrLn stderr err
-  help >> return Nothing
-
+    optCmd :: String -> [Option]
+    optCmd c = fromMaybe (error $ "No such command '" ++ c ++ "'") $
+               lookup c cmdOpts
 
 kojiListHaskell :: Bool -> Maybe Dist -> IO [Package]
 kojiListHaskell verbose mdist = do
@@ -186,9 +210,9 @@ newPackages mdist = do
   kps <- kojiListHaskell True mdist
   return $ kps \\ ps
 
-repoAction :: Bool -> Bool -> Maybe Dist -> (Package -> IO ()) -> [Package] -> IO ()
-repoAction _ _ _ _ [] = return ()
-repoAction header needsSpec mdist action (pkg:rest) = do
+repoAction :: Bool -> Bool -> Maybe Dist -> [Option] -> (Package -> IO ()) -> [Package] -> IO ()
+repoAction _ _ _ _ _ [] = return ()
+repoAction header needsSpec mdist opts action (pkg:rest) = do
   withCurrentDirectory "." $ do
     let branchGiven = isJust mdist
         branch = maybe "master" distBranch mdist
@@ -200,7 +224,7 @@ repoAction header needsSpec mdist action (pkg:rest) = do
     haveSSH <- doesFileExist $ home </> ".ssh/id_rsa"
     dirExists <- doesDirectoryExist pkg
     unless dirExists $
-      cmd_ "fedpkg" $ ["clone"] ++ ["-a" | not haveSSH] ++ (if branchGiven then ["-b", branch] else ["-B"]) ++ [pkg]
+      cmd_ "fedpkg" $ ["clone"] ++ ["-a" | not haveSSH] ++ (if 'B' `elem` opts then ["-B"] else ["-b", branch]) ++ [pkg]
     singleDir <- doesFileExist $ pkg </> ".git/config"
     unless singleDir $ do
       branchDir <- doesDirectoryExist $ pkg </> branch
@@ -227,11 +251,11 @@ repoAction header needsSpec mdist action (pkg:rest) = do
         unless hasSpec $ putStrLn "No spec file!"
         unless (needsSpec && not hasSpec) $
           action pkg
-  repoAction header needsSpec mdist action rest
+  repoAction header needsSpec mdist opts action rest
 
-repoAction_ :: Bool -> Bool -> Maybe Dist -> IO () -> [Package] -> IO ()
-repoAction_ header needsSpec mdist action =
-  repoAction header needsSpec mdist (const action)
+repoAction_ :: Bool -> Bool -> Maybe Dist -> [Option] -> IO () -> [Package] -> IO ()
+repoAction_ header needsSpec mdist opts action =
+  repoAction header needsSpec mdist opts (const action)
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do
