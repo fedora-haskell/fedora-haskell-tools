@@ -157,24 +157,29 @@ getOpts as =
 
 parseArgs :: [String] -> IO Arguments
 parseArgs as =
-  let (opts, args) = getOpts as in
-    case args of
-      [] -> help >> return Nothing
-      (c:_) | any (`notElem` optCmd c) opts -> giveUp $ "Unknown option '-" ++ opts ++ "' for command '" ++ c ++ "'"
-      [c] -> return (Just (c, opts, Nothing, []))
-      (c:dist:pkgs) | dist `notElem` dists ->
-                        return $ Just (c, opts, Nothing, dist:pkgs)
-                    | otherwise ->
-                        return $ Just (c, opts, Just dist, pkgs)
-  where
-    giveUp :: String -> IO Arguments
-    giveUp err = do
-      hPutStrLn stderr err
-      help >> return Nothing
+  let (opts, args) = getOpts as in do
+    if null args
+      then help >> return Nothing
+      else let c = head args in
+             if c `notElem` cmds
+             then error $ "No such command '" ++ c ++ "'"
+             else
+               case tail args of
+                 [] -> return (Just (c, opts, Nothing, []))
+                 _ | any (`notElem` optCmd c) opts -> giveUp $ "Unknown option '-" ++ opts ++ "' for command '" ++ c ++ "'"
+                 (dist:pkgs) | dist `notElem` dists ->
+                               return $ Just (c, opts, Nothing, dist:pkgs)
+                             | otherwise ->
+                               return $ Just (c, opts, Just dist, pkgs)
+      where
+        giveUp :: String -> IO Arguments
+        giveUp err = do
+          hPutStrLn stderr err
+          help >> return Nothing
 
-    optCmd :: String -> [Option]
-    optCmd c = fromMaybe (error $ "No such command '" ++ c ++ "'") $
-               lookup c cmdOpts
+        optCmd :: String -> [Option]
+        optCmd c = fromMaybe (error $ "No such command '" ++ c ++ "'") $
+                   lookup c cmdOpts
 
 kojiListHaskell :: Bool -> Maybe Dist -> IO [Package]
 kojiListHaskell verbose mdist = do
