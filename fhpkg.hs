@@ -125,6 +125,7 @@ commands = [ Cmd "clone" ['B'] "clone repos"
 cmdOpts :: [(String, [Option])]
 cmdOpts = map (cmdName &&& cmdOptions) commands
 
+cmds :: [String]
 cmds = map fst cmdOpts
 
 help :: IO ()
@@ -139,9 +140,9 @@ help = do
     mx = maximum $ map length cmds
     renderCmd :: Command -> String
     renderCmd (Cmd c opts desc) =
-      "  " ++ cmdOpts ++ replicate (mx - length cmdOpts) ' ' +-+ "-" +-+ desc
+      "  " ++ cmdopts ++ replicate (mx - length cmdopts) ' ' +-+ "-" +-+ desc
       where
-        cmdOpts = c ++ if null opts then "" else " [-" ++ opts ++ "]"
+        cmdopts = c ++ if null opts then "" else " [-" ++ opts ++ "]"
 
 type Package = String
 
@@ -151,7 +152,7 @@ type Option = Char
 
 getOpts :: [String] -> ([Option], [String])
 getOpts as =
-  let (optss, args) = partition (\ as -> head as == '-') as in
+  let (optss, args) = partition (\ cs -> head cs == '-') as in
   (concatMap (removePrefix "-") optss, map (removeSuffix "/") args)
 
 parseArgs :: [String] -> IO Arguments
