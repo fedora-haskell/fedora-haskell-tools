@@ -26,8 +26,8 @@ module Main where
 #else
 import Control.Applicative ((<$>))
 #endif
-import Control.Arrow ((&&&))
 import Control.Monad (unless, when)
+import Data.Char (isUpper, toLower, toUpper)
 import Data.Maybe
 import Data.List (isInfixOf, isPrefixOf, nub, partition, sort, (\\))
 
@@ -53,83 +53,107 @@ main = do
     Nothing -> return ()
     Just (com, opts, mdist, pkgs) ->
       case com of
-        "list" -> withPackages mdist pkgs (mapM_ putStrLn)
-        "count" -> withPackages mdist pkgs (print . length)
-        "hackage" -> do
+        List -> withPackages mdist pkgs (mapM_ putStrLn)
+        Count -> withPackages mdist pkgs (print . length)
+        Hackage -> do
           let currentHackage = Just hackageRelease
           unless (isNothing mdist || mdist == currentHackage) $ error $ "Hackage is currently for" +-+ fromJust currentHackage ++ "!"
           withPackages currentHackage pkgs (repoqueryHackageCSV currentHackage)
-        "clone" -> withPackages mdist pkgs $
+        Clone -> withPackages mdist pkgs $
                    repoAction_ True False mdist opts (return ())
-        "clone-new" -> do
+        CloneNew -> do
           new <- newPackages mdist
           withPackages mdist new $ repoAction_ True False mdist opts (return ())
-        "pull" -> withPackages mdist pkgs $
+        Pull -> withPackages mdist pkgs $
                   repoAction_ True False mdist opts (cmd_ "git" ["pull", "--rebase"])
-        "push" -> withPackages mdist pkgs $
+        Push -> withPackages mdist pkgs $
                   repoAction_ True False mdist opts (cmd_ "git" ["push"])
-        "diff" -> withPackages mdist pkgs $
+        Diff -> withPackages mdist pkgs $
                   repoAction_ False False mdist opts (cmd_ "git" ["--no-pager", "diff"])
-        "diff-origin" -> withPackages mdist pkgs $
+        DiffOrigin -> withPackages mdist pkgs $
                   repoAction_ True False mdist opts (cmd_ "git" ["--no-pager", "diff", "origin"])
-        "diff-branch" -> withPackages mdist pkgs $
+        DiffBranch -> withPackages mdist pkgs $
                   repoAction False True mdist opts compareRawhide
-        "diff-stackage" -> withPackages mdist pkgs $
+        DiffStackage -> withPackages mdist pkgs $
                   repoAction True True mdist opts compareStackage
-        "verrel" -> withPackages mdist pkgs $
+        Verrel -> withPackages mdist pkgs $
                     repoAction_ False True mdist opts (cmd_ "fedpkg" ["verrel"])
-        "update" -> withPackages mdist pkgs $
+        Update -> withPackages mdist pkgs $
                   repoAction True True mdist opts updatePackage
-        "refresh" -> withPackages mdist pkgs $
+        Refresh -> withPackages mdist pkgs $
                   repoAction_ True True mdist opts (cmd_ "cabal-rpm" ["refresh"])
-        "prep" -> withPackages mdist pkgs $
+        Prep -> withPackages mdist pkgs $
                     repoAction_ True True mdist opts (cmd_ "fedpkg" ["prep"])
-        "commit" -> withPackages mdist pkgs $
+        Commit -> withPackages mdist pkgs $
                     -- need to handle passing commit message
                     repoAction_ True True mdist opts (commitChanges "")
-        "subpkgs" -> withPackages mdist pkgs $
+        Subpkgs -> withPackages mdist pkgs $
                      repoAction True True mdist opts (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn)
-        "new" -> newPackages mdist >>= mapM_ putStrLn
-        _ -> return ()
+        New -> newPackages mdist >>= mapM_ putStrLn
   where
     withPackages :: Maybe Dist -> [Package] -> ([Package] -> IO ()) -> IO ()
     withPackages mdist pkgs act =
       (if null pkgs then repoqueryHaskell False mdist else return pkgs) >>= act
 
 -- name, summary, options
-data Command = Cmd { cmdName :: String
-                   , cmdOptions :: [Option]
+data Command = Cmd { cmdName :: CmdName
                    , cmdDescription :: String
                    }
 
+data CmdName = Clone | CloneNew | Count | Diff | DiffOrigin | DiffBranch
+                | DiffStackage | Hackage | List | New | Prep
+                | Commit | Pull | Push | Update | Refresh | Subpkgs | Verrel
+  deriving (Read, Show, Eq)
+
+showCmd :: CmdName -> String
+showCmd c = render "" (show c)
+  where
+    render :: String -> String -> String
+    render os "" = os
+    render "" (i:is) = render [toLower i] is
+    render os (i:is) = render (os ++ if isUpper i then "-" ++ [toLower i] else [i]) is
+
+readCmd :: String -> CmdName
+readCmd c = read $ parse "" c
+  where
+    parse :: String -> String -> String
+    parse os "" = os
+    parse "" (i:is) = parse [toUpper i] is
+    parse os ('-':is) = parse (os ++ [toUpper $ head is]) (tail is)
+    parse os (i:is) = parse (os ++ [i]) is
+
 commands :: [Command]
-commands = [ Cmd "clone" ['B'] "clone repos"
-           , Cmd "clone-new" ['B'] "clone new packages"
-           , Cmd "count" [] "count number of packages"
-           , Cmd "diff" [] "git diff"
-           , Cmd "diff-origin" [] "git diff origin"
-           , Cmd "diff-branch" [] "compare branch with master"
-           , Cmd "diff-stackage" [] "compare with stackage"
-           , Cmd "hackage" [] "generate Hackage distro data"
-           , Cmd "list" [] "list packages"
-           , Cmd "new" [] "new unbuilt packages"
-           , Cmd "prep" [] "fedpkg prep"
-           , Cmd "commit" [] "fedpkg commit"
-           , Cmd "pull" [] "git pull repos"
-           , Cmd "push" [] "git push repos"
-           , Cmd "update" [] "cabal-rpm update"
-           , Cmd "refresh" [] "cabal-rpm refresh"
-           , Cmd "subpkgs" [] "list subpackages"
-           , Cmd "verrel" [] "show nvr of packages"]
+commands = [ Cmd Clone "clone repos"
+           , Cmd CloneNew "clone new packages"
+           , Cmd Count  "count number of packages"
+           , Cmd Diff  "git diff"
+           , Cmd DiffOrigin  "git diff origin"
+           , Cmd DiffBranch  "compare branch with master"
+           , Cmd DiffStackage  "compare with stackage"
+           , Cmd Hackage  "generate Hackage distro data"
+           , Cmd List  "list packages"
+           , Cmd New  "new unbuilt packages"
+           , Cmd Prep  "fedpkg prep"
+           , Cmd Commit  "fedpkg commit"
+           , Cmd Pull  "git pull repos"
+           , Cmd Push  "git push repos"
+           , Cmd Update  "cabal-rpm update"
+           , Cmd Refresh  "cabal-rpm refresh"
+           , Cmd Subpkgs  "list subpackages"
+           , Cmd Verrel  "show nvr of packages"]
 
-cmdOpts :: [(String, [Option])]
-cmdOpts = map (cmdName &&& cmdOptions) commands
+cmdOpts :: CmdName ->  [Option]
+cmdOpts Clone = ['B']
+cmdOpts CloneNew = ['B']
+cmdOpts _ = []
 
-cmds :: [String]
-cmds = map fst cmdOpts
+cmds :: [CmdName]
+cmds = map cmdName commands
 
-help :: IO ()
-help = do
+help :: String -> IO a
+help err = do
+  unless (null err) $
+    hPutStrLn stderr err
   progName <- getProgName
   hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [DIST]\n"
     ++ "\n"
@@ -137,16 +161,17 @@ help = do
   mapM_ (putStrLn . renderCmd) commands
   exitWith (ExitFailure 1)
   where
-    mx = maximum $ map length cmds
+    mx = maximum $ map (length . showCmd) cmds
     renderCmd :: Command -> String
-    renderCmd (Cmd c opts desc) =
+    renderCmd (Cmd c desc) =
       "  " ++ cmdopts ++ replicate (mx - length cmdopts) ' ' +-+ "-" +-+ desc
       where
-        cmdopts = c ++ if null opts then "" else " [-" ++ opts ++ "]"
+        opts = cmdOpts c
+        cmdopts = showCmd c ++ if null opts then "" else " [-" ++ opts ++ "]"
 
 type Package = String
 
-type Arguments = Maybe (String, [Option], Maybe Dist, [Package])
+type Arguments = Maybe (CmdName, [Option], Maybe Dist, [Package])
 
 type Option = Char
 
@@ -157,29 +182,22 @@ getOpts as =
 
 parseArgs :: [String] -> IO Arguments
 parseArgs as =
-  let (opts, args) = getOpts as in do
+  let (opts, args) = getOpts as in
     if null args
-      then help >> return Nothing
-      else let c = head args in
+      then help ""
+      else let name = head args
+               c = readCmd name in
              if c `notElem` cmds
-             then error $ "No such command '" ++ c ++ "'"
+             then error $ "No such command '" ++ name ++ "'"
              else
                case tail args of
                  [] -> return (Just (c, opts, Nothing, []))
-                 _ | any (`notElem` optCmd c) opts -> giveUp $ "Unknown option '-" ++ opts ++ "' for command '" ++ c ++ "'"
-                 (dist:pkgs) | dist `notElem` dists ->
-                               return $ Just (c, opts, Nothing, dist:pkgs)
+                 _ | any (`notElem` cmdOpts c) opts ->
+                     help $ "Unknown option '-" ++ opts ++ "' for command '" ++ name ++ "'"
+                 (d:pkgs) | d `notElem` dists ->
+                               return $ Just (c, opts, Nothing, d:pkgs)
                              | otherwise ->
-                               return $ Just (c, opts, Just dist, pkgs)
-      where
-        giveUp :: String -> IO Arguments
-        giveUp err = do
-          hPutStrLn stderr err
-          help >> return Nothing
-
-        optCmd :: String -> [Option]
-        optCmd c = fromMaybe (error $ "No such command '" ++ c ++ "'") $
-                   lookup c cmdOpts
+                               return $ Just (c, opts, Just d, pkgs)
 
 kojiListHaskell :: Bool -> Maybe Dist -> IO [Package]
 kojiListHaskell verbose mdist = do
