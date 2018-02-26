@@ -44,8 +44,10 @@ Executable fhbz
 Executable fhpkg
     Main-is:       fhpkg.hs
     Build-depends: base < 5,
+                   csv,
                    directory,
                    filepath,
+                   HTTP,
                    process,
                    unix
     Other-modules: Dists,

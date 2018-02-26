@@ -31,13 +31,16 @@ import Data.Char (isUpper, toLower, toUpper)
 import Data.Maybe
 import Data.List (isInfixOf, isPrefixOf, nub, partition, sort, (\\))
 
+import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getHomeDirectory, setCurrentDirectory)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeFileName)
 import System.IO (hPutStrLn, stderr)
 --import System.Posix.Env (getEnv)
+import Text.CSV (parseCSV)
+import Text.Read (readMaybe)
 
 import Dists (Dist, dists, distBranch, hackageRelease, releaseVersion)
 import Koji (kojiListPkgs)
@@ -56,9 +59,11 @@ main = do
         List -> withPackages mdist pkgs (mapM_ putStrLn)
         Count -> withPackages mdist pkgs (print . length)
         Hackage -> do
-          let currentHackage = Just hackageRelease
-          unless (isNothing mdist || mdist == currentHackage) $ error $ "Hackage is currently for" +-+ fromJust currentHackage ++ "!"
-          withPackages currentHackage pkgs (repoqueryHackageCSV currentHackage)
+          unless (isNothing mdist || mdist == Just hackageRelease) $ error $ "Hackage is currently for" +-+ hackageRelease ++ "!"
+          withPackages (Just hackageRelease) pkgs $ repoqueryHackageCSV hackageRelease
+        CompareHackage -> do
+          unless (isNothing mdist || mdist == Just hackageRelease) $ error $ "Hackage is currently for" +-+ hackageRelease ++ "!"
+          withPackages (Just hackageRelease) pkgs $ compareHackage (null pkgs) hackageRelease
         Clone -> withPackages mdist pkgs $
                    repoAction_ True False mdist opts (return ())
         CloneNew -> do
@@ -101,10 +106,12 @@ data Command = Cmd { cmdName :: CmdName
                    }
 
 data CmdName = Clone | CloneNew | Count | Diff | DiffOrigin | DiffBranch
-                | DiffStackage | Hackage | List | New | Prep
+                | DiffStackage | Hackage | CompareHackage | List | New | Prep
                 | Commit | Pull | Push | Update | Refresh | Subpkgs | Verrel
   deriving (Read, Show, Eq)
 
+
+-- SomeCommand -> "some-command"
 showCmd :: CmdName -> String
 showCmd c = render "" (show c)
   where
@@ -113,8 +120,9 @@ showCmd c = render "" (show c)
     render "" (i:is) = render [toLower i] is
     render os (i:is) = render (os ++ if isUpper i then "-" ++ [toLower i] else [i]) is
 
+-- "some-command" -> SomeCommand
 readCmd :: String -> CmdName
-readCmd c = read $ parse "" c
+readCmd c = fromMaybe (error $ "Unknown command " ++ c) (readMaybe $ parse "" c)
   where
     parse :: String -> String -> String
     parse os "" = os
@@ -131,6 +139,7 @@ commands = [ Cmd Clone "clone repos"
            , Cmd DiffBranch  "compare branch with master"
            , Cmd DiffStackage  "compare with stackage"
            , Cmd Hackage  "generate Hackage distro data"
+           , Cmd CompareHackage  "compare with Hackage distro data"
            , Cmd List  "list packages"
            , Cmd New  "new unbuilt packages"
            , Cmd Prep  "fedpkg prep"
@@ -206,11 +215,72 @@ kojiListHaskell verbose mdist = do
   when (null libs) $ error "No library packages found"
   return $ sort $ nub libs
 
-repoqueryHackageCSV :: Maybe Dist -> [Package] -> IO ()
-repoqueryHackageCSV mdist pkgs = do
-  let relver = maybe "rawhide" releaseVersion mdist
+repoqueryHackageCSV :: Dist -> [Package] -> IO ()
+repoqueryHackageCSV dist pkgs = do
+  let relver = releaseVersion dist
   -- Hackage csv chokes on final newline so remove it
   init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery relver (["--disablerepo=*", "--enablerepo=fedora", "--enablerepo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ pkgs) >>= putStr
+
+data PkgVer = PV { pvPkg :: String, pvVer :: String}
+  deriving (Eq)
+
+instance Show PkgVer
+  where
+    show (PV p v) = p ++ "-" ++ v
+
+instance Ord PkgVer
+  where
+    compare (PV p _) (PV p' _) = compare p p'
+
+compareHackage :: Bool -> Dist -> [Package] -> IO ()
+compareHackage all' dist pkgs = do
+  hck <- simpleHTTP (getRequest "http://hackage.haskell.org/distro/Fedora/packages.csv") >>= getResponseBody
+  let hackage = sort . either (error "Malformed Hackage csv") (map mungeHackage) $ parseCSV "packages.csv" hck
+      relver = releaseVersion dist
+  fedora <- sort . map mungeRepo . lines <$> repoquery relver (["--disablerepo=*", "--enablerepo=fedora", "--enablerepo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ pkgs)
+  compareSets all' hackage fedora
+  where
+    mungeHackage :: [String] -> PkgVer
+    mungeHackage [_,v,u] = PV (takeFileName u) v
+    mungeHackage _ = error "Malformed Hackage csv"
+
+    mungeRepo :: String -> PkgVer
+    mungeRepo s | ',' `elem` s =
+                  let (p,v) = break (== ',') s in
+                    PV p (tail v)
+                | otherwise = error "Malformed repoquery output"
+
+    -- compareWithHackage :: [PkgVer] -> PkgVer -> IO ()
+    -- compareWithHackage hckg (p,v) =
+    --   let hv = lookup p hckg in
+    --     case hv of
+    --       Nothing -> putStrLn $ "New:" +-+ p ++ "-" ++ v
+    --       Just v' | v == v' -> return ()
+    --               | otherwise -> putStrLn $ p +-+ v' +-+ "->" +-+ v
+
+    -- deletedPackages :: [PkgVer] -> [PkgVer] -> IO ()
+    -- deletedPackages h f =
+    --   let left = (map fst h) \\ (map fst f) in
+    --     mapM_ (\ p -> putStrLn $ "Removed:" +-+ p) left
+
+compareSets :: Bool -> [PkgVer] -> [PkgVer] -> IO ()
+compareSets _ [] [] = return ()
+compareSets _ [] (f:fs) = do
+  putStrLn ("New:" +-+ show f)
+  compareSets False [] fs
+compareSets all' (h:hs) [] = do
+  when all' $ putStrLn ("Removed:" +-+ show h)
+  compareSets all' hs []
+compareSets all' (h:hs) (f:fs) | h == f = compareSets all' hs fs
+                          | h < f = do
+                              when all' $ putStrLn $ "Removed:" +-+ show h
+                              compareSets all' hs (f:fs)
+                          | h > f = do
+                              putStrLn $ "New:" +-+ show f
+                              compareSets all' (h:hs) fs
+                          | otherwise = do
+                              putStrLn $ pvPkg h ++ ":" +-+ pvVer h +-+ "->" +-+ pvVer f
+                              compareSets all' hs fs
 
 replace :: Eq a => [a] -> [a] -> [a] -> [a]
 replace a b s@(x:xs) =
