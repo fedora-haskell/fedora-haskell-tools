@@ -30,6 +30,7 @@ import Control.Monad (unless, when)
 import Data.Char (isUpper, toLower, toUpper)
 import Data.Maybe
 import Data.List (isInfixOf, isPrefixOf, nub, partition, sort, (\\))
+import Data.List.NonEmpty (NonEmpty(..), fromList)
 
 import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
 import System.Directory (doesDirectoryExist, doesFileExist,
@@ -51,11 +52,12 @@ import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
 
 main :: IO ()
 main = do
-  margs <- getArgs >>= parseArgs
-  case margs of
-    Nothing -> return ()
-    Just (com, opts, mdist, pkgs) ->
-      case com of
+  as <- getArgs
+  if null as
+    then help ""
+    else
+    let (com, opts, mdist, pkgs) = parseCmdArgs (fromList as) in
+    case com of
         List -> withPackages mdist pkgs (mapM_ putStrLn)
         Count -> withPackages mdist pkgs (print . length)
         Hackage -> do
@@ -90,8 +92,7 @@ main = do
         Prep -> withPackages mdist pkgs $
                     repoAction_ True True mdist opts (cmd_ "fedpkg" ["prep"])
         Commit -> withPackages mdist pkgs $
-                    -- need to handle passing commit message
-                    repoAction_ True True mdist opts (commitChanges "")
+                    repoAction_ True True mdist opts (commitChanges opts)
         Subpkgs -> withPackages mdist pkgs $
                      repoAction True True mdist opts (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn)
         New -> newPackages mdist >>= mapM_ putStrLn
@@ -100,7 +101,7 @@ main = do
     withPackages mdist pkgs act =
       (if null pkgs then repoqueryHaskell False mdist else return pkgs) >>= act
 
--- name, summary, options
+-- name, summary
 data Command = Cmd { cmdName :: CmdName
                    , cmdDescription :: String
                    }
@@ -152,61 +153,76 @@ commands = [ Cmd Clone "clone repos"
            , Cmd Verrel  "show nvr of packages"]
 
 cmdOpts :: CmdName ->  [Option]
-cmdOpts Clone = ['B']
-cmdOpts CloneNew = ['B']
+cmdOpts Commit = [('m', Just "COMMITMSG")]
 cmdOpts _ = []
 
-cmds :: [CmdName]
-cmds = map cmdName commands
+globalOpts :: [Option]
+globalOpts = [('B', Nothing)]
 
 help :: String -> IO a
 help err = do
   unless (null err) $
     hPutStrLn stderr err
   progName <- getProgName
-  hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD [DIST]\n"
+  hPutStrLn stderr $ "Usage:" +-+ progName +-+ showOpts globalOpts +-+ "CMD [DIST] [PKG]...\n"
     ++ "\n"
     ++ "Commands:\n"
   mapM_ (putStrLn . renderCmd) commands
   exitWith (ExitFailure 1)
   where
+    cmds :: [CmdName]
+    cmds = map cmdName commands
     mx = maximum $ map (length . showCmd) cmds
     renderCmd :: Command -> String
     renderCmd (Cmd c desc) =
       "  " ++ cmdopts ++ replicate (mx - length cmdopts) ' ' +-+ "-" +-+ desc
       where
         opts = cmdOpts c
-        cmdopts = showCmd c ++ if null opts then "" else " [-" ++ opts ++ "]"
+        cmdopts = showCmd c ++ if null opts then "" else " " ++ showOpts opts
 
 type Package = String
 
-type Arguments = Maybe (CmdName, [Option], Maybe Dist, [Package])
+type Option = (Char, Maybe String)
 
-type Option = Char
+showOpt :: Option -> String
+showOpt (c, m) = "-" ++ [c] ++ maybe "" (\ m' -> '=':m') m
 
-getOpts :: [String] -> ([Option], [String])
-getOpts as =
-  let (optss, args) = partition (\ cs -> head cs == '-') as in
-  (concatMap (removePrefix "-") optss, map (removeSuffix "/") args)
+showOpts :: [Option] -> String
+showOpts = unwords . map (\ s -> "[" ++ showOpt s ++ "]")
 
-parseArgs :: [String] -> IO Arguments
-parseArgs as =
-  let (opts, args) = getOpts as in
-    if null args
-      then help ""
-      else let name = head args
-               c = readCmd name in
-             if c `notElem` cmds
-             then error $ "No such command '" ++ name ++ "'"
-             else
-               case tail args of
-                 [] -> return (Just (c, opts, Nothing, []))
-                 _ | any (`notElem` cmdOpts c) opts ->
-                     help $ "Unknown option '-" ++ opts ++ "' for command '" ++ name ++ "'"
-                 (d:pkgs) | d `notElem` dists ->
-                               return $ Just (c, opts, Nothing, d:pkgs)
-                             | otherwise ->
-                               return $ Just (c, opts, Just d, pkgs)
+validOpt :: Option -> [Option] -> Bool
+validOpt (c,m) [] = error $ "invalid option:" +-+ showOpt (c,m)
+validOpt (c,m) ((c',m'):rest) | c /= c' = validOpt (c,m) rest
+                              | isJust m /= isJust m' =
+                                error $ "Bad option: should be" +-+ showOpt (c',m')
+                              | otherwise = True
+
+parseCmdArgs :: NonEmpty String -> (CmdName, [Option], Maybe Dist, [Package])
+parseCmdArgs (('-':_) :| _) = error "global options not yet supported"
+parseCmdArgs (name :| as) =
+  let c = readCmd name
+      (opts, mdist, args) = getOpts c
+  in (c, opts, mdist, args)
+  where
+    getOpts :: CmdName -> ([Option], Maybe Dist, [String])
+    getOpts c =
+      let (os, args) = partition (\ cs -> head cs == '-') as
+          opts =
+            let res = map (parseOpt . removePrefix "-") os in
+              if all (`validOpt` (globalOpts ++ cmdOpts c)) res then res
+              else error "invalid option"
+          (mdist, rest) =
+            case map (removeSuffix "/") args of
+              [] -> (Nothing, [])
+              (d:pkgs) | d `elem` dists -> (Just d, pkgs)
+                       | otherwise -> (Nothing, d:pkgs)
+      in (opts, mdist, rest)
+
+    parseOpt :: String -> Option
+    parseOpt [] = error "Empty option"
+    parseOpt [l] = (l, Nothing)
+    parseOpt (l:'=':val) = (l, Just val)
+    parseOpt ls = error $ "Cannot parse option:" +-+ ls
 
 kojiListHaskell :: Bool -> Maybe Dist -> IO [Package]
 kojiListHaskell verbose mdist = do
@@ -249,19 +265,6 @@ compareHackage all' dist pkgs = do
                   let (p,v) = break (== ',') s in
                     PV p (tail v)
                 | otherwise = error "Malformed repoquery output"
-
-    -- compareWithHackage :: [PkgVer] -> PkgVer -> IO ()
-    -- compareWithHackage hckg (p,v) =
-    --   let hv = lookup p hckg in
-    --     case hv of
-    --       Nothing -> putStrLn $ "New:" +-+ p ++ "-" ++ v
-    --       Just v' | v == v' -> return ()
-    --               | otherwise -> putStrLn $ p +-+ v' +-+ "->" +-+ v
-
-    -- deletedPackages :: [PkgVer] -> [PkgVer] -> IO ()
-    -- deletedPackages h f =
-    --   let left = (map fst h) \\ (map fst f) in
-    --     mapM_ (\ p -> putStrLn $ "Removed:" +-+ p) left
 
 compareSets :: Bool -> [PkgVer] -> [PkgVer] -> IO ()
 compareSets _ [] [] = return ()
@@ -318,7 +321,7 @@ repoAction header needsSpec mdist opts action (pkg:rest) = do
     haveSSH <- doesFileExist $ home </> ".ssh/id_rsa"
     dirExists <- doesDirectoryExist pkg
     unless dirExists $
-      cmd_ "fedpkg" $ ["clone"] ++ ["-a" | not haveSSH] ++ (if 'B' `elem` opts then ["-B"] else ["-b", branch]) ++ [pkg]
+      cmd_ "fedpkg" $ ["clone"] ++ ["-a" | not haveSSH] ++ (if ('B',Nothing) `elem` globalOpts then ["-B"] else ["-b", branch]) ++ [pkg]
     singleDir <- doesFileExist $ pkg </> ".git/config"
     unless singleDir $ do
       branchDir <- doesDirectoryExist $ pkg </> branch
@@ -393,9 +396,10 @@ updatePackage pkg = do
     then cmd_ "cabal-rpm" ["update"]
     else putStrLn "skipping since not hackage"
 
-commitChanges :: String -> IO ()
-commitChanges msg = do
+commitChanges :: [Option] -> IO ()
+commitChanges [('m', Just msg)] = do
   chgs <- cmd "git" ["diff"]
   if null chgs
     then putStrLn "no changes"
     else cmd_ "fedpkg" ["commit", "-m", msg]
+commitChanges _ = error "commit requires: -m=\"commit message\""

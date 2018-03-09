@@ -6,13 +6,15 @@ deps query tool
 
 Parallelize
 
+--from (--continue) eg when conflict stops fhpkg
+
+# support chain-build
+
 # git
 - branch merging
 - build new packages across branches
 
-# command options
 - debug output
-- dist option (assume rawhide)
 
 # Building: rebuild*
 - recursive building for koji and mock
