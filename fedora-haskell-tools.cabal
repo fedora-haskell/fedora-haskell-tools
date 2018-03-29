@@ -50,6 +50,8 @@ Executable fhpkg
                    HTTP,
                    process,
                    unix
+    if impl(ghc<8.0)
+        Build-depends: semigroups
     Other-modules: Dists,
                    Koji,
                    RPM,
