@@ -1,12 +1,12 @@
-Porting haskell-sig.git scripts:
-
-use pkgdb-cli + cabal-sort for --all packages
-
 deps query tool
 
-Parallelize
+Parallelize builds
 
 --from (--continue) eg when conflict stops fhpkg
+
+allow master instead of rawhide
+
+(`fhpkg clone -B branch pkg` doesn't really make sense)
 
 # support chain-build
 
