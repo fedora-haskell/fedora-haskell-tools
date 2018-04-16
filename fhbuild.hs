@@ -42,12 +42,13 @@ data Command = Install | Mock | Koji | Chain | Pending | Changed | Built | Bump
 
 main :: IO ()
 main = do
-  margs <- getArgs >>= parseArgs
-  case margs of
-    Nothing -> return ()
-    Just (com, dist, pkgs) -> do
+  args <- getArgs
+  case args of
+    (c:d:ps) -> do
+      (com, dist, pkgs) <- parseArgs c d ps
       cwd <- getCurrentDirectory
       build cwd (mode com) dist Nothing Nothing False pkgs
+    _ -> help
   where
     mode "install" = Install
     mode "mock" = Mock
@@ -79,19 +80,13 @@ help = do
     ++ "  bump\t\t- bump release for NVRs already built\n"
   exitWith (ExitFailure 1)
 
-type Arguments = Maybe (String, Dist, [String])
+type Arguments = (String, Dist, [String])
 
-parseArgs :: [String] -> IO Arguments
-parseArgs (c:dist:pkgs) | dist `notElem` dists = giveUp $ "Unknown dist '" ++ dist ++ "'"
-                        | null pkgs = giveUp "Please specify a package."
-                        | otherwise =
-                            return $ Just (c, dist, map (removeSuffix "/") pkgs)
-parseArgs _ = help >> return Nothing
-
-giveUp :: String -> IO Arguments
-giveUp err = do
-  hPutStrLn stderr err
-  return Nothing
+parseArgs :: String -> String -> [String] -> IO Arguments
+parseArgs c dist pkgs | dist `notElem` dists = error $ "Unknown dist '" ++ dist ++ "'"
+                      | null pkgs = error "Please specify a package."
+                      | otherwise =
+                          return (c, dist, map (removeSuffix "/") pkgs)
 
 build :: FilePath -> Command -> Dist -> Maybe String -> Maybe (String, String) -> Bool -> [String] -> IO ()
 build _ _ _ _ _ _ [] = return ()
