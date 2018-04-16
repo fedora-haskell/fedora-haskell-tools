@@ -60,7 +60,6 @@ main = do
 
 runCommand :: Arguments -> IO ()
 runCommand (com, opts, mdist, args, ps) = do
-  print (com, opts, mdist, args, ps)
   let allpkgs = OptNull 'A' `elem` opts
   if allpkgs && (not . null) ps
     then error "Cannot have '-A' and list of packages"
@@ -77,51 +76,34 @@ runCommand (com, opts, mdist, args, ps) = do
         CompareHackage -> do
           checkHackageDist
           withPackages (Just hackageRelease) pkgs $ compareHackage (null pkgs) hackageRelease
-        Clone -> withPackages mdist pkgs $
-                   repoAction_ True False mdist opts (return ())
+        Clone -> repoAction_ True False mdist opts (return ()) pkgs
         CloneNew -> do
-          new <- newPackages mdist
-          withPackages mdist new $ repoAction_ True False mdist opts (return ())
-        Checkout -> withPackages mdist pkgs $
-                    repoAction_ True False mdist opts (return ())
-        Pull -> withPackages mdist pkgs $
-                  repoAction_ True False mdist opts (cmd_ "git" ["pull", "--rebase"])
-        Push -> withPackages mdist pkgs $
-                  repoAction_ True False mdist opts (cmd_ "git" ["push"])
-        Merge -> withPackages mdist pkgs $
-                  repoAction_ True False mdist opts (cmd_ "git" ("merge" : args))
-        Diff -> withPackages mdist pkgs $
-                  repoAction_ False False mdist opts (cmd_ "git" ["--no-pager", "diff"])
-        DiffOrigin -> withPackages mdist pkgs $
-                  repoAction_ True False mdist opts (cmd_ "git" ["--no-pager", "diff", "origin"])
-        DiffBranch -> withPackages mdist pkgs $
-                  repoAction False True mdist opts compareRawhide
-        DiffStackage -> withPackages mdist pkgs $
-                  repoAction True True mdist opts compareStackage
-        Verrel -> withPackages mdist pkgs $
-                    repoAction_ False True mdist opts (cmd_ "fedpkg" ["verrel"])
-        Update -> withPackages mdist pkgs $
-                  repoAction True True mdist opts updatePackage
-        Refresh -> withPackages mdist pkgs $
-                  repoAction_ True True mdist opts (cmd_ "cabal-rpm" ["refresh"])
-        Prep -> withPackages mdist pkgs $
-                    repoAction_ True True mdist opts (cmd_ "fedpkg" ["prep"])
-        Commit -> withPackages mdist pkgs $
-                    repoAction_ True True mdist opts (commitChanges opts)
-        Subpkgs -> withPackages mdist pkgs $
-                     repoAction True True mdist opts (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn)
-        Cmd -> withPackages mdist pkgs $
-               if null args
+          newPackages mdist >>= repoAction_ True False mdist opts (return ())
+        Checkout -> repoAction_ True False mdist opts (return ()) pkgs
+        Pull -> repoAction_ True False mdist opts (cmd_ "git" ["pull", "--rebase"]) pkgs
+        Push -> repoAction_ True False mdist opts (cmd_ "git" ["push"]) pkgs
+        Merge -> repoAction_ True False mdist opts (cmd_ "git" ("merge" : args)) pkgs
+        Diff -> repoAction_ False False mdist opts (cmd_ "git" (["--no-pager", "diff"] ++ args)) pkgs
+        DiffOrigin -> repoAction_ True False mdist opts (cmd_ "git" ["--no-pager", "diff", "origin"]) pkgs
+        DiffBranch -> repoAction False True mdist opts compareRawhide pkgs
+        DiffStackage -> repoAction True True mdist opts compareStackage pkgs
+        Verrel -> repoAction_ False True mdist opts (cmd_ "fedpkg" ["verrel"]) pkgs
+        Update -> repoAction True True mdist opts updatePackage pkgs
+        Refresh -> repoAction_ True True mdist opts (cmd_ "cabal-rpm" ["refresh"]) pkgs
+        Prep -> repoAction_ True True mdist opts (cmd_ "fedpkg" ["prep"]) pkgs
+        Commit -> repoAction_ True True mdist opts (commitChanges opts) pkgs
+        Subpkgs -> repoAction True True mdist opts (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn) pkgs
+        Cmd -> if null args
                then error "cmd requires args"
-               else repoAction_ True True mdist opts (cmd_ (head args) (tail args))
+               else repoAction_ True True mdist opts (cmd_ (head args) (tail args)) pkgs
         New -> newPackages mdist >>= mapM_ putStrLn
   where
     checkHackageDist =
       unless (isNothing mdist || mdist == Just hackageRelease) $ error $ "Hackage is currently for" +-+ hackageRelease ++ "!"
 
-withPackages :: Maybe Dist -> [Package] -> ([Package] -> IO ()) -> IO ()
-withPackages mdst ps act =
-  (if null ps then repoqueryHaskell False mdst else return ps) >>= act
+    withPackages :: Maybe Dist -> [Package] -> ([Package] -> IO ()) -> IO ()
+    withPackages mdst pkgs act =
+      (if null pkgs then repoqueryHaskell False mdst else return pkgs) >>= act
 
 -- name, summary
 data Command = Command { cmdName :: CmdName , cmdDescription :: String}
