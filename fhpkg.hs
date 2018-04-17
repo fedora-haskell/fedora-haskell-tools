@@ -391,13 +391,13 @@ repoAction header needsSpec mdist opts action (pkg:rest) = do
       actual <- gitBranch
       when (branch /= actual) $
         cmd_ "fedpkg" ["switch-branch", branch]
-      isDead <- doesFileExist "dead.package"
-      unless isDead $ do
-        let spec = pkg ++ ".spec"
-        hasSpec <- doesFileExist spec
-        unless hasSpec $ putStrLn "No spec file!"
-        unless (needsSpec && not hasSpec) $
-          action pkg
+    isDead <- doesFileExist "dead.package"
+    unless isDead $ do
+      let spec = pkg ++ ".spec"
+      hasSpec <- doesFileExist spec
+      unless hasSpec $ putStrLn "No spec file!"
+      unless (needsSpec && not hasSpec) $
+        action pkg
   repoAction header needsSpec mdist opts action rest
 
 repoAction_ :: Bool -> Bool -> Maybe Dist -> [Option] -> IO () -> [Package] -> IO ()
