@@ -25,12 +25,10 @@ module Main where
 #else
 import Control.Applicative ((<$>))
 #endif
-import Control.Arrow (second)
 import Control.Monad (unless, when)
 import Data.Char (isUpper, toLower, toUpper)
 import Data.Maybe
-import Data.List (intercalate, isInfixOf, isPrefixOf, nub, partition, sort, (\\))
-import Data.List.NonEmpty (NonEmpty(..), fromList)
+import Data.List (isInfixOf, isPrefixOf, nub, partition, sort, (\\))
 
 import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
 import System.Directory (doesDirectoryExist, doesFileExist,
@@ -56,11 +54,14 @@ main = do
   if null as
     then help ""
     else
-    runCommand $ parseCmdArgs (fromList as)
+    runCommand $ parseCmdArgs as
 
 runCommand :: Arguments -> IO ()
-runCommand (com, opts, mdist, args, ps) = do
-  let allpkgs = OptNull 'A' `elem` opts
+runCommand (com, os, mdist, ps) = do
+  let (global, opts) = partition (`elem` globalOpts) os
+      allpkgs = OptNull 'A' `elem` global
+  when (not allpkgs && null ps && com `notElem` [Hackage, CompareHackage, Count]) $
+    help "Please specify package(s)"
   if allpkgs && (not . null) ps
     then error "Cannot have '-A' and list of packages"
     else do
@@ -69,34 +70,34 @@ runCommand (com, opts, mdist, args, ps) = do
               else return ps
       case com of
         List -> mapM_ putStrLn pkgs
-        Count -> (print . length) pkgs
+        Count -> repoqueryHaskell False mdist >>= (print . length)
         Hackage -> do
+          -- add check for no pkg args
           checkHackageDist
           repoqueryHackageCSV hackageRelease
         CompareHackage -> do
           checkHackageDist
           withPackages (Just hackageRelease) pkgs $ compareHackage (null pkgs) hackageRelease
-        Clone -> repoAction_ True False mdist opts (return ()) pkgs
-        CloneNew -> do
-          newPackages mdist >>= repoAction_ True False mdist opts (return ())
-        Checkout -> repoAction_ True False mdist opts (return ()) pkgs
-        Pull -> repoAction_ True False mdist opts (cmd_ "git" ["pull", "--rebase"]) pkgs
-        Push -> repoAction_ True False mdist opts (cmd_ "git" ["push"]) pkgs
-        Merge -> repoAction_ True False mdist opts (cmd_ "git" ("merge" : args)) pkgs
-        Diff -> repoAction_ False False mdist opts (cmd_ "git" (["--no-pager", "diff"] ++ args)) pkgs
-        DiffOrigin -> repoAction_ True False mdist opts (cmd_ "git" ["--no-pager", "diff", "origin"]) pkgs
-        DiffBranch -> repoAction False True mdist opts compareRawhide pkgs
-        DiffStackage -> repoAction True True mdist opts compareStackage pkgs
-        Verrel -> repoAction_ False True mdist opts (cmd_ "fedpkg" ["verrel"]) pkgs
-        Update -> repoAction True True mdist opts updatePackage pkgs
-        Refresh -> repoAction_ True True mdist opts (cmd_ "cabal-rpm" ["refresh"]) pkgs
-        Prep -> repoAction_ True True mdist opts (cmd_ "fedpkg" ["prep"]) pkgs
-        Commit -> repoAction_ True True mdist opts (commitChanges opts) pkgs
-        Subpkgs -> repoAction True True mdist opts (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn) pkgs
-        Cmd -> if null args
-               then error "cmd requires args"
-               else repoAction_ True True mdist opts (cmd_ (head args) (tail args)) pkgs
         New -> newPackages mdist >>= mapM_ putStrLn
+
+        Clone -> repoAction_ True False mdist global (return ()) pkgs
+        CloneNew ->
+          newPackages mdist >>= repoAction_ True False mdist global (return ())
+        Checkout -> repoAction_ True False mdist global (return ()) pkgs
+        Pull -> repoAction_ True False mdist global (cmd_ "git" ["pull", "--rebase"]) pkgs
+        Push -> repoAction_ True False mdist global (cmd_ "git" ["push"]) pkgs
+        Merge -> repoAction_ True False mdist global (gitMerge opts) pkgs
+        Diff -> repoAction_ False False mdist global (gitDiff opts) pkgs
+        DiffOrigin -> repoAction_ True False mdist global (cmd_ "git" ["--no-pager", "diff", maybe "origin" ("origin/" ++) mdist]) pkgs
+        DiffBranch -> repoAction False True mdist global compareRawhide pkgs
+        DiffStackage -> repoAction True True mdist global compareStackage pkgs
+        Verrel -> repoAction_ False True mdist global (cmd_ "fedpkg" ["verrel"]) pkgs
+        Update -> repoAction True True mdist global updatePackage pkgs
+        Refresh -> repoAction_ True True mdist global (cmd_ "cabal-rpm" ["refresh"]) pkgs
+        Prep -> repoAction_ True True mdist global (cmd_ "fedpkg" ["prep"]) pkgs
+        Commit -> repoAction_ True True mdist global (commitChanges opts) pkgs
+        Subpkgs -> repoAction True True mdist global (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn) pkgs
+        Cmd -> repoAction_ True True mdist global (execCmd opts) pkgs
   where
     checkHackageDist =
       unless (isNothing mdist || mdist == Just hackageRelease) $ error $ "Hackage is currently for" +-+ hackageRelease ++ "!"
@@ -116,7 +117,7 @@ data CmdName = Checkout | Clone | CloneNew | Cmd | Count | Diff | DiffOrigin
 
 -- SomeCommand -> "some-command"
 showCmd :: CmdName -> String
-showCmd c = render "" (show c)
+showCmd c = render "" (show c) +-+ showCmdOpts c
   where
     render :: String -> String -> String
     render os "" = os
@@ -146,6 +147,7 @@ commands = [ Command Checkout "fedpkg switch-branch"
            , Command Hackage "generate Hackage distro data"
            , Command CompareHackage "compare with Hackage distro data"
            , Command List "list packages"
+           , Command Merge "git merge"
            , Command New "new unbuilt packages"
            , Command Prep "fedpkg prep"
            , Command Commit "fedpkg commit"
@@ -156,14 +158,21 @@ commands = [ Command Checkout "fedpkg switch-branch"
            , Command Subpkgs "list subpackages"
            , Command Verrel "show nvr of packages"]
 
-cmdOpts :: CmdName ->  [Option]
-cmdOpts Commit = [OptArg 'm' "COMMITMSG"]
+-- (mandatory, optional)
+--type CommandOptions = ([Option], [Option])
+type CommandOptions = [(Option, Bool)]
+
+cmdOpts :: CmdName ->  CommandOptions
+cmdOpts Commit = [(OptArg 'm' "\"COMMITMSG\"", False)]
+cmdOpts Diff = [(OptArg 'w' "BRANCH", True)]
+cmdOpts Merge = [(OptArg 'f' "BRANCH", False)]
+cmdOpts Cmd = [(OptLong "cmd" "\"command\"", False)]
 cmdOpts _ = []
 
 globalOptsDesc :: [(Option, String)]
 globalOptsDesc =
-  [ (OptNull 'B', "clone branch dirs (fedpkg clone -B)")
-  , (OptNull 'A', "all Fedora Haskell packages")
+  [ (OptNull 'A', "all Fedora Haskell packages")
+  , (OptNull 'B', "clone branch dirs (fedpkg clone -B)")
   ]
 
 globalOpts :: [Option]
@@ -171,99 +180,89 @@ globalOpts = map fst globalOptsDesc
 
 help :: String -> IO a
 help err = do
-  unless (null err) $
-    hPutStrLn stderr err
-  progName <- getProgName
-  putStrLn $ "Usage:" +-+ progName +-+ "CMD" +-+ showOpts globalOptsNotAll +-+ "[ARGS... --] [DIST] [PKG]..."
-  putStrLn $ "      " +-+ progName +-+ "CMD -A [ARGS] [DIST]\n"
-  putStrLn "Options:"
-  mapM_ (putStrLn . describeOpt) globalOptsDesc
-  putStrLn ""
-  putStrLn "Commands:"
-  mapM_ (putStrLn . renderCmd) commands
+  if null err
+    then do
+    progName <- getProgName
+    putStrLn $ "Usage:" +-+ progName +-+ "CMD [DIST]" +-+ showOpts globalOptsNotAll +-+ "PKG..."
+    putStrLn $ "      " +-+ progName +-+ "CMD [DIST] -A \n"
+    putStrLn "Global options:"
+    mapM_ (putStrLn . describeOpt) globalOptsDesc
+    putStrLn ""
+    putStrLn "Commands:"
+    mapM_ renderCmd commands
+    else hPutStrLn stderr err
   exitWith (ExitFailure 1)
   where
     globalOptsNotAll = filter (/= OptNull 'A') globalOpts
     cmds :: [CmdName]
     cmds = map cmdName commands
     mx = maximum $ map (length . showCmd) cmds
-    renderCmd :: Command -> String
-    renderCmd (Command c desc) =
-      "  " ++ cmdHelp
-      where
-        opts = cmdOpts c
-        cmdHelp =
-          let (nullopts, argopts) = partition isNull opts
-              txt = showCmd c ++ if null opts then "" else " " ++ showOpts nullopts
-              indent = "\n    "
-          in
-            txt ++ replicate (mx - length txt) ' ' +-+ "-" +-+ desc ++
-            if null argopts then "" else indent ++ intercalate indent (map show argopts)
+    renderCmd :: Command -> IO ()
+    renderCmd (Command c desc) = do
+      let txt = showCmd c
+      putStrLn $ "  " ++ txt ++ replicate (mx - length txt) ' ' +-+ "-" +-+ desc
 
 type Package = String
 
 -- add description
-data Option = OptNull Char | OptArg Char String
+data Option = OptNull Char | OptArg Char String | OptLong String String
 
 instance Eq Option
   where
     OptNull c == OptNull c' = c == c'
     OptArg c _ == OptArg c' _ = c == c'
-    OptNull _ == OptArg _ _ = False
-    OptArg _ _== OptNull _  = False
+    OptLong s _ == OptLong s' _ = s == s'
+    _ == _ = False
 
 isNull :: Option -> Bool
 isNull (OptNull _) = True
-isNull (OptArg _ _) = False
+isNull _ = False
 
 instance Show Option
   where
     show (OptNull c) = "-" ++ [c]
     show (OptArg c v) = "-" ++ [c] ++ ('=':v)
+    show (OptLong s v) = "--" ++ s ++ ('=':v)
 
 showOpts :: [Option] -> String
 showOpts = unwords . map (\ s -> "[" ++ show s ++ "]")
 
-validOpt :: Option -> [Option] -> Bool
-validOpt opt [] = error $ "invalid option:" +-+ show opt
-validOpt opt (opt':rest) | opt /= opt' = validOpt opt rest
-                         | otherwise = True
+showCmdOpts :: CmdName -> String
+showCmdOpts = unwords . map
+              (\ (s,o) -> if o then "[" ++ show s ++ "]" else show s) . cmdOpts
 
 describeOpt :: (Option, String) -> String
 describeOpt (opt, desc) =
   "  " ++ show opt ++ ":" +-+ desc
 
-type Arguments = (CmdName, [Option], Maybe Dist, [String], [Package])
+type Arguments = (CmdName, [Option], Maybe Dist, [Package])
 
-parseCmdArgs :: NonEmpty String -> Arguments
-parseCmdArgs (('-':_) :| _) = error "options should come after command"
-parseCmdArgs (name :| as) =
-  let c = readCmd name
-      (opts, mdist, args, pkgs) = getOpts c
-  in (c, opts, mdist, args, pkgs)
+parseCmdArgs :: [String] -> Arguments
+parseCmdArgs [] = error "Need to pass more arguments" -- should not happen
+parseCmdArgs as =
+      let (os, args) = partition isFlag as in
+        if null args
+        then error "Please give an command"
+        else
+          let (cstr:rest) = args
+              c = readCmd cstr
+              opts =
+                let res = map parseOpt os in
+                  if all (`elem` globalOpts ++ map fst (cmdOpts c)) res then res
+                  else error "invalid option"
+              (mdist, pkgs) =
+                case map (removeSuffix "/") rest of
+                  [] -> (Nothing, [])
+                  rst@(d:ps) | d `elem` dists ->
+                             if OptNull 'A' `elem` opts && (not . null) ps
+                             then error "Can't give packages with -A"
+                             else (Just d, ps)
+                         | otherwise ->
+                             if OptNull 'A' `elem` opts && (not . null) rst
+                             then error "Can't give packages with -A"
+                             else  (Nothing, rst)
+          in (c, opts, mdist, pkgs)
   where
-    getOpts :: CmdName -> ([Option], Maybe Dist, [String], [Package])
-    getOpts c =
-      let (os, args) = partition isFlag as
-          opts =
-            let res = map parseOpt os in
-              if all (`validOpt` (globalOpts ++ cmdOpts c)) res then res
-              else error "invalid option"
-          (cargs, pkgs')
-            | OptNull 'A' `elem` opts =
-              if "--" `elem` args
-              then error "Can't give packages with -A"
-              else (args, [])
-            | "--" `elem` args =
-              second tail $ span (/= "--") args
-            | otherwise = ([], args)
-          (mdist, pkgs) =
-            case map (removeSuffix "/") pkgs' of
-              [] -> (Nothing, [])
-              (d:ps) | d `elem` dists -> (Just d, ps)
-                       | otherwise -> (Nothing, d:ps)
-      in (opts, mdist, cargs, pkgs)
-
     isFlag ['-', c] | c /= '-' = True
     isFlag ('-':c:'=':_) | c /= '-' = True
     isFlag _ = False
@@ -272,6 +271,11 @@ parseCmdArgs (name :| as) =
     parseOpt [] = error "Empty option"
     parseOpt ['-',l] = OptNull l
     parseOpt ('-':l:'=':val) = OptArg l val
+    parseOpt ('-':'-':assgn)
+      | '=' `elem` assgn =
+          let (n,v) = break (== '=') assgn
+          in if null n || null v then error "malformed long option"
+             else OptLong n (tail v)
     parseOpt ls = error $ "Cannot parse option:" +-+ ls
 
 repoqueryHackageCSV :: Dist -> IO ()
@@ -411,7 +415,7 @@ pkgDir dir branch top = do
 
 gitBranch :: IO String
 gitBranch =
-  (removePrefix "* " . head . filter (isPrefixOf "* ") . lines) <$> cmd "git" ["branch"]
+  removePrefix "* " . head . filter (isPrefixOf "* ") . lines <$> cmd "git" ["branch"]
 
 compareStackage :: Package -> IO ()
 compareStackage p = do
@@ -453,3 +457,22 @@ commitChanges [OptArg 'm' msg] = do
     then putStrLn "no changes"
     else cmd_ "fedpkg" ["commit", "-m", msg]
 commitChanges _ = error "commit requires: -m=\"commit message\""
+
+gitMerge :: [Option] -> IO ()
+gitMerge [OptArg 'f' branch] = cmd_ "git" ["merge", branch]
+gitMerge _ = error "merge needs -f=BRANCH option"
+
+gitDiff :: [Option] -> IO ()
+gitDiff [OptArg 'w' branch] = cmd_ "git" (gitDiffSubcmd ++ [branch])
+gitDiff [] = cmd_ "git" gitDiffSubcmd
+gitDiff _ = error "diff does not take this option"
+
+gitDiffSubcmd :: [String]
+gitDiffSubcmd = ["--no-pager", "diff"]
+
+execCmd :: [Option] -> IO ()
+execCmd [OptLong "cmd" cs]
+  | null cs = error "a string must be passed to --cmd="
+  | otherwise = let (c:args) = words cs in
+                  cmd_ c args
+execCmd _ = error "cmd needs --cmd= option"
