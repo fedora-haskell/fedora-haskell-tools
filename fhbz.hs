@@ -43,6 +43,10 @@ data BugState = BugState {
 data Flag = Close | Force | DryRun | NoComment | Refresh | State String
    deriving (Eq, Show)
 
+isState :: Flag -> Bool
+isState (State _) = True
+isState _ = False
+
 options :: [OptDescr Flag]
 options =
  [ Option "f" ["force"]  (NoArg Force)  "update even if no version change (implies --refresh)"
@@ -56,7 +60,7 @@ options =
 parseOpts :: [String] -> IO ([Flag], [String])
 parseOpts argv =
    case getOpt Permute options argv of
-      (os,ps,[]  ) -> return (os,ps)
+      (os,ps,[]) -> return (os,ps)
       (_,_,errs) -> do
         prog <- getProgName
         error $ concat errs ++ usageInfo (header prog) options
@@ -65,7 +69,7 @@ parseOpts argv =
 main :: IO ()
 main = do
   (opts, args) <- getArgs >>= parseOpts
-  let state = fromMaybe "NEW" $ listToMaybe $ map (\ (State s) -> s) $ filter (\ o -> case o of (State _) -> True ; _ -> False) opts
+  let state = fromMaybe "NEW" $ listToMaybe $ map (\ (State s) -> s) $ filter isState opts
   bugs <- parseLines . lines <$> bugzillaQuery (["--cc=haskell-devel@lists.fedoraproject.org", "--bug_status=" ++ state, "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ if null args then [] else ["--component=" ++ intercalate "," args])
   mapM_ (checkBug opts) bugs
 

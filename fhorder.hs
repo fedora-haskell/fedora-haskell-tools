@@ -45,9 +45,8 @@ help = do
   exitWith (ExitFailure 1)
 
 sortPkgs :: String -> [String] -> IO [PackageDeps]
-sortPkgs dist pkgs = do
-  pkgdeps <- catMaybes <$> mapM (pkgDeps $ distBranch dist) pkgs
-  return $ sort pkgdeps
+sortPkgs dist pkgs =
+  sort . catMaybes <$> mapM (pkgDeps $ distBranch dist) pkgs
 
 type PackageDeps = (String, [String])
 

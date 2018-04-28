@@ -334,7 +334,7 @@ bodhiOverride dist nvr =
 buildRequires :: FilePath -> IO [String]
 buildRequires spec =
   -- FIXME should resolve "pkgconfig()" etc
-  (map (head . words) . lines) <$> rpmspec ["--buildrequires"] Nothing spec
+  map (head . words) . lines <$> rpmspec ["--buildrequires"] Nothing spec
 --    >>= mapM (whatProvides relver)
 
 derefSrcPkg :: FilePath -> Dist -> String -> String -> IO String
@@ -356,7 +356,7 @@ derefSrcPkg topdir dist relver pkg =
 
 gitBranch :: IO String
 gitBranch =
-  (removePrefix "* " . head . filter (isPrefixOf "* ") . lines) <$> cmd "git" ["branch"]
+  removePrefix "* " . head . filter (isPrefixOf "* ") . lines <$> cmd "git" ["branch"]
 
 eqNVR :: String -> String -> Bool
 eqNVR p1 p2 =
