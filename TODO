@@ -1,3 +1,5 @@
+repoquery system repos
+
 deps query tool
 
 Parallelize builds
@@ -8,10 +10,13 @@ allow master instead of rawhide
 
 (`fhpkg clone -B branch pkg` doesn't really make sense)
 
+check commands has all commands
+
 # support chain-build
 
 # git
 - branch merging
+* merge a/next koji build
 - build new packages across branches
 
 - debug output
