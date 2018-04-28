@@ -1,6 +1,5 @@
 help:
 	@echo -n "devel targets: git-tag sdist version git-push upload copy"
-	@if [ -f Makefile.local ]; then echo " help-local"; else echo ""; fi
 
 sdist:
 	./make-dist $(VERSION)
