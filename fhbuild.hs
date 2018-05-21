@@ -347,12 +347,13 @@ derefSrcPkg topdir dist relver pkg =
   else
     do putStrLn $ "Repoquerying" +-+ pkg
        res <- repoquerySrc dist relver pkg
-       putStrLn $ pkg +-+ "->" +-+ show res
        case res of
          Nothing ->
            do putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
               fhbuildFail
-         Just s -> return s
+         Just s -> do
+           when (pkg /= s) $ putStrLn $ pkg +-+ "->" +-+ s
+           return s
 
 gitBranch :: IO String
 gitBranch =
