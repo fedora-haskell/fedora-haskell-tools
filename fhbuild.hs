@@ -30,7 +30,7 @@ import System.FilePath ((</>), dropExtension)
 import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget,
-              releaseVersion)
+              releaseVersion, rpmDistTag)
 import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
              notInKoji, pkgDir)
 import RPM (packageManager, rpmInstall, repoquerySrc, rpmspec)
@@ -138,7 +138,6 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
           else do
           nvr <- cmd "fedpkg" ["verrel"]
           let verrel = removePrefix (pkg ++ "-") nvr
-              release = tail $ dropWhile (/= '-') verrel
               tag = distTag dist
               relver = releaseVersion dist
           case mode of
@@ -169,7 +168,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 -- note "fedpkg --path dir local" saves .build.log in cwd
                 loopWait (cmdBool "fedpkg" ["local"])
                 opkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
-                rpms <- lines <$> rpmspec ["--builtrpms"] (Just ("%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n")) spec
+                rpms <- lines <$> rpmspec ["--builtrpms", "--define=dist" +-+ rpmDistTag dist] (Just ("%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n")) spec
                 putStrLn $ nvr +-+ "built\n"
                 instpkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
                 if null instpkgs
@@ -387,7 +386,7 @@ loopWait act = do
     --cmdlog "touch" [".fhbuild-fail"]
     putStrLn ""
     putChar '\a'
-    putStr "Press Enter after fixing"
+    putStrLn "Press Enter after fixing"
     getLine >> loopWait act
 
 isHaskellDevelPkg :: String -> Bool

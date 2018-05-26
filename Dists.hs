@@ -25,7 +25,8 @@ module Dists (Dist,
               distOverride,
               hackageRelease,
               releaseVersion,
-              rawhide) where
+              rawhide,
+              rpmDistTag) where
 
 import Data.Char (isNumber)
 import Data.Maybe (fromMaybe, maybe)
@@ -81,3 +82,7 @@ distTarget d = maybe d (\ suff -> d ++ "-" ++ suff) sidetag
 releaseVersion :: Dist -> String
 releaseVersion r | r == rawhide = "rawhide"
 releaseVersion r = distVersion r
+
+rpmDistTag :: Dist -> String
+rpmDistTag ('f':r) = ".fc" ++ r
+rpmDistTag d = '.' : d
