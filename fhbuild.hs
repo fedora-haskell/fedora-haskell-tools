@@ -388,8 +388,7 @@ loopWait act = do
     putStrLn ""
     putChar '\a'
     putStr "Press Enter after fixing"
-    getLine
-    loopPause act
+    getLine >> loopWait act
 
 isHaskellDevelPkg :: String -> Bool
 isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg)
