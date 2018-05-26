@@ -167,9 +167,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 putStrLn ""
                 putStrLn $ "Building" +-+ nvr
                 -- note "fedpkg --path dir local" saves .build.log in cwd
-                success <- cmdBool "fedpkg" ["local"]
-                unless success
-                  buildPause
+                loopWait (cmdBool "fedpkg" ["local"])
                 opkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
                 rpms <- lines <$> rpmspec ["--builtrpms"] (Just ("%{arch}/%{name}-%{version}-" ++ release ++ ".%{arch}.rpm\n")) spec
                 putStrLn $ nvr +-+ "built\n"
@@ -309,10 +307,8 @@ showChange latest nvr = do
 fedpkgBuild :: FilePath -> Dist -> String -> Maybe String -> IO ()
 fedpkgBuild topdir dist nvr waittag = do
   giturl <- cmd "fedpkg" ["giturl"]
-  success <- cmdBool "koji" ["build", "--fail-fast", distTarget dist, giturl]
-  if success
-    then logMsg $ nvr +-+ "built"
-    else buildPause
+  loopWait $ cmdBool "koji" ["build", "--fail-fast", distTarget dist, giturl]
+  logMsg $ nvr +-+ "built"
   maybe (return ()) (\ t -> kojiWaitPkg topdir t nvr) waittag
 
 bodhiOverride :: Dist -> String -> IO ()
@@ -382,11 +378,18 @@ displayLogTail f = do
       start = length ls - (disp + foot)
   mapM_ putStrLn $ take disp $ drop start ls
 
-buildPause :: IO ()
-buildPause = do
-  --cmdlog "touch" [".fhbuild-fail"]
-  putStr "Press enter to continue: "
-  getLine >> return ()
+loopWait :: IO Bool -> IO ()
+loopWait act = do
+  suc <- act
+  if suc
+    then return ()
+    else do
+    --cmdlog "touch" [".fhbuild-fail"]
+    putStrLn ""
+    putChar '\a'
+    putStr "Press Enter after fixing"
+    getLine
+    loopPause act
 
 isHaskellDevelPkg :: String -> Bool
 isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg)
