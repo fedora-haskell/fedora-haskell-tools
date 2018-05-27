@@ -166,19 +166,23 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 putStrLn ""
                 putStrLn $ "Building" +-+ nvr
                 -- note "fedpkg --path dir local" saves .build.log in cwd
-                loopWait (cmdBool "fedpkg" ["local"])
-                opkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
-                rpms <- lines <$> rpmspec ["--builtrpms", "--define=dist" +-+ rpmDistTag dist] (Just ("%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n")) spec
-                putStrLn $ nvr +-+ "built\n"
-                instpkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
-                if null instpkgs
-                  -- maybe filter out pandoc-pdf if not installed
-                  then rpmInstall rpms
+                success <- cmdBool "fedpkg" ["local"]
+                if not success
+                  then do
+                  waitForEnter
+                  build topdir Install dist Nothing Nothing False [pkg]
                   else do
-                  pkgmgr <- packageManager
-                  -- sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
-                  sudo pkgmgr ("install":"-y":rpms)
-                setCurrentDirectory topdir
+                  opkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
+                  rpms <- lines <$> rpmspec ["--builtrpms", "--define=dist" +-+ rpmDistTag dist] (Just ("%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n")) spec
+                  putStrLn $ nvr +-+ "built\n"
+                  instpkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
+                  if null instpkgs
+                    -- maybe filter out pandoc-pdf if not installed
+                    then rpmInstall rpms
+                    else do
+                    pkgmgr <- packageManager
+                    -- sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
+                    sudo pkgmgr ("install":"-y":rpms)
               build topdir Install dist Nothing Nothing False rest
             Mock -> do
               putStrLn $ "Mock building" +-+ nvr
@@ -306,9 +310,12 @@ showChange latest nvr = do
 fedpkgBuild :: FilePath -> Dist -> String -> Maybe String -> IO ()
 fedpkgBuild topdir dist nvr waittag = do
   giturl <- cmd "fedpkg" ["giturl"]
-  loopWait $ cmdBool "koji" ["build", "--fail-fast", distTarget dist, giturl]
-  logMsg $ nvr +-+ "built"
-  maybe (return ()) (\ t -> kojiWaitPkg topdir t nvr) waittag
+  success <- cmdBool "koji" ["build", "--fail-fast", distTarget dist, giturl]
+  if success
+    then do
+    logMsg $ nvr +-+ "built"
+    maybe (return ()) (\ t -> kojiWaitPkg topdir t nvr) waittag
+    else waitForEnter
 
 bodhiOverride :: Dist -> String -> IO ()
 bodhiOverride dist nvr =
@@ -377,17 +384,12 @@ displayLogTail f = do
       start = length ls - (disp + foot)
   mapM_ putStrLn $ take disp $ drop start ls
 
-loopWait :: IO Bool -> IO ()
-loopWait act = do
-  suc <- act
-  if suc
-    then return ()
-    else do
-    --cmdlog "touch" [".fhbuild-fail"]
+waitForEnter :: IO ()
+waitForEnter = do
     putStrLn ""
     putChar '\a'
     putStrLn "Press Enter after fixing"
-    getLine >> loopWait act
+    getLine >> return ()
 
 isHaskellDevelPkg :: String -> Bool
 isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg)
