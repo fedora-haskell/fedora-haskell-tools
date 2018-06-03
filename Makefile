@@ -1,5 +1,5 @@
 help:
-	@echo -n "devel targets: git-tag sdist version git-push upload copy"
+	@echo "devel targets: git-tag sdist version git-push upload copy"
 
 sdist:
 	./make-dist $(VERSION)
@@ -22,5 +22,3 @@ git-push:
 
 copy:
 	cp -p dist/$(NAME)-$(VERSION).tar.gz ~/fedora/haskell/$(NAME)/master
-
--include Makefile.local
