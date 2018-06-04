@@ -26,10 +26,7 @@ Executable fhbuild
                    filepath,
                    process,
                    unix
-    Other-modules: Dists,
-                   Koji,
-                   RPM,
-                   Utils
+    Other-modules: Dists, Koji, RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
 
@@ -37,7 +34,7 @@ Executable fhbz
     Main-is:       fhbz.hs
     Build-depends: base < 5,
                    time
-    Other-modules: Utils
+    Other-modules: Dists, Koji, RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
 

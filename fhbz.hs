@@ -30,6 +30,8 @@ import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               getOpt, usageInfo)
 import System.FilePath ((</>))
 
+import Dists (rawhide)
+import Koji (koji)
 import Utils ((+-+), cmd, cmd_, cmdStdErr, removePrefix, removeSuffix)
 
 data BugState = BugState {
@@ -139,7 +141,7 @@ colon ps = (nv, if null s then "" else removePrefix ":" s)
 
 closeBug :: [Flag] -> String -> String -> String -> IO ()
 closeBug opts bid bcomp pkgver = do
-  rawhide <- cmd "koji" ["latest-pkg", "rawhide", bcomp, "--quiet"]
+  rawhide <- cmd (koji rawhide) ["latest-pkg", "rawhide", bcomp, "--quiet"]
   unless (null rawhide) $ do
     let nvr = (head . words) rawhide
     let nv = removeRelease nvr

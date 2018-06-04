@@ -43,7 +43,7 @@ import Text.CSV (parseCSV)
 import Text.Read (readMaybe)
 
 import Dists (Dist, dists, distBranch, hackageRelease, rawhide, releaseVersion)
-import Koji (kojiListPkgs)
+import Koji (kojiListPkgs, rpkg)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)
 import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
@@ -98,12 +98,12 @@ runCommand (com, os, ps) = do
         Diff -> repoAction_ False False mdist global (gitDiff opts) pkgs
         DiffOrigin -> repoAction_ True False mdist global (cmd_ "git" ["--no-pager", "diff", maybe "origin" ("origin/" ++) mdist]) pkgs
         DiffBranch -> repoAction False True mdist global compareRawhide pkgs
-        DiffStackage -> repoAction True True mdist global compareStackage pkgs
-        Verrel -> repoAction_ False True mdist global (cmd_ "fedpkg" ["verrel"]) pkgs
+        DiffStackage -> repoAction True True mdist global (compareStackage mdist) pkgs
+        Verrel -> repoAction_ False True mdist global (cmd_ (rpkg mdist) ["verrel"]) pkgs
         Update -> repoAction True True mdist global updatePackage pkgs
         Refresh -> repoAction_ True True mdist global (cmd_ "cabal-rpm" ["refresh"]) pkgs
-        Prep -> repoAction_ True True mdist global (cmd_ "fedpkg" ["prep"]) pkgs
-        Commit -> repoAction_ True True mdist global (commitChanges opts) pkgs
+        Prep -> repoAction_ True True mdist global (cmd_ (rpkg mdist) ["prep"]) pkgs
+        Commit -> repoAction_ True True mdist global (commitChanges mdist opts) pkgs
         Subpkgs -> repoAction True True mdist global (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn) pkgs
         Missing -> repoAction True True mdist global (checkForMissingDeps mdist) pkgs
         Cmd -> repoAction_ True True mdist global (execCmd opts) pkgs
@@ -384,13 +384,13 @@ repoAction header needsSpec mdist opts action (pkg:rest) = do
     haveSSH <- doesFileExist $ home </> ".ssh/id_rsa"
     dirExists <- doesDirectoryExist pkg
     unless dirExists $
-      cmd_ "fedpkg" $ ["clone"] ++ ["-a" | not haveSSH] ++ (if OptNull 'B' `elem` opts then ["-B"] else ["-b", branch]) ++ [pkg]
+      cmd_ (rpkg mdist) $ ["clone"] ++ ["-a" | not haveSSH] ++ (if OptNull 'B' `elem` opts then ["-B"] else ["-b", branch]) ++ [pkg]
     singleDir <- doesFileExist $ pkg </> ".git/config"
     unless singleDir $ do
       branchDir <- doesDirectoryExist $ pkg </> branch
       unless branchDir $
         withCurrentDirectory pkg $
-          cmd_ "fedpkg" ["clone", "-b", branch, pkg, branch]
+          cmd_ (rpkg mdist) ["clone", "-b", branch, pkg, branch]
     wd <- pkgDir pkg branch ""
     setCurrentDirectory wd
     pkggit <- do
@@ -403,7 +403,7 @@ repoAction header needsSpec mdist opts action (pkg:rest) = do
     when dirExists $ do
       actual <- gitBranch
       when (branch /= actual) $
-        cmd_ "fedpkg" ["switch-branch", branch]
+        cmd_ (rpkg mdist) ["switch-branch", branch]
     isDead <- doesFileExist "dead.package"
     unless isDead $ do
       let spec = pkg ++ ".spec"
@@ -421,9 +421,9 @@ gitBranch :: IO String
 gitBranch =
   removePrefix "* " . head . filter (isPrefixOf "* ") . lines <$> cmd "git" ["branch"]
 
-compareStackage :: Package -> IO ()
-compareStackage p = do
-  nvr <- cmd "fedpkg" ["verrel"]
+compareStackage :: Maybe Dist -> Package -> IO ()
+compareStackage mdist p = do
+  nvr <- cmd (rpkg mdist) ["verrel"]
   stkg <- cmdMaybe "stackage" ["package", "lts", maybeRemovePrefix "ghc-" p]
   let same = isJust stkg && fromJust stkg `isInfixOf` nvr
   putStrLn $ removePrefix (p ++ "-") nvr +-+ "(fedora)"
@@ -454,13 +454,13 @@ updatePackage pkg = do
     then cmd_ "cabal-rpm" ["update"]
     else putStrLn "skipping since not hackage"
 
-commitChanges :: [Option] -> IO ()
-commitChanges [OptArg 'm' msg] = do
+commitChanges :: Maybe Dist -> [Option] -> IO ()
+commitChanges mdist [OptArg 'm' msg] = do
   chgs <- cmd "git" ["diff"]
   if null chgs
     then putStrLn "no changes"
-    else cmd_ "fedpkg" ["commit", "-m", msg]
-commitChanges _ = error "commit requires: -m=\"commit message\""
+    else cmd_ (rpkg mdist) ["commit", "-m", msg]
+commitChanges _ _ = error "commit requires: -m=\"commit message\""
 
 gitMerge :: [Option] -> IO ()
 gitMerge [OptArg 'f' branch] = cmd_ "git" ["merge", branch]

@@ -31,8 +31,8 @@ import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget,
               rpmDistTag)
-import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
-             notInKoji)
+import Koji (koji, kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
+             notInKoji, rpkg)
 import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs,
             packageManager, pkgDir, rpmInstall, rpmspec)
 import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
@@ -84,7 +84,7 @@ help = do
 type Arguments = (String, Dist, [String])
 
 parseArgs :: String -> String -> [String] -> IO Arguments
-parseArgs c dist pkgs | dist `notElem` dists = error $ "Unknown dist '" ++ dist ++ "'"
+parseArgs c dist pkgs | dist `notElem` dists && not ("rhel-" `isPrefixOf` dist) = error $ "Unknown dist '" ++ dist ++ "'"
                       | null pkgs = error "Please specify a package."
                       | otherwise =
                           return (c, dist, map (removeSuffix "/") pkgs)
@@ -99,7 +99,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
   dirExists <- doesDirectoryExist pkg
   unless dirExists $ do
     let anon = ["-a" | mode `notElem` [Koji, Chain]]
-    cmdlog "fedpkg" $ ["clone", "-b", branch, pkg] ++ anon
+    cmdlog (rpkg (Just dist)) $ ["clone", "-b", branch, pkg] ++ anon
   wd <- pkgDir pkg branch ""
   setCurrentDirectory wd
   ignore <- doesFileExist ".fhbuild-ignore"
@@ -127,7 +127,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
         when dirExists $ do
           actual <- gitBranch
           when (branch /= actual) $
-            cmd_ "fedpkg" ["switch-branch", branch]
+            cmd_ (rpkg (Just dist)) ["switch-branch", branch]
           cmd_ "git" ["pull", "-q"]
         -- noupdate <- doesFileExist ".noupdate"
         -- unless noupdate $
@@ -137,7 +137,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
         if not hasSpec
           then putStrLn $ "No" +-+ spec
           else do
-          nvr <- cmd "fedpkg" ["verrel"]
+          nvr <- cmd (rpkg (Just dist)) ["verrel"]
           let verrel = removePrefix (pkg ++ "-") nvr
               tag = distTag dist
           case mode of
@@ -166,7 +166,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 putStrLn ""
                 putStrLn $ "Building" +-+ nvr
                 -- note "fedpkg --path dir local" saves .build.log in cwd
-                success <- cmdBool "fedpkg" ["local"]
+                success <- cmdBool (rpkg (Just dist)) ["local"]
                 if not success
                   then do
                   waitForEnter
@@ -186,7 +186,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               build topdir Install dist Nothing Nothing False rest
             Mock -> do
               putStrLn $ "Mock building" +-+ nvr
-              cmdlog "fedpkg" ["mockbuild"]
+              cmdlog (rpkg (Just dist)) ["mockbuild"]
               build topdir Mock dist Nothing Nothing False rest
             Koji -> do
               unless (null rest) $ do
@@ -199,7 +199,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 kojiWaitPkg topdir tag nvr
                 build topdir Koji dist Nothing mlast False rest
                 else do
-                building <- kojiBuilding pkg nvr
+                building <- kojiBuilding pkg nvr dist
                 if building
                   then do
                   putStrLn $ nvr +-+ "is already building"
@@ -215,7 +215,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                         kojiWaitPkg topdir tag nvr'
                   showChange latest nvr
                   cmd_ "git" ["push"]
-                  fedpkgBuild topdir dist nvr (if waitrepo then Just tag else Nothing)
+                  rpkgBuild topdir dist nvr (if waitrepo then Just tag else Nothing)
                   bodhiOverride dist nvr
                   unless (null rest) $ do
                     dep <- dependent pkg (head rest) branch topdir
@@ -243,7 +243,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
               when (eqNVR nvr latest) $ do
                 putStrLn pkg
                 cmd_ "rpmdev-bumpspec" ["-c", "rebuild", spec]
-                cmd_ "fedpkg" ["commit", "-m", "bump release"]
+                cmd_ (rpkg (Just dist)) ["commit", "-m", "bump release"]
               build topdir Bump dist Nothing Nothing False rest
             Chain -> do
               fhbuilt <- kojiCheckFHBuilt topdir nvr
@@ -257,7 +257,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   --kojiWaitPkg topdir tag nvr
                   build topdir Chain dist Nothing Nothing False rest
                 else do
-                building <- kojiBuilding pkg nvr
+                building <- kojiBuilding pkg nvr dist
                 if building
                   then do
                   putStrLn $ nvr +-+ "is already building"
@@ -279,7 +279,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   -- note "fedpkg --path dir local" saves .build.log in cwd
                   cmd_ "git" ["push"]
                   putStrLn ""
-                  fedpkgBuild topdir dist nvr  (if waitrepo then Just tag else Nothing)
+                  rpkgBuild topdir dist nvr  (if waitrepo then Just tag else Nothing)
                   bodhiOverride dist nvr
                   unless (null rest) $ do
                     putStrLn ""
@@ -299,10 +299,10 @@ showChange latest nvr = do
   putStrLn ""
   putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
 
-fedpkgBuild :: FilePath -> Dist -> String -> Maybe String -> IO ()
-fedpkgBuild topdir dist nvr waittag = do
-  giturl <- cmd "fedpkg" ["giturl"]
-  success <- cmdBool "koji" ["build", "--fail-fast", distTarget dist, giturl]
+rpkgBuild :: FilePath -> Dist -> String -> Maybe String -> IO ()
+rpkgBuild topdir dist nvr waittag = do
+  giturl <- cmd (rpkg (Just dist)) ["giturl"]
+  success <- cmdBool (koji dist) ["build", "--fail-fast", distTarget dist, giturl]
   if success
     then do
     logMsg $ nvr +-+ "built"

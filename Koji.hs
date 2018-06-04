@@ -20,16 +20,19 @@ module Koji where
 import Control.Applicative ((<$>))
 #endif
 import Control.Monad (unless)
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, isPrefixOf)
 import System.FilePath ((</>))
 
 import Dists (Dist)
 import RPM (pkgDir)
 import Utils (cmd, cmd_, cmdBool)
 
+koji :: Dist -> String
+koji dist = if "rhel" `isPrefixOf` dist then "brew" else "koji"
+
 kojiLatestPkg :: Dist -> String -> IO String
 kojiLatestPkg dist pkg = do
-  res <- words <$> cmd "koji" ["latest-pkg", "--quiet", dist, pkg]
+  res <- words <$> cmd (koji dist) ["latest-pkg", "--quiet", dist, pkg]
   return $ if null res then "" else head res
 
 kojiWaitPkg :: FilePath -> Dist -> String -> IO ()
@@ -37,7 +40,7 @@ kojiWaitPkg topdir dist nvr = do
   let fhbuilt = topdir </> ".fhbuilt"
   already <- kojiCheckFHBuilt topdir nvr
   unless already $ do
-    cmd_ "koji" ["wait-repo", dist, "--build=" ++ nvr]
+    cmd_ (koji dist) ["wait-repo", dist, "--build=" ++ nvr]
     appendFile fhbuilt $ nvr ++ "\n"
 
 kojiCheckFHBuilt :: FilePath -> String -> IO Bool
@@ -45,9 +48,9 @@ kojiCheckFHBuilt topdir nvr = do
   let fhbuilt = topdir </> ".fhbuilt"
   cmdBool "grep" ["-q", nvr, fhbuilt]
 
-kojiBuilding :: String -> String -> IO Bool
-kojiBuilding pkg build = do
-  tasks <- lines <$> cmd "koji" ["list-tasks", "--mine", "--quiet"]
+kojiBuilding :: String -> String -> Dist -> IO Bool
+kojiBuilding pkg build dist = do
+  tasks <- lines <$> cmd (koji dist) ["list-tasks", "--mine", "--quiet"]
   return $ any (build `isInfixOf`) tasks || any (("/" ++ pkg ++ ":") `isInfixOf`) tasks
 
 -- parseKojiTask :: [String] -> Maybe String
@@ -59,11 +62,15 @@ notInKoji :: String -> FilePath -> String -> String -> IO Bool
 notInKoji branch topdir tag pkg = do
   latest <- kojiLatestPkg tag pkg
   pkgpath <- pkgDir pkg branch topdir
-  local <- cmd "fedpkg" ["--path", pkgpath, "verrel"]
+  local <- cmd (rpkg (Just tag)) ["--path", pkgpath, "verrel"]
   if latest == local
     then kojiWaitPkg topdir tag latest >> return False
     else return True
 
 kojiListPkgs :: Dist -> IO [String]
 kojiListPkgs dist =
-  words <$> cmd "koji" ["list-pkgs", "--tag=" ++ dist]
+  words <$> cmd (koji dist) ["list-pkgs", "--tag=" ++ dist]
+
+rpkg :: Maybe String -> String
+rpkg Nothing = "fedpkg"
+rpkg (Just dist) = if "rhel" `isPrefixOf` dist then "rhpkg" else "fedpkg"
