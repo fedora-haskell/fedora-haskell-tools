@@ -28,7 +28,7 @@ module Dists (Dist,
               rawhide,
               rpmDistTag) where
 
-import Data.Char (isNumber)
+import Data.Char (isDigit)
 import Data.Maybe (fromMaybe, maybe)
 
 import Utils ((+-+))
@@ -52,7 +52,7 @@ distBranch d | d == rawhide = "master"
              | otherwise = d
 
 splitDist :: Dist -> (String, String)
-splitDist = break isNumber
+splitDist = break isDigit
 
 distShort :: Dist -> String
 distShort = fst . splitDist
@@ -79,9 +79,11 @@ distTag d = d ++ "-" ++ fromMaybe "build" sidetag
 distTarget  :: Dist -> String
 distTarget d = maybe d (\ suff -> d ++ "-" ++ suff) sidetag
 
-releaseVersion :: Dist -> String
-releaseVersion r | r == rawhide = "rawhide"
-releaseVersion r = distVersion r
+releaseVersion :: Dist -> Maybe String
+releaseVersion r | r == rawhide = Just "rawhide"
+releaseVersion r = if all isDigit v then Just v else Nothing
+  where
+    v = distVersion r
 
 rpmDistTag :: Dist -> String
 rpmDistTag ('f':r) = ".fc" ++ r
