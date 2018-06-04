@@ -28,7 +28,7 @@ import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
 import Data.Char (isUpper, toLower, toUpper)
 import Data.Maybe
-import Data.List (isInfixOf, isPrefixOf, nub, partition, sort, (\\))
+import Data.List (find, isInfixOf, isPrefixOf, nub, partition, sort, (\\))
 
 import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
 import System.Directory (doesDirectoryExist, doesFileExist,
@@ -44,9 +44,9 @@ import Text.Read (readMaybe)
 
 import Dists (Dist, dists, distBranch, hackageRelease, rawhide, releaseVersion)
 import Koji (kojiListPkgs)
-import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package, pkgDir,
+import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)
-import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
+import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
               maybeRemovePrefix, removePrefix, removeSuffix,
               withCurrentDirectory)
 
@@ -59,9 +59,15 @@ main = do
     runCommand $ parseCmdArgs as
 
 runCommand :: Arguments -> IO ()
-runCommand (com, os, mdist, ps) = do
+runCommand (com, os, ps) = do
   let (global, opts) = partition (`elem` globalOpts) os
       allpkgs = OptNull 'A' `elem` global
+      mdist = getOptVal (OptArg 'b' "brnch") global
+  case mdist of
+    Nothing -> return ()
+    Just d -> if (d `elem` dists || "rhel" `isPrefixOf` d)
+      then return ()
+      else putStrLn "Unknown branch"
   when (not allpkgs && null ps && com `notElem` [Hackage, CompareHackage, Count]) $
     help "Please specify package(s)"
   if allpkgs && (not . null) ps
@@ -75,10 +81,10 @@ runCommand (com, os, mdist, ps) = do
         Count -> repoqueryHaskell False mdist >>= (print . length)
         Hackage -> do
           -- add check for no pkg args
-          checkHackageDist
+          checkHackageDist mdist
           repoqueryHackageCSV hackageRelease
         CompareHackage -> do
-          checkHackageDist
+          checkHackageDist mdist
           withPackages (Just hackageRelease) pkgs $ compareHackage (null pkgs) hackageRelease
         New -> newPackages mdist >>= mapM_ putStrLn
 
@@ -102,7 +108,7 @@ runCommand (com, os, mdist, ps) = do
         Missing -> repoAction True True mdist global (checkForMissingDeps mdist) pkgs
         Cmd -> repoAction_ True True mdist global (execCmd opts) pkgs
   where
-    checkHackageDist =
+    checkHackageDist mdist =
       unless (isNothing mdist || mdist == Just hackageRelease) $ error $ "Hackage is currently for" +-+ hackageRelease ++ "!"
 
     withPackages :: Maybe Dist -> [Package] -> ([Package] -> IO ()) -> IO ()
@@ -177,6 +183,7 @@ globalOptsDesc :: [(Option, String)]
 globalOptsDesc =
   [ (OptNull 'A', "all Fedora Haskell packages")
   , (OptNull 'B', "clone branch dirs (fedpkg clone -B)")
+  , (OptArg 'b' "BRANCH", "branch to use (fedpkg -b)")
   ]
 
 globalOpts :: [Option]
@@ -187,8 +194,8 @@ help err = do
   if null err
     then do
     progName <- getProgName
-    putStrLn $ "Usage:" +-+ progName +-+ "CMD [DIST]" +-+ showOpts globalOptsNotAll +-+ "PKG..."
-    putStrLn $ "      " +-+ progName +-+ "CMD [DIST] -A \n"
+    putStrLn $ "Usage:" +-+ progName +-+ "CMD" +-+ showOpts globalOptsNotAll +-+ "PKG..."
+    putStrLn $ "      " +-+ progName +-+ "CMD -A \n"
     putStrLn "Global options:"
     mapM_ (putStrLn . describeOpt) globalOptsDesc
     putStrLn ""
@@ -216,6 +223,15 @@ instance Eq Option
     OptLong s _ == OptLong s' _ = s == s'
     _ == _ = False
 
+getOptVal :: Option -> [Option] -> Maybe String
+getOptVal (OptNull _) _ = Nothing
+getOptVal opt opts = maybe Nothing mval optval
+  where
+    optval = find (== opt) opts
+    mval (OptNull _) = Nothing
+    mval (OptArg _ v) = Just v
+    mval (OptLong _ v) = Just v
+
 isNull :: Option -> Bool
 isNull (OptNull _) = True
 isNull _ = False
@@ -237,7 +253,7 @@ describeOpt :: (Option, String) -> String
 describeOpt (opt, desc) =
   "  " ++ show opt ++ ":" +-+ desc
 
-type Arguments = (CmdName, [Option], Maybe Dist, [Package])
+type Arguments = (CmdName, [Option], [Package])
 
 parseCmdArgs :: [String] -> Arguments
 parseCmdArgs [] = error "Need to pass more arguments" -- should not happen
@@ -252,18 +268,10 @@ parseCmdArgs as =
                 let res = map parseOpt os in
                   if all (`elem` globalOpts ++ map fst (cmdOpts c)) res then res
                   else error "invalid option"
-              (mdist, pkgs) =
-                case map (removeSuffix "/") rest of
-                  [] -> (Nothing, [])
-                  rst@(d:ps) | d `elem` dists ->
-                             if OptNull 'A' `elem` opts && (not . null) ps
-                             then error "Can't give packages with -A"
-                             else (Just d, ps)
-                         | otherwise ->
-                             if OptNull 'A' `elem` opts && (not . null) rst
-                             then error "Can't give packages with -A"
-                             else  (Nothing, rst)
-          in (c, opts, mdist, pkgs)
+              pkgs = map (removeSuffix "/") rest
+          in if OptNull 'A' `elem` opts && (not . null) pkgs
+             then error "Can't give packages with -A"
+             else (c, opts, pkgs)
   where
     isFlag ['-', c] | c /= '-' = True
     isFlag ('-':c:'=':_) | c /= '-' = True
@@ -285,7 +293,7 @@ repoqueryHackageCSV dist = do
   pkgs <- repoqueryHaskell False (Just dist)
   let relver = releaseVersion dist
   -- Hackage csv chokes on final newline so remove it
-  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery relver (["--disablerepo=*", "--enablerepo=fedora", "--enablerepo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ pkgs) >>= putStr
+  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery relver (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ pkgs) >>= putStr
 
 data PkgVer = PV { pvPkg :: String, pvVer :: String}
   deriving (Eq)
@@ -303,7 +311,7 @@ compareHackage all' dist pkgs = do
   hck <- simpleHTTP (getRequest "http://hackage.haskell.org/distro/Fedora/packages.csv") >>= getResponseBody
   let hackage = sort . either (error "Malformed Hackage csv") (map mungeHackage) $ parseCSV "packages.csv" hck
       relver = releaseVersion dist
-  fedora <- sort . map mungeRepo . lines <$> repoquery relver (["--disablerepo=*", "--enablerepo=fedora", "--enablerepo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ pkgs)
+  fedora <- sort . map mungeRepo . lines <$> repoquery relver (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ pkgs)
   compareSets all' hackage fedora
   where
     mungeHackage :: [String] -> PkgVer
@@ -344,8 +352,7 @@ replace _ _ [] = []
 
 repoqueryHaskell :: Bool -> Maybe Dist -> IO [Package]
 repoqueryHaskell verbose mdist = do
-  -- fixme: should use repoquery instead:
-  let relver = maybe "rawhide" releaseVersion mdist
+  let relver = maybe Nothing releaseVersion mdist
   when verbose $ putStrLn "Getting packages from repoquery"
   bin <- words <$> repoquery relver ["--qf=%{source_name}", "--whatrequires", "libHSbase-*-ghc*.so()(64bit)"]
   when (null bin) $ error "No libHSbase consumers found!"
@@ -389,7 +396,7 @@ repoAction header needsSpec mdist opts action (pkg:rest) = do
     pkggit <- do
       gd <- doesFileExist ".git/config"
       if gd
-        then checkFedoraPkgGit
+        then checkPkgsGit
         else return False
     unless pkggit $
       error $ "not a Fedora pkg git dir!:" +-+ wd
@@ -479,8 +486,13 @@ checkForMissingDeps mdist pkg = do
   dir <- takeFileName <$> getCurrentDirectory
   let top = if dir == pkg then ".." else "../.."
       dist = fromMaybe rawhide mdist
-  deps <- buildRequires (pkg ++ ".spec") >>= haskellSrcPkgs top dist -- >>= mapM (derefSrcPkg top dist)
-  mapM_ (checkMissing top) deps
+      spec = pkg ++ ".spec"
+  hasSpec <- doesFileExist spec
+  if hasSpec
+    then do
+    deps <- buildRequires (pkg ++ ".spec") >>= haskellSrcPkgs top dist
+    mapM_ (checkMissing top) deps
+    else putStrLn "no spec file found!"
   where
     checkMissing :: FilePath -> Package -> IO ()
     checkMissing top dep = do

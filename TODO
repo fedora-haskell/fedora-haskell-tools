@@ -12,6 +12,10 @@ allow master instead of rawhide
 
 check commands has all commands
 
+count --ga to query without updates
+
+bodhi testing query?
+
 # support chain-build
 
 # git
@@ -34,9 +38,6 @@ check commands has all commands
 - do not downgrade versions
 - --liberal (allow failures)
 - reconnect to koji when disconnected (build or wait-repo)
-
-# updating
-- port update-pkg-ver
 
 # checking
 - Fedora x < Fedora x+1

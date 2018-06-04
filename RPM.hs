@@ -34,8 +34,8 @@ import System.FilePath ((</>))
 import System.Exit (ExitCode (..), exitFailure, exitWith)
 import System.IO (hPutStrLn, stderr)
 
-import Dists (Dist, distBranch, distTag, releaseVersion)
-import Utils (cmd, removeSuffix, sudo, (+-+))
+import Dists (Dist, distBranch, dists, distTag, releaseVersion)
+import Utils (cmd, removePrefix, removeSuffix, sudo, (+-+))
 
 -- @since base 4.8.0.0
 die :: String -> IO a
@@ -62,18 +62,24 @@ rpmInstall rpms = do
   let (inst, arg) = if pkginstaller == "dnf" then ("dnf", "install") else ("yum", "localinstall")
   sudo inst $ ["-y", "--nogpgcheck", arg] ++ rpms
 
-repoquery :: String -> [String] -> IO String
+repoquery :: Maybe String -> [String] -> IO String
 repoquery relver args = do
   havednf <- optionalProgram "dnf"
   let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet"]) else ("repoquery", [])
-  cmd prog (subcmd ++ ["--releasever=" ++ relver] ++ args)
+      releasever = case relver of
+                     Nothing -> []
+                     Just rv -> ["--releasever=" ++ rv]
+  cmd prog (subcmd ++ releasever ++ args)
 
 repoquerySrc :: Dist -> String -> IO (Maybe String)
 repoquerySrc dist key = do
   havednf <- optionalProgram "dnf"
   let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}"]
       relver = releaseVersion dist
-  res <- words <$> repoquery relver (srcflag ++ ["--repofrompath", "koji-buildroot,http://kojipkgs.fedoraproject.org/repos" </> distTag dist </> "latest/x86_64/", "--whatprovides", key])
+      repo = if dist `elem` dists
+             then ["--repo=koji-buildroot", "--repofrompath", "koji-buildroot,http://kojipkgs.fedoraproject.org/repos" </> distTag dist </> "latest/x86_64/"]
+             else []
+  res <- words <$> repoquery relver (srcflag ++ repo ++ ["--whatprovides", key])
   return $ case res of
     [p] -> Just p
     ps | key `elem` ps -> Just key
@@ -92,13 +98,22 @@ buildRequires spec =
 
 type Package = String
 
-derefSrcPkg :: FilePath -> Dist -> Package -> IO Package
-derefSrcPkg topdir dist pkg =
+derefSrcPkg :: FilePath -> Dist -> Bool -> Package -> IO Package
+derefSrcPkg topdir dist verb pkg =
   if isHaskellDevelPkg pkg
   then
-    do let base = removeSuffix "-devel" pkg
-       dirExists <- doesDirectoryExist $ topdir </> base
-       if dirExists then return base else derefSrcPkg topdir dist base
+    do let lib = removeSuffix "-devel" pkg
+       -- fixme: should check branch (dir)
+       libExists <- doesDirectoryExist $ topdir </> lib
+       if libExists
+         then return lib
+         else do
+         -- todo: check bin has lib
+         let bin = removePrefix "ghc-" lib
+         binExists <- doesDirectoryExist $ topdir </> bin
+         if binExists
+           then return bin
+           else derefSrcPkg topdir dist verb lib
   else
     do putStrLn $ "Repoquerying" +-+ pkg
        res <- repoquerySrc dist pkg
@@ -107,11 +122,14 @@ derefSrcPkg topdir dist pkg =
            do putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
               exitWith (ExitFailure 1)
          Just s -> do
-           when (pkg /= s) $ putStrLn $ pkg +-+ "->" +-+ s
+           when (pkg /= s && verb) $ putStrLn $ pkg +-+ "->" +-+ s
            return s
 
 isHaskellDevelPkg :: Package -> Bool
-isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg)
+isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg) || pkg `elem`haskellTools
+
+haskellTools :: [Package]
+haskellTools = ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]
 
 haskellSrcPkgs ::  FilePath -> String -> [Package] -> IO [Package]
 haskellSrcPkgs topdir dist brs = do
@@ -119,8 +137,8 @@ haskellSrcPkgs topdir dist brs = do
     let branch = distBranch dist
     ghcDir <- pkgDir "ghc" branch topdir
     filter isHaskellDevelPkg . words <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
-  let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
-  nub <$> mapM (derefSrcPkg topdir dist) hdeps
+  let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
+  nub <$> mapM (derefSrcPkg topdir dist False) hdeps
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do

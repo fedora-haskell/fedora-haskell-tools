@@ -35,7 +35,7 @@ import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
              notInKoji)
 import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs,
             packageManager, pkgDir, rpmInstall, rpmspec)
-import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
+import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
               logMsg, removePrefix, removeSuffix, sudo)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built | Bump
@@ -117,7 +117,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
       else do
       pkggit <- do
         gd <- doesFileExist ".git/config"
-        if gd then checkFedoraPkgGit
+        if gd then checkPkgsGit
           else return False
       if not pkggit
         then if mode `elem` [Install, Koji, Chain]
@@ -153,7 +153,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 missing <- nub <$> (buildRequires spec >>= filterM notInstalled)
                 -- FIXME sort into build order
                 let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
-                srcs <- nub <$> mapM (derefSrcPkg topdir dist) hmissing
+                srcs <- nub <$> mapM (derefSrcPkg topdir dist True) hmissing
                 unless (null srcs) $ do
                   putStrLn "Missing:"
                   mapM_ putStrLn srcs
