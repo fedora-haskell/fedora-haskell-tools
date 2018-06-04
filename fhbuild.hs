@@ -18,9 +18,9 @@ module Main where
 #else
 import Control.Applicative ((<$>))
 #endif
-import Control.Monad (filterM, unless, when)
+import Control.Monad (filterM, unless, void, when)
 import Data.Maybe
-import Data.List (intercalate, isPrefixOf, isSuffixOf, nub, (\\))
+import Data.List (intercalate, isPrefixOf, nub)
 
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, setCurrentDirectory)
@@ -30,10 +30,11 @@ import System.FilePath ((</>), dropExtension)
 import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget,
-              releaseVersion, rpmDistTag)
+              rpmDistTag)
 import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
-             notInKoji, pkgDir)
-import RPM (packageManager, rpmInstall, repoquerySrc, rpmspec)
+             notInKoji)
+import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs,
+            packageManager, pkgDir, rpmInstall, rpmspec)
 import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
               logMsg, removePrefix, removeSuffix, sudo)
 
@@ -139,7 +140,6 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
           nvr <- cmd "fedpkg" ["verrel"]
           let verrel = removePrefix (pkg ++ "-") nvr
               tag = distTag dist
-              relver = releaseVersion dist
           case mode of
             Install -> do
               let req = fromMaybe pkg msubpkg
@@ -153,7 +153,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 missing <- nub <$> (buildRequires spec >>= filterM notInstalled)
                 -- FIXME sort into build order
                 let hmissing = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) missing
-                srcs <- nub <$> mapM (derefSrcPkg topdir dist relver) hmissing
+                srcs <- nub <$> mapM (derefSrcPkg topdir dist) hmissing
                 unless (null srcs) $ do
                   putStrLn "Missing:"
                   mapM_ putStrLn srcs
@@ -173,7 +173,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   build topdir Install dist Nothing Nothing False [pkg]
                   else do
                   opkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
-                  rpms <- lines <$> rpmspec ["--builtrpms", "--define=dist" +-+ rpmDistTag dist] (Just ("%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n")) spec
+                  rpms <- lines <$> rpmspec ["--builtrpms", "--define=dist" +-+ rpmDistTag dist] (Just "%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n") spec
                   putStrLn $ nvr +-+ "built\n"
                   instpkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
                   if null instpkgs
@@ -266,15 +266,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                     build topdir Chain dist Nothing Nothing False rest
                   else do
                   showChange latest nvr
-                  brs <- buildRequires spec
-                  --print brs
-                  ghcLibs <- do
-                    ghcDir <- pkgDir "ghc" branch topdir
-                    filter isHaskellDevelPkg . words <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
-                  -- FIXME sort into build order
-                  let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
-                  --print hdeps
-                  srcs <- filter (`notElem` ["ghc"]) . nub <$> mapM (derefSrcPkg topdir dist relver) hdeps
+                  srcs <- buildRequires spec >>= haskellSrcPkgs topdir dist
                   --print srcs
                   hmissing <- nub <$> filterM (notInKoji branch topdir tag) srcs
                   putStrLn ""
@@ -333,30 +325,6 @@ bodhiOverride dist nvr =
 --     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
 --   return $ if null res then pkg else res
 
-buildRequires :: FilePath -> IO [String]
-buildRequires spec =
-  -- FIXME should resolve "pkgconfig()" etc
-  map (head . words) . lines <$> rpmspec ["--buildrequires"] Nothing spec
---    >>= mapM (whatProvides relver)
-
-derefSrcPkg :: FilePath -> Dist -> String -> String -> IO String
-derefSrcPkg topdir dist relver pkg =
-  if isHaskellDevelPkg pkg
-  then
-    do let base = removeSuffix "-devel" pkg
-       dirExists <- doesDirectoryExist $ topdir </> base
-       if dirExists then return base else derefSrcPkg topdir dist relver base
-  else
-    do putStrLn $ "Repoquerying" +-+ pkg
-       res <- repoquerySrc dist relver pkg
-       case res of
-         Nothing ->
-           do putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
-              exitWith (ExitFailure 1)
-         Just s -> do
-           when (pkg /= s) $ putStrLn $ pkg +-+ "->" +-+ s
-           return s
-
 gitBranch :: IO String
 gitBranch =
   removePrefix "* " . head . filter (isPrefixOf "* ") . lines <$> cmd "git" ["branch"]
@@ -389,7 +357,4 @@ waitForEnter = do
     putStrLn ""
     putChar '\a'
     putStrLn "Press Enter after fixing"
-    getLine >> return ()
-
-isHaskellDevelPkg :: String -> Bool
-isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg)
+    void getLine

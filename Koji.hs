@@ -21,10 +21,10 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Monad (unless)
 import Data.List (isInfixOf)
-import System.Directory (doesDirectoryExist)
 import System.FilePath ((</>))
 
 import Dists (Dist)
+import RPM (pkgDir)
 import Utils (cmd, cmd_, cmdBool)
 
 kojiLatestPkg :: Dist -> String -> IO String
@@ -67,8 +67,3 @@ notInKoji branch topdir tag pkg = do
 kojiListPkgs :: Dist -> IO [String]
 kojiListPkgs dist =
   words <$> cmd "koji" ["list-pkgs", "--tag=" ++ dist]
-
-pkgDir :: String -> String -> FilePath -> IO FilePath
-pkgDir dir branch top = do
-  b <- doesDirectoryExist $ top </> dir </> branch
-  return $ top </> dir </> if b then branch else ""

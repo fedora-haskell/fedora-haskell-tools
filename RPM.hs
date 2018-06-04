@@ -11,9 +11,13 @@
 -- the Free Software Foundation, either version 3 of the License, or
 -- (at your option) any later version.
 
-module RPM (packageManager,
+module RPM (buildRequires,
+            derefSrcPkg,
+            haskellSrcPkgs,
+            Package,
+            packageManager,
+            pkgDir,
             repoquery,
-            repoquerySrc,
             rpmInstall,
             rpmspec) where
 
@@ -22,15 +26,16 @@ module RPM (packageManager,
 import Control.Applicative ((<$>))
 #endif
 import Control.Monad (when)
+import Data.List (isPrefixOf, isSuffixOf, nub, (\\))
 import Data.Maybe (isJust, isNothing)
-import System.Directory (findExecutable)
+import System.Directory (doesDirectoryExist, findExecutable)
 import System.FilePath ((</>))
 -- die is available in ghc-7.10 base-4.8
-import System.Exit (exitFailure)
+import System.Exit (ExitCode (..), exitFailure, exitWith)
 import System.IO (hPutStrLn, stderr)
 
-import Dists (Dist, distTag)
-import Utils (cmd, sudo)
+import Dists (Dist, distBranch, distTag, releaseVersion)
+import Utils (cmd, removeSuffix, sudo, (+-+))
 
 -- @since base 4.8.0.0
 die :: String -> IO a
@@ -63,11 +68,12 @@ repoquery relver args = do
   let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet"]) else ("repoquery", [])
   cmd prog (subcmd ++ ["--releasever=" ++ relver] ++ args)
 
-repoquerySrc :: Dist -> String -> String -> IO (Maybe String)
-repoquerySrc dist relver key = do
+repoquerySrc :: Dist -> String -> IO (Maybe String)
+repoquerySrc dist key = do
   havednf <- optionalProgram "dnf"
   let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}"]
-  res <- words <$> repoquery relver (srcflag ++ ["--repofrompath", "koji,http://kojipkgs.fedoraproject.org/repos" </> distTag dist </> "latest/x86_64/", "--whatprovides", key])
+      relver = releaseVersion dist
+  res <- words <$> repoquery relver (srcflag ++ ["--repofrompath", "koji-buildroot,http://kojipkgs.fedoraproject.org/repos" </> distTag dist </> "latest/x86_64/", "--whatprovides", key])
   return $ case res of
     [p] -> Just p
     ps | key `elem` ps -> Just key
@@ -77,3 +83,46 @@ rpmspec :: [String] -> Maybe String -> FilePath -> IO String
 rpmspec args mqf spec = do
   let qf = maybe [] (\ q -> ["--queryformat", q]) mqf
   cmd "rpmspec" (["-q"] ++ args ++ qf ++ [spec])
+
+buildRequires :: FilePath -> IO [String]
+buildRequires spec =
+  -- FIXME should resolve "pkgconfig()" etc
+  map (head . words) . lines <$> rpmspec ["--buildrequires"] Nothing spec
+--    >>= mapM (whatProvides relver)
+
+type Package = String
+
+derefSrcPkg :: FilePath -> Dist -> Package -> IO Package
+derefSrcPkg topdir dist pkg =
+  if isHaskellDevelPkg pkg
+  then
+    do let base = removeSuffix "-devel" pkg
+       dirExists <- doesDirectoryExist $ topdir </> base
+       if dirExists then return base else derefSrcPkg topdir dist base
+  else
+    do putStrLn $ "Repoquerying" +-+ pkg
+       res <- repoquerySrc dist pkg
+       case res of
+         Nothing ->
+           do putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
+              exitWith (ExitFailure 1)
+         Just s -> do
+           when (pkg /= s) $ putStrLn $ pkg +-+ "->" +-+ s
+           return s
+
+isHaskellDevelPkg :: Package -> Bool
+isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg)
+
+haskellSrcPkgs ::  FilePath -> String -> [Package] -> IO [Package]
+haskellSrcPkgs topdir dist brs = do
+  ghcLibs <- do
+    let branch = distBranch dist
+    ghcDir <- pkgDir "ghc" branch topdir
+    filter isHaskellDevelPkg . words <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
+  let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
+  nub <$> mapM (derefSrcPkg topdir dist) hdeps
+
+pkgDir :: String -> String -> FilePath -> IO FilePath
+pkgDir dir branch top = do
+  b <- doesDirectoryExist $ top </> dir </> branch
+  return $ top </> dir </> if b then branch else ""

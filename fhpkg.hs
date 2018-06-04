@@ -32,7 +32,8 @@ import Data.List (isInfixOf, isPrefixOf, nub, partition, sort, (\\))
 
 import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
 import System.Directory (doesDirectoryExist, doesFileExist,
-                         getHomeDirectory, setCurrentDirectory)
+                         getCurrentDirectory, getHomeDirectory,
+                         setCurrentDirectory)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), takeFileName)
@@ -41,9 +42,10 @@ import System.IO (hPutStrLn, stderr)
 import Text.CSV (parseCSV)
 import Text.Read (readMaybe)
 
-import Dists (Dist, dists, distBranch, hackageRelease, releaseVersion)
+import Dists (Dist, dists, distBranch, hackageRelease, rawhide, releaseVersion)
 import Koji (kojiListPkgs)
-import RPM (repoquery, rpmspec)
+import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package, pkgDir,
+            repoquery, rpmspec)
 import Utils ((+-+), checkFedoraPkgGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
               maybeRemovePrefix, removePrefix, removeSuffix,
               withCurrentDirectory)
@@ -97,6 +99,7 @@ runCommand (com, os, mdist, ps) = do
         Prep -> repoAction_ True True mdist global (cmd_ "fedpkg" ["prep"]) pkgs
         Commit -> repoAction_ True True mdist global (commitChanges opts) pkgs
         Subpkgs -> repoAction True True mdist global (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn) pkgs
+        Missing -> repoAction True True mdist global (checkForMissingDeps mdist) pkgs
         Cmd -> repoAction_ True True mdist global (execCmd opts) pkgs
   where
     checkHackageDist =
@@ -112,7 +115,7 @@ data Command = Command { cmdName :: CmdName , cmdDescription :: String}
 data CmdName = Checkout | Clone | CloneNew | Cmd | Count | Diff | DiffOrigin
              | DiffBranch | DiffStackage | Hackage | CompareHackage
              | List | Merge | New | Prep | Commit | Pull | Push | Update
-             | Refresh | Subpkgs | Verrel
+             | Refresh | Subpkgs | Missing | Verrel
   deriving (Read, Show, Eq)
 
 -- SomeCommand -> "some-command"
@@ -148,6 +151,7 @@ commands = [ Command Checkout "fedpkg switch-branch"
            , Command CompareHackage "compare with Hackage distro data"
            , Command List "list packages"
            , Command Merge "git merge"
+           , Command Missing "missing dependency source packages"
            , Command New "new unbuilt packages"
            , Command Prep "fedpkg prep"
            , Command Commit "fedpkg commit"
@@ -201,8 +205,6 @@ help err = do
     renderCmd (Command c desc) = do
       let txt = showCmd c
       putStrLn $ "  " ++ txt ++ replicate (mx - length txt) ' ' +-+ "-" +-+ desc
-
-type Package = String
 
 -- add description
 data Option = OptNull Char | OptArg Char String | OptLong String String
@@ -408,11 +410,6 @@ repoAction_ :: Bool -> Bool -> Maybe Dist -> [Option] -> IO () -> [Package] -> I
 repoAction_ header needsSpec mdist opts action =
   repoAction header needsSpec mdist opts (const action)
 
-pkgDir :: String -> String -> FilePath -> IO FilePath
-pkgDir dir branch top = do
-  b <- doesDirectoryExist $ top </> dir </> branch
-  return $ top </> dir </> if b then branch else ""
-
 gitBranch :: IO String
 gitBranch =
   removePrefix "* " . head . filter (isPrefixOf "* ") . lines <$> cmd "git" ["branch"]
@@ -476,3 +473,16 @@ execCmd [OptLong "cmd" cs]
   | otherwise = let (c:args) = words cs in
                   cmd_ c args
 execCmd _ = error "cmd needs --cmd= option"
+
+checkForMissingDeps :: Maybe Dist -> Package -> IO ()
+checkForMissingDeps mdist pkg = do
+  dir <- takeFileName <$> getCurrentDirectory
+  let top = if dir == pkg then ".." else "../.."
+      dist = fromMaybe rawhide mdist
+  deps <- buildRequires (pkg ++ ".spec") >>= haskellSrcPkgs top dist -- >>= mapM (derefSrcPkg top dist)
+  mapM_ (checkMissing top) deps
+  where
+    checkMissing :: FilePath -> Package -> IO ()
+    checkMissing top dep = do
+      exists <- doesDirectoryExist $ top </> dep
+      unless exists $ putStrLn $ "Missing" +-+ dep
