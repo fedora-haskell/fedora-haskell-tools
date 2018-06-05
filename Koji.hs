@@ -30,10 +30,10 @@ import Utils (cmd, cmd_, cmdBool)
 koji :: Dist -> String
 koji dist = if "rhel" `isPrefixOf` dist then "brew" else "koji"
 
-kojiLatestPkg :: Dist -> String -> IO String
+kojiLatestPkg :: Dist -> String -> IO (Maybe String)
 kojiLatestPkg dist pkg = do
   res <- words <$> cmd (koji dist) ["latest-pkg", "--quiet", dist, pkg]
-  return $ if null res then "" else head res
+  return $ if null res then Nothing else Just $ head res
 
 kojiWaitPkg :: FilePath -> Dist -> String -> IO ()
 kojiWaitPkg topdir dist nvr = do
@@ -63,8 +63,8 @@ notInKoji branch topdir tag pkg = do
   latest <- kojiLatestPkg tag pkg
   pkgpath <- pkgDir pkg branch topdir
   local <- cmd (rpkg (Just tag)) ["--path", pkgpath, "verrel"]
-  if latest == local
-    then kojiWaitPkg topdir tag latest >> return False
+  if latest == Just local
+    then kojiWaitPkg topdir tag local >> return False
     else return True
 
 kojiListPkgs :: Dist -> IO [String]

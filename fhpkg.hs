@@ -65,7 +65,7 @@ runCommand (com, os, ps) = do
       mdist = getOptVal (OptArg 'b' "brnch") global
   case mdist of
     Nothing -> return ()
-    Just d -> if (d `elem` dists || "rhel" `isPrefixOf` d)
+    Just d -> if d `elem` dists || "rhel" `isPrefixOf` d
       then return ()
       else putStrLn "Unknown branch"
   when (not allpkgs && null ps && com `notElem` [Hackage, CompareHackage, Count]) $

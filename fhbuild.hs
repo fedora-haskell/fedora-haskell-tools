@@ -33,7 +33,7 @@ import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget,
               rpmDistTag)
 import Koji (koji, kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
              notInKoji, rpkg)
-import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs,
+import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package,
             packageManager, pkgDir, rpmInstall, rpmspec)
 import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
               logMsg, removePrefix, removeSuffix, sudo)
@@ -193,7 +193,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 putStrLn $ show (length rest) +-+ "more packages"
                 putStrLn ""
               latest <- kojiLatestPkg tag pkg
-              if nvr == latest
+              if Just nvr == latest
                 then do
                 putStrLn $ nvr +-+ "already built!"
                 kojiWaitPkg topdir tag nvr
@@ -213,7 +213,8 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                       when dep $ do
                         putStrLn $ "Waiting for" +-+ nvr'
                         kojiWaitPkg topdir tag nvr'
-                  showChange latest nvr
+                  showChange pkg latest nvr
+                  putStrLn ""
                   cmd_ "git" ["push"]
                   rpkgBuild topdir dist nvr (if waitrepo then Just tag else Nothing)
                   bodhiOverride dist nvr
@@ -226,7 +227,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
             Pending -> do
               latest <- kojiLatestPkg tag pkg
               unless (eqNVR nvr latest) $
-                putStrLn $ latest +-+ "->" +-+ nvr
+                showNVRChange pkg latest nvr
               build topdir Pending dist Nothing Nothing False rest
             Changed -> do
               latest <- kojiLatestPkg tag pkg
@@ -248,9 +249,9 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
             Chain -> do
               fhbuilt <- kojiCheckFHBuilt topdir nvr
               latest <- if fhbuilt
-                         then return nvr
+                         then return $ Just nvr
                          else kojiLatestPkg tag pkg
-              if nvr == latest
+              if Just nvr == latest
                 then do
                 putStrLn $ nvr +-+ "already built!"
                 unless (null rest) $ --do
@@ -265,7 +266,8 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   unless (null rest) $
                     build topdir Chain dist Nothing Nothing False rest
                   else do
-                  showChange latest nvr
+                  showChange pkg latest nvr
+                  putStrLn ""
                   srcs <- buildRequires spec >>= haskellSrcPkgs topdir dist
                   --print srcs
                   hmissing <- nub <$> filterM (notInKoji branch topdir tag) srcs
@@ -293,11 +295,20 @@ notInstalled :: String -> IO Bool
 notInstalled pkg =
   not <$> cmdBool "rpm" ["--quiet", "-q", pkg]
 
-showChange :: String -> String -> IO ()
-showChange latest nvr = do
+showChange :: Package -> Maybe String -> String -> IO ()
+showChange pkg mlatest nvr = do
   cmd_ "git" ["--no-pager", "log", "-1"]
   putStrLn ""
-  putStrLn $ latest +-+ "->" +-+ nvr ++ "\n"
+  showNVRChange pkg mlatest nvr
+
+showNVRChange :: Package -> Maybe String -> String -> IO ()
+showNVRChange pkg Nothing nvr =
+  putStrLn $ pkg +-+ "new" +-+ removePrefix (pkg ++ "-") nvr
+showNVRChange pkg (Just latest) nvr = do
+  putStrLn $ pkg ++ ":" +-+ removePrefix prefix latest
+  putStrLn $ replicate (length pkg - 1) ' ' ++ "->" +-+ removePrefix prefix nvr
+  where
+    prefix = pkg ++ "-"
 
 rpkgBuild :: FilePath -> Dist -> String -> Maybe String -> IO ()
 rpkgBuild topdir dist nvr waittag = do
@@ -329,9 +340,9 @@ gitBranch :: IO String
 gitBranch =
   removePrefix "* " . head . filter (isPrefixOf "* ") . lines <$> cmd "git" ["branch"]
 
-eqNVR :: String -> String -> Bool
+eqNVR :: String -> Maybe String -> Bool
 eqNVR p1 p2 =
-  dropExtension p1 == dropExtension p2
+  Just (dropExtension p1) == fmap dropExtension p2
 
 -- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> ("pkg", Just "X.Y")
 processDeps :: [String] -> (String, Maybe String)
