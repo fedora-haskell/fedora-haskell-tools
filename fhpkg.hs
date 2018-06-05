@@ -33,7 +33,7 @@ import Data.List (find, isInfixOf, isPrefixOf, nub, partition, sort, (\\))
 import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, getHomeDirectory,
-                         setCurrentDirectory)
+                         listDirectory, setCurrentDirectory)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), takeFileName)
@@ -88,25 +88,26 @@ runCommand (com, os, ps) = do
           withPackages (Just hackageRelease) pkgs $ compareHackage (null pkgs) hackageRelease
         New -> newPackages mdist >>= mapM_ putStrLn
 
-        Clone -> repoAction_ True False mdist global (return ()) pkgs
+        Clone -> repoAction_ mdist global True False (return ()) pkgs
         CloneNew ->
-          newPackages mdist >>= repoAction_ True False mdist global (return ())
-        Checkout -> repoAction_ True False mdist global (return ()) pkgs
-        Pull -> repoAction_ True False mdist global (cmd_ "git" ["pull", "--rebase"]) pkgs
-        Push -> repoAction_ True False mdist global (cmd_ "git" ["push"]) pkgs
-        Merge -> repoAction_ True False mdist global (gitMerge opts) pkgs
-        Diff -> repoAction_ False False mdist global (gitDiff opts) pkgs
-        DiffOrigin -> repoAction_ True False mdist global (cmd_ "git" ["--no-pager", "diff", maybe "origin" ("origin/" ++) mdist]) pkgs
-        DiffBranch -> repoAction False True mdist global compareRawhide pkgs
-        DiffStackage -> repoAction True True mdist global (compareStackage mdist) pkgs
-        Verrel -> repoAction_ False True mdist global (cmd_ (rpkg mdist) ["verrel"]) pkgs
-        Update -> repoAction True True mdist global updatePackage pkgs
-        Refresh -> repoAction_ True True mdist global (cmd_ "cabal-rpm" ["refresh"]) pkgs
-        Prep -> repoAction_ True True mdist global (cmd_ (rpkg mdist) ["prep"]) pkgs
-        Commit -> repoAction_ True True mdist global (commitChanges mdist opts) pkgs
-        Subpkgs -> repoAction True True mdist global (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn) pkgs
-        Missing -> repoAction True True mdist global (checkForMissingDeps mdist) pkgs
-        Cmd -> repoAction_ True True mdist global (execCmd opts) pkgs
+          newPackages mdist >>= repoAction_ mdist global True False (return ())
+        Checkout -> repoAction_ mdist global True False (return ()) pkgs
+        Pull -> repoAction_ mdist global True False (cmd_ "git" ["pull", "--rebase"]) pkgs
+        Push -> repoAction_ mdist global True False (cmd_ "git" ["push"]) pkgs
+        Merge -> repoAction_ mdist global True False (gitMerge opts) pkgs
+        Diff -> repoAction_ mdist global False False (gitDiff opts) pkgs
+        DiffOrigin -> repoAction_ mdist global True False (cmd_ "git" ["--no-pager", "diff", maybe "origin" ("origin/" ++) mdist]) pkgs
+        DiffBranch -> repoAction mdist global False True compareRawhide pkgs
+        DiffStackage -> repoAction mdist global True True (compareStackage mdist) pkgs
+        Verrel -> repoAction_ mdist global False True (cmd_ (rpkg mdist) ["verrel"]) pkgs
+        Update -> repoAction mdist global True True updatePackage pkgs
+        Refresh -> repoAction_ mdist global True True (cmd_ "cabal-rpm" ["refresh"]) pkgs
+        Prep -> repoAction_ mdist global True True (cmd_ (rpkg mdist) ["prep"]) pkgs
+        Commit -> repoAction_ mdist global True True (commitChanges mdist opts) pkgs
+        Subpkgs -> repoAction mdist global True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn) pkgs
+        Missing -> repoAction mdist global True True (checkForMissingDeps mdist) pkgs
+        Leaf -> repoAction mdist global (OptNull 'v' `elem` opts) True (checkLeafPkg opts) pkgs
+        Cmd -> repoAction_ mdist global True True (execCmd opts) pkgs
   where
     checkHackageDist mdist =
       unless (isNothing mdist || mdist == Just hackageRelease) $ error $ "Hackage is currently for" +-+ hackageRelease ++ "!"
@@ -121,7 +122,7 @@ data Command = Command { cmdName :: CmdName , cmdDescription :: String}
 data CmdName = Checkout | Clone | CloneNew | Cmd | Count | Diff | DiffOrigin
              | DiffBranch | DiffStackage | Hackage | CompareHackage
              | List | Merge | New | Prep | Commit | Pull | Push | Update
-             | Refresh | Subpkgs | Missing | Verrel
+             | Refresh | Subpkgs | Missing | Leaf | Verrel
   deriving (Read, Show, Eq)
 
 -- SomeCommand -> "some-command"
@@ -155,6 +156,7 @@ commands = [ Command Checkout "fedpkg switch-branch"
            , Command DiffStackage "compare with stackage"
            , Command Hackage "generate Hackage distro data"
            , Command CompareHackage "compare with Hackage distro data"
+           , Command Leaf "list leaf packages"
            , Command List "list packages"
            , Command Merge "git merge"
            , Command Missing "missing dependency source packages"
@@ -177,6 +179,7 @@ cmdOpts Commit = [(OptArg 'm' "\"COMMITMSG\"", False)]
 cmdOpts Diff = [(OptArg 'w' "BRANCH", True)]
 cmdOpts Merge = [(OptArg 'f' "BRANCH", False)]
 cmdOpts Cmd = [(OptLong "cmd" "\"command\"", False)]
+cmdOpts Leaf = [(OptNull 'v', False)]
 cmdOpts _ = []
 
 globalOptsDesc :: [(Option, String)]
@@ -371,9 +374,9 @@ kojiListHaskell verbose mdist = do
   when (null libs) $ error "No library packages found"
   return $ sort $ nub libs
 
-repoAction :: Bool -> Bool -> Maybe Dist -> [Option] -> (Package -> IO ()) -> [Package] -> IO ()
+repoAction :: Maybe Dist -> [Option] -> Bool -> Bool -> (Package -> IO ()) -> [Package] -> IO ()
 repoAction _ _ _ _ _ [] = return ()
-repoAction header needsSpec mdist opts action (pkg:rest) = do
+repoAction mdist opts header needsSpec action (pkg:rest) = do
   withCurrentDirectory "." $ do
     let branchGiven = isJust mdist
         branch = maybe "master" distBranch mdist
@@ -411,11 +414,11 @@ repoAction header needsSpec mdist opts action (pkg:rest) = do
       unless hasSpec $ putStrLn "No spec file!"
       unless (needsSpec && not hasSpec) $
         action pkg
-  repoAction header needsSpec mdist opts action rest
+  repoAction mdist opts header needsSpec action rest
 
-repoAction_ :: Bool -> Bool -> Maybe Dist -> [Option] -> IO () -> [Package] -> IO ()
-repoAction_ header needsSpec mdist opts action =
-  repoAction header needsSpec mdist opts (const action)
+repoAction_ :: Maybe Dist -> [Option] -> Bool -> Bool -> IO () -> [Package] -> IO ()
+repoAction_ mdist opts header needsSpec action =
+  repoAction mdist opts header needsSpec (const action)
 
 gitBranch :: IO String
 gitBranch =
@@ -498,3 +501,17 @@ checkForMissingDeps mdist pkg = do
     checkMissing top dep = do
       exists <- doesDirectoryExist $ top </> dep
       unless exists $ putStrLn $ "Missing" +-+ dep
+
+checkLeafPkg :: [Option] -> Package -> IO ()
+checkLeafPkg opts pkg = do
+  dir <- takeFileName <$> getCurrentDirectory
+  let branchdir = not (dir == pkg)
+      top = if branchdir then "../.." else ".."
+      spec = pkg ++ ".spec"
+  subpkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
+  allpkgs <- listDirectory top
+  let keys = concat $ map (\ p -> ["-e", "Requires:\\s*" ++ p ++ "\\($\\|\\s\\|[^-]\\)"]) subpkgs
+      other = map (\ p -> top </> p </> (if branchdir then dir else "") </> p ++ ".spec") $ allpkgs \\ [pkg]
+      verb = OptNull 'v' `elem` opts
+  found <- cmdBool "grep" $ (if verb then [] else ["-q"]) ++ keys ++ other
+  unless found $ putStrLn pkg
