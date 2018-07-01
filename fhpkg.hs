@@ -25,7 +25,7 @@ module Main where
 #else
 import Control.Applicative ((<$>))
 #endif
-import Control.Monad (unless, when)
+import Control.Monad (filterM, unless, when)
 import Data.Char (isUpper, toLower, toUpper)
 import Data.Maybe
 import Data.List (find, isInfixOf, isPrefixOf, nub, partition, sort, (\\))
@@ -502,16 +502,27 @@ checkForMissingDeps mdist pkg = do
       exists <- doesDirectoryExist $ top </> dep
       unless exists $ putStrLn $ "Missing" +-+ dep
 
+-- fixme: make a dependency cache
 checkLeafPkg :: [Option] -> Package -> IO ()
 checkLeafPkg opts pkg = do
   dir <- takeFileName <$> getCurrentDirectory
-  let branchdir = not (dir == pkg)
+  let branchdir = dir /= pkg
       top = if branchdir then "../.." else ".."
       spec = pkg ++ ".spec"
   subpkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
   allpkgs <- listDirectory top
-  let keys = concat $ map (\ p -> ["-e", "Requires:\\s*" ++ p ++ "\\($\\|\\s\\|[^-]\\)"]) subpkgs
-      other = map (\ p -> top </> p </> (if branchdir then dir else "") </> p ++ ".spec") $ allpkgs \\ [pkg]
+  let other = map (\ p -> top </> p </> (if branchdir then dir else "") </> p ++ ".spec") $ allpkgs \\ [pkg]
       verb = OptNull 'v' `elem` opts
-  found <- cmdBool "grep" $ (if verb then [] else ["-q"]) ++ keys ++ other
-  unless found $ putStrLn pkg
+  found <- filterM (dependsOn subpkgs) other
+  if null found
+    then putStrLn pkg
+    else when verb $ mapM_ putStrLn found
+  where
+    dependsOn :: [Package] -> Package -> IO Bool
+    dependsOn subpkgs p = do
+      file <- doesFileExist p
+      if file
+        then do
+        deps <- buildRequires p
+        return $ any (`elem` deps) subpkgs
+        else return False
