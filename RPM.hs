@@ -88,7 +88,7 @@ repoquerySrc dist key = do
 rpmspec :: [String] -> Maybe String -> FilePath -> IO String
 rpmspec args mqf spec = do
   let qf = maybe [] (\ q -> ["--queryformat", q]) mqf
-  cmd "rpmspec" (["-q"] ++ args ++ qf ++ [spec])
+  cmd "rpmspec" (["-q"] ++ ["--define", "ghc_version any"] ++ args ++ qf ++ [spec])
 
 buildRequires :: FilePath -> IO [String]
 buildRequires spec =
