@@ -289,7 +289,7 @@ parseCmdArgs as =
   where
     isFlag ['-', c] | c /= '-' = True
     isFlag ('-':c:'=':_) | c /= '-' = True
-    isFlag ('-':'-':cs) = True
+    isFlag ('-':'-':_) = True
     isFlag _ = False
 
     parseOpt :: String -> Option
