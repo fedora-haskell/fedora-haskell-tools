@@ -33,7 +33,10 @@ import Data.List (find, isInfixOf, isPrefixOf, nub, partition, sort, (\\))
 import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, getHomeDirectory,
-                         listDirectory, setCurrentDirectory)
+#if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
+                         listDirectory,
+#endif
+                         setCurrentDirectory)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), takeFileName)
@@ -49,6 +52,14 @@ import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
 import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
               maybeRemovePrefix, removePrefix, removeSuffix,
               withCurrentDirectory)
+
+#if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
+#else
+listDirectory :: FilePath -> IO [FilePath]
+listDirectory path =
+  filter f <$> getDirectoryContents path
+  where f filename = filename /= "." && filename /= ".."
+#endif
 
 main :: IO ()
 main = do
