@@ -36,7 +36,7 @@ import System.Directory (doesDirectoryExist, doesFileExist,
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
                          listDirectory,
 #else
-                         getDirectoryContents
+                         getDirectoryContents,
 #endif
                          setCurrentDirectory)
 import System.Environment (getArgs, getProgName)
