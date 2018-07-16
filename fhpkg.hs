@@ -42,7 +42,7 @@ import System.Directory (doesDirectoryExist, doesFileExist,
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), takeFileName)
-import System.IO (hPutStrLn, stderr)
+import System.IO (hFlush, hPutStrLn, stderr, stdout)
 --import System.Posix.Env (getEnv)
 import Text.CSV (parseCSV)
 import Text.Read (readMaybe)
@@ -394,8 +394,9 @@ repoAction mdist opts header needsSpec action (pkg:rest) = do
   withCurrentDirectory "." $ do
     let branchGiven = isJust mdist
         branch = maybe "master" distBranch mdist
-    when header $
+    when header $ do
       putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ "=="
+      hFlush stdout
     -- muser <- getEnv "USER"
     home <- getHomeDirectory
     haveSSH <- doesFileExist $ home </> ".ssh/id_rsa"
