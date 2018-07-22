@@ -23,6 +23,7 @@ module Utils (checkPkgsGit,
               cmdSilent,
               cmdStdErr,
               error_,
+              git,
               git_,
               gitBranch,
               logMsg,
@@ -175,6 +176,10 @@ withCurrentDirectory dir action =
 checkPkgsGit :: IO Bool
 checkPkgsGit =
   cmdBool "grep" ["-q", "-e", "\\(pkgs\\|src\\).", ".git/config"]
+
+git :: String -> [String] -> IO String
+git c as =
+  cmd "git" ("--no-pager":c:as)
 
 git_ :: String -> [String] -> IO ()
 git_ c as =

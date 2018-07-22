@@ -52,7 +52,7 @@ import Koji (kojiListPkgs, rpkg)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)
 import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
-              git_, gitBranch, maybeRemovePrefix, removePrefix, removeSuffix,
+              git, git_, gitBranch, maybeRemovePrefix, removePrefix, removeSuffix,
               withCurrentDirectory)
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
@@ -110,6 +110,7 @@ runCommand (com, os, ps) = do
         Merge -> repoAction_ mdist global True False (gitMerge opts) pkgs
         Diff -> repoAction_ mdist global False False (gitDiff opts) pkgs
         DiffOrigin -> repoAction_ mdist global True False (git_ "diff" [maybe "origin" ("origin/" ++) mdist]) pkgs
+        Unpushed -> repoAction mdist global False False (gitLogOneLine mdist) pkgs
         DiffBranch -> repoAction mdist global False True compareRawhide pkgs
         DiffStackage -> repoAction mdist global True True (compareStackage mdist) pkgs
         Verrel -> repoAction_ mdist global False True (cmd_ (rpkg mdist) ["verrel"]) pkgs
@@ -134,8 +135,8 @@ data Command = Command { cmdName :: CmdName , cmdDescription :: String}
 
 data CmdName = Checkout | Clone | CloneNew | Cmd | Count | Diff | DiffOrigin
              | DiffBranch | DiffStackage | Hackage | CompareHackage
-             | List | Merge | New | Prep | Commit | Pull | Push | Update
-             | Refresh | Subpkgs | Missing | Leaf | Verrel
+             | List | Merge | New | Prep | Commit | Pull | Push | Unpushed
+             | Update | Refresh | Subpkgs | Missing | Leaf | Verrel
   deriving (Read, Show, Eq)
 
 -- SomeCommand -> "some-command"
@@ -178,6 +179,7 @@ commands = [ Command Checkout "fedpkg switch-branch"
            , Command Commit "fedpkg commit"
            , Command Pull "git pull repos"
            , Command Push "git push repos"
+           , Command Unpushed "show unpushed commits"
            , Command Update "cabal-rpm update"
            , Command Refresh "cabal-rpm refresh"
            , Command Subpkgs "list subpackages"
@@ -534,3 +536,9 @@ checkLeafPkg opts pkg = do
         deps <- buildRequires p
         return $ any (`elem` deps) subpkgs
         else return False
+
+gitLogOneLine :: Maybe Dist -> Package -> IO ()
+gitLogOneLine mdist pkg = do
+  out <- git "log" [maybe "origin" ("origin/" ++) mdist ++ "..HEAD", "--pretty=oneline"]
+  unless (null out) $
+    putStrLn $ pkg +-+ ":" +-+ (unwords . tail . words) out
