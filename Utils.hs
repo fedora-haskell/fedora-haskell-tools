@@ -23,6 +23,8 @@ module Utils (checkPkgsGit,
               cmdSilent,
               cmdStdErr,
               error_,
+              git_,
+              gitBranch,
               logMsg,
               maybeRemovePrefix,
               removePrefix,
@@ -37,7 +39,7 @@ module Utils (checkPkgsGit,
 import Control.Applicative ((<$>))
 #endif
 import Control.Monad (void)
-import Data.List (stripPrefix)
+import Data.List (isPrefixOf, stripPrefix)
 import Data.Maybe (fromMaybe)
 import System.Exit (ExitCode (..))
 import System.Process (readProcess, readProcessWithExitCode, rawSystem)
@@ -173,3 +175,12 @@ withCurrentDirectory dir action =
 checkPkgsGit :: IO Bool
 checkPkgsGit =
   cmdBool "grep" ["-q", "-e", "\\(pkgs\\|src\\).", ".git/config"]
+
+git_ :: String -> [String] -> IO ()
+git_ c as =
+  cmd_ "git" ("--no-pager":c:as)
+
+gitBranch :: IO String
+gitBranch =
+  removePrefix "* " . head . filter (isPrefixOf "* ") . lines <$> cmd "git" ["branch"]
+

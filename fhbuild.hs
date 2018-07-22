@@ -36,7 +36,7 @@ import Koji (koji, kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
 import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package,
             packageManager, pkgDir, rpmInstall, rpmspec)
 import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
-              logMsg, removePrefix, removeSuffix, sudo)
+              git_, gitBranch, logMsg, removePrefix, removeSuffix, sudo)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built | Bump
              deriving (Eq)
@@ -128,7 +128,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
           actual <- gitBranch
           when (branch /= actual) $
             cmd_ (rpkg (Just dist)) ["switch-branch", branch]
-          cmd_ "git" ["pull", "-q"]
+          git_ "pull" ["-q"]
         -- noupdate <- doesFileExist ".noupdate"
         -- unless noupdate $
         --   void $ cmdBool "cabal-rpm" ["update"]
@@ -148,7 +148,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 then putStrLn $ nvr +-+ "already installed!\n"
                 else do
                 putStrLn $ fromMaybe "Not installed" installed +-+ "->" +-+ nvr
-                cmd_ "git" ["--no-pager", "log", "-1"]
+                git_ "log" ["-1"]
                 putStrLn ""
                 missing <- nub <$> (buildRequires spec >>= filterM notInstalled)
                 -- FIXME sort into build order
@@ -215,7 +215,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                         kojiWaitPkg topdir tag nvr'
                   showChange pkg latest nvr
                   putStrLn ""
-                  cmd_ "git" ["push"]
+                  git_ "push" []
                   rpkgBuild topdir dist nvr (if waitrepo then Just tag else Nothing)
                   bodhiOverride dist nvr
                   unless (null rest) $ do
@@ -279,7 +279,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                     setCurrentDirectory $ topdir </> wd
                     putStrLn ""
                   -- note "fedpkg --path dir local" saves .build.log in cwd
-                  cmd_ "git" ["push"]
+                  git_ "push" []
                   putStrLn ""
                   rpkgBuild topdir dist nvr  (if waitrepo then Just tag else Nothing)
                   bodhiOverride dist nvr
@@ -297,7 +297,7 @@ notInstalled pkg =
 
 showChange :: Package -> Maybe String -> String -> IO ()
 showChange pkg mlatest nvr = do
-  cmd_ "git" ["--no-pager", "log", "-1"]
+  git_ "log" ["-1"]
   putStrLn ""
   showNVRChange pkg mlatest nvr
 
@@ -335,10 +335,6 @@ bodhiOverride dist nvr =
 --     installed <- not <$> notInstalled pkg
 --     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
 --   return $ if null res then pkg else res
-
-gitBranch :: IO String
-gitBranch =
-  removePrefix "* " . head . filter (isPrefixOf "* ") . lines <$> cmd "git" ["branch"]
 
 eqNVR :: String -> Maybe String -> Bool
 eqNVR p1 p2 =

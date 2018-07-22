@@ -52,7 +52,7 @@ import Koji (kojiListPkgs, rpkg)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)
 import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
-              maybeRemovePrefix, removePrefix, removeSuffix,
+              git_, gitBranch, maybeRemovePrefix, removePrefix, removeSuffix,
               withCurrentDirectory)
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
@@ -105,11 +105,11 @@ runCommand (com, os, ps) = do
         CloneNew ->
           newPackages mdist >>= repoAction_ mdist global True False (return ())
         Checkout -> repoAction_ mdist global True False (return ()) pkgs
-        Pull -> repoAction_ mdist global True False (cmd_ "git" ["pull", "--rebase"]) pkgs
-        Push -> repoAction_ mdist global True False (cmd_ "git" ["push"]) pkgs
+        Pull -> repoAction_ mdist global True False (git_ "pull" ["--rebase"]) pkgs
+        Push -> repoAction_ mdist global True False (git_ "push" []) pkgs
         Merge -> repoAction_ mdist global True False (gitMerge opts) pkgs
         Diff -> repoAction_ mdist global False False (gitDiff opts) pkgs
-        DiffOrigin -> repoAction_ mdist global True False (cmd_ "git" ["--no-pager", "diff", maybe "origin" ("origin/" ++) mdist]) pkgs
+        DiffOrigin -> repoAction_ mdist global True False (git_ "diff" [maybe "origin" ("origin/" ++) mdist]) pkgs
         DiffBranch -> repoAction mdist global False True compareRawhide pkgs
         DiffStackage -> repoAction mdist global True True (compareStackage mdist) pkgs
         Verrel -> repoAction_ mdist global False True (cmd_ (rpkg mdist) ["verrel"]) pkgs
@@ -435,10 +435,6 @@ repoAction_ :: Maybe Dist -> [Option] -> Bool -> Bool -> IO () -> [Package] -> I
 repoAction_ mdist opts header needsSpec action =
   repoAction mdist opts header needsSpec (const action)
 
-gitBranch :: IO String
-gitBranch =
-  removePrefix "* " . head . filter (isPrefixOf "* ") . lines <$> cmd "git" ["branch"]
-
 compareStackage :: Maybe Dist -> Package -> IO ()
 compareStackage mdist p = do
   nvr <- cmd (rpkg mdist) ["verrel"]
@@ -481,16 +477,13 @@ commitChanges mdist [OptArg 'm' msg] = do
 commitChanges _ _ = error "commit requires: -m=\"commit message\""
 
 gitMerge :: [Option] -> IO ()
-gitMerge [OptArg 'f' branch] = cmd_ "git" ["merge", branch]
+gitMerge [OptArg 'f' branch] = git_ "merge" [branch]
 gitMerge _ = error "merge needs -f=BRANCH option"
 
 gitDiff :: [Option] -> IO ()
-gitDiff [OptArg 'w' branch] = cmd_ "git" (gitDiffSubcmd ++ [branch])
-gitDiff [] = cmd_ "git" gitDiffSubcmd
+gitDiff [OptArg 'w' branch] = git_ "diff" [branch]
+gitDiff [] = git_ "diff" []
 gitDiff _ = error "diff does not take this option"
-
-gitDiffSubcmd :: [String]
-gitDiffSubcmd = ["--no-pager", "diff"]
 
 execCmd :: [Option] -> IO ()
 execCmd [OptLong "cmd" cs]
