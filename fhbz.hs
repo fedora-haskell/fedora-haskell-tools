@@ -141,9 +141,9 @@ colon ps = (nv, if null s then "" else removePrefix ":" s)
 
 closeBug :: [Flag] -> String -> String -> String -> IO ()
 closeBug opts bid bcomp pkgver = do
-  rawhide <- cmd (koji rawhide) ["latest-pkg", "rawhide", bcomp, "--quiet"]
-  unless (null rawhide) $ do
-    let nvr = (head . words) rawhide
+  latest <- cmd (koji rawhide) ["latest-pkg", "rawhide", bcomp, "--quiet"]
+  unless (null latest) $ do
+    let nvr = (head . words) latest
     let nv = removeRelease nvr
     when (nv == pkgver) $ do
       putStrLn $ "closing" +-+ bid ++ ":" +-+ nv +-+ "in rawhide"
