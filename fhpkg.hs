@@ -114,8 +114,8 @@ runCommand (com, os, ps) = do
         DiffBranch -> repoAction mdist global False True compareRawhide pkgs
         DiffStackage -> repoAction mdist global True True (compareStackage mdist) pkgs
         Verrel -> repoAction_ mdist global False True (cmd_ (rpkg mdist) ["verrel"]) pkgs
-        Update -> repoAction mdist global True True updatePackage pkgs
-        Refresh -> repoAction_ mdist global True True (cmd_ "cabal-rpm" ["refresh"]) pkgs
+        Update -> repoAction mdist global True True (updateOrRefreshPackage False) pkgs
+        Refresh -> repoAction mdist global True True (updateOrRefreshPackage True) pkgs
         Prep -> repoAction_ mdist global True True (cmd_ (rpkg mdist) ["prep"]) pkgs
         Commit -> repoAction_ mdist global True True (commitChanges mdist opts) pkgs
         Subpkgs -> repoAction mdist global True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn) pkgs
@@ -463,11 +463,17 @@ compareRawhide p = do
   where
     removeDisttag = reverse . tail . dropWhile (/= '.') . reverse
 
-updatePackage :: Package -> IO ()
-updatePackage pkg = do
-  hckg <- cmdBool "grep" ["-q", "hackage.haskell.org/package/", pkg ++ ".spec"]
+isFromHackage :: Package -> IO Bool
+isFromHackage pkg =
+  cmdBool "grep" ["-q", "hackage.haskell.org/package/", pkg ++ ".spec"]
+
+
+updateOrRefreshPackage :: Bool -> Package -> IO ()
+updateOrRefreshPackage refresh pkg = do
+  hckg <- isFromHackage pkg
+  let mode = if refresh then "refresh" else "update"
   if hckg
-    then cmd_ "cabal-rpm" ["update"]
+    then cmd_ "cabal-rpm" [mode]
     else putStrLn "skipping since not hackage"
 
 commitChanges :: Maybe Dist -> [Option] -> IO ()
