@@ -96,27 +96,28 @@ runCommand (com, os, ps) = do
           withPackages (Just hackageRelease) pkgs $ compareHackage (null pkgs) hackageRelease
         New -> newPackages mdist >>= mapM_ putStrLn
 
+        -- repo actions
+        Checkout -> repoAction_ mdist global True False (return ()) pkgs
         Clone -> repoAction_ mdist global True False (return ()) pkgs
         CloneNew ->
           newPackages mdist >>= repoAction_ mdist global True False (return ())
-        Checkout -> repoAction_ mdist global True False (return ()) pkgs
+        Commit -> repoAction_ mdist global True True (commitChanges mdist opts) pkgs
+        Cmd -> repoAction_ mdist global True True (execCmd opts) pkgs
+        Diff -> repoAction mdist global False False (gitDiff opts) pkgs
+        DiffBranch -> repoAction mdist global False True compareRawhide pkgs
+        DiffOrigin -> repoAction_ mdist global True False (git_ "diff" [maybe "origin" ("origin/" ++) mdist]) pkgs
+        DiffStackage -> repoAction mdist global True True (compareStackage mdist) pkgs
+        Leaf -> repoAction mdist global (OptNull 'v' `elem` opts) True (checkLeafPkg opts) pkgs
+        Merge -> repoAction_ mdist global True False (gitMerge opts) pkgs
+        Missing -> repoAction mdist global True True (checkForMissingDeps mdist) pkgs
         Pull -> repoAction_ mdist global True False (git_ "pull" ["--rebase"]) pkgs
         Push -> repoAction_ mdist global True False (git_ "push" []) pkgs
-        Merge -> repoAction_ mdist global True False (gitMerge opts) pkgs
-        Diff -> repoAction mdist global False False (gitDiff opts) pkgs
-        DiffOrigin -> repoAction_ mdist global True False (git_ "diff" [maybe "origin" ("origin/" ++) mdist]) pkgs
-        Unpushed -> repoAction mdist global False True (gitLogOneLine mdist opts) pkgs
-        DiffBranch -> repoAction mdist global False True compareRawhide pkgs
-        DiffStackage -> repoAction mdist global True True (compareStackage mdist) pkgs
-        Verrel -> repoAction_ mdist global False True (cmd_ (rpkg mdist) ["verrel"]) pkgs
-        Update -> repoAction mdist global True True (updateOrRefreshPackage False) pkgs
-        Refresh -> repoAction mdist global True True (updateOrRefreshPackage True) pkgs
         Prep -> repoAction_ mdist global True True (cmd_ (rpkg mdist) ["prep"]) pkgs
-        Commit -> repoAction_ mdist global True True (commitChanges mdist opts) pkgs
+        Refresh -> repoAction mdist global True True (updateOrRefreshPackage True) pkgs
+        Unpushed -> repoAction mdist global False True (gitLogOneLine mdist opts) pkgs
+        Update -> repoAction mdist global True True (updateOrRefreshPackage False) pkgs
+        Verrel -> repoAction_ mdist global False True (cmd_ (rpkg mdist) ["verrel"]) pkgs
         Subpkgs -> repoAction mdist global True True (\ p -> rpmspec [] (Just "%{name}-%{version}\n") (p ++ ".spec") >>= putStrLn) pkgs
-        Missing -> repoAction mdist global True True (checkForMissingDeps mdist) pkgs
-        Leaf -> repoAction mdist global (OptNull 'v' `elem` opts) True (checkLeafPkg opts) pkgs
-        Cmd -> repoAction_ mdist global True True (execCmd opts) pkgs
   where
     checkHackageDist mdist =
       unless (isNothing mdist || mdist == Just hackageRelease) $ error $ "Hackage is currently for" +-+ hackageRelease ++ "!"
