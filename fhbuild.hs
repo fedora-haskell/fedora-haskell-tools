@@ -181,7 +181,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                     then rpmInstall rpms
                     else do
                     pkgmgr <- packageManager
-                    -- sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
+                    sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
                     sudo pkgmgr ("install":"-y":rpms)
               putStrLn ""
               putStrLn $ show (length rest) +-+ "packages left"
