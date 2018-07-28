@@ -428,7 +428,8 @@ repoAction mdist opts header needsSpec action (pkg:rest) = do
     unless isDead $ do
       let spec = pkg ++ ".spec"
       hasSpec <- doesFileExist spec
-      unless hasSpec $ putStrLn "No spec file!"
+      -- FIXME: silence for cmds that only output package names (eg unpushed -s)
+      unless hasSpec $ putStrLn $ (if header then "" else pkg ++ ": ") ++ "No spec file!"
       unless (needsSpec && not hasSpec) $
         action pkg
   repoAction mdist opts header needsSpec action rest
