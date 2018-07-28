@@ -183,6 +183,8 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                     pkgmgr <- packageManager
                     -- sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
                     sudo pkgmgr ("install":"-y":rpms)
+              putStrLn ""
+              putStrLn $ show (length rest) +-+ "packages left"
               build topdir Install dist Nothing Nothing False rest
             Mock -> do
               putStrLn $ "Mock building" +-+ nvr
