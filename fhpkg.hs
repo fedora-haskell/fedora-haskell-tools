@@ -35,7 +35,8 @@ import System.Directory (doesDirectoryExist, doesFileExist,
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), takeFileName)
-import System.IO (hFlush, hPutStrLn, stderr, stdout)
+import System.IO (BufferMode(..), hPutStrLn, hSetBuffering, stderr,
+                  stdout)
 --import System.Posix.Env (getEnv)
 import Text.CSV (parseCSV)
 import Text.Read (readMaybe)
@@ -69,6 +70,7 @@ runCommand (com, os, ps) = do
   let (global, opts) = partition (`elem` globalOpts) os
       allpkgs = OptNull 'A' `elem` global
       mdist = getOptVal (OptArg 'b' "brnch") global
+  hSetBuffering stdout LineBuffering
   case mdist of
     Nothing -> return ()
     Just d -> if d `elem` dists || "rhel" `isPrefixOf` d
@@ -391,7 +393,6 @@ repoAction mdist opts header needsSpec action (pkg:rest) = do
         branch = maybe "master" distBranch mdist
     when header $ do
       putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ "=="
-      hFlush stdout
     -- muser <- getEnv "USER"
     home <- getHomeDirectory
     haveSSH <- doesFileExist $ home </> ".ssh/id_rsa"
