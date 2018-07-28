@@ -1,3 +1,15 @@
+# fhpkg
+- use optparse-applicative
+- only print header if output
+
+(from fhpkg.hs):
+- cache dist package lists?
+- push subpackages to Hackage
+- compare branch versions
+- compare with LTS
+- query-format string
+
+
 repoquery system repos
 
 deps query tool
@@ -12,7 +24,7 @@ allow master instead of rawhide
 
 check commands has all commands
 
-count --ga to query without updates
+count: option to query without updates
 
 bodhi testing query?
 
@@ -57,3 +69,4 @@ bodhi testing query?
 - include version checks
 
 # package ordering (sorting)
+- use rpmbuild-order

@@ -12,13 +12,6 @@
 -- the Free Software Foundation, either version 3 of the License, or
 -- (at your option) any later version.
 
--- Todo:
--- cache dist package lists?
--- push subpackages to Hackage
--- compare branch versions
--- compare with LTS
--- query-format string
-
 module Main where
 
 #if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,2))
