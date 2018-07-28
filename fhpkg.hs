@@ -112,6 +112,7 @@ runCommand (com, os, ps) = do
         Missing -> repoAction mdist global True True (checkForMissingDeps mdist) pkgs
         Pull -> repoAction_ mdist global True False (git_ "pull" ["--rebase"]) pkgs
         Push -> repoAction_ mdist global True False (git_ "push" []) pkgs
+        Pushed -> repoAction mdist global False False (gitHeadAtOrigin mdist) pkgs
         Prep -> repoAction_ mdist global True True (cmd_ (rpkg mdist) ["prep"]) pkgs
         Refresh -> repoAction mdist global True True (updateOrRefreshPackage True) pkgs
         Unpushed -> repoAction mdist global False True (gitLogOneLine mdist opts) pkgs
@@ -131,8 +132,8 @@ data Command = Command { cmdName :: CmdName , cmdDescription :: String}
 
 data CmdName = Checkout | Clone | CloneNew | Cmd | Count | Diff | DiffOrigin
              | DiffBranch | DiffStackage | Hackage | CompareHackage
-             | List | Merge | New | Prep | Commit | Pull | Push | Unpushed
-             | Update | Refresh | Subpkgs | Missing | Leaf | Verrel
+             | List | Merge | New | Prep | Commit | Pull | Push | Pushed
+             | Unpushed | Update | Refresh | Subpkgs | Missing | Leaf | Verrel
   deriving (Read, Show, Eq)
 
 -- SomeCommand -> "some-command"
@@ -175,6 +176,7 @@ commands = [ Command Checkout "fedpkg switch-branch"
            , Command Commit "fedpkg commit"
            , Command Pull "git pull repos"
            , Command Push "git push repos"
+           , Command Pushed "head in sync with origin"
            , Command Unpushed "show unpushed commits"
            , Command Update "cabal-rpm update"
            , Command Refresh "cabal-rpm refresh"
@@ -558,3 +560,8 @@ gitLogOneLine mdist opts pkg = do
     putStrLn $ pkg ++ if short then "" else (unwords . map replaceHash . words) out
   where
     replaceHash h = if length h /= 40 then h else ":"
+
+gitHeadAtOrigin :: Maybe Dist -> Package -> IO ()
+gitHeadAtOrigin mdist pkg = do
+  same <- cmdBool "git" ["diff", "--quiet", maybe "origin" ("origin/" ++) mdist ++ "..HEAD"]
+  when same $ putStrLn pkg
