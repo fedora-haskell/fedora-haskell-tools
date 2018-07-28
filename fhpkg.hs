@@ -238,8 +238,8 @@ instance Eq Option
     OptLong s _ == OptLong s' _ = s == s'
     _ == _ = False
 
---hasOpt :: Option -> [Option] -> Bool
---hasOpt opt opts = any (== opt) opts
+hasOptNull :: Char -> [Option] -> Bool
+hasOptNull c opts = OptNull c `elem` opts
 
 getOptVal :: Option -> [Option] -> Maybe String
 getOptVal (OptNull _) _ = Nothing
@@ -250,9 +250,9 @@ getOptVal opt opts = maybe Nothing mval optval
     mval (OptArg _ v) = Just v
     mval (OptLong _ v) = Just v
 
-isNull :: Option -> Bool
-isNull (OptNull _) = True
-isNull _ = False
+--isNull :: Option -> Bool
+--isNull (OptNull _) = True
+--isNull _ = False
 
 instance Show Option
   where
@@ -288,7 +288,7 @@ parseCmdArgs as =
                   if all (`elem` globalOpts ++ map fst (cmdOpts c)) res then res
                   else error "invalid option"
               pkgs = map (removeSuffix "/") rest
-          in if OptNull 'A' `elem` opts && (not . null) pkgs
+          in if hasOptNull 'A' opts && (not . null) pkgs
              then error "Can't give packages with -A"
              else (c, opts, pkgs)
   where
@@ -397,14 +397,14 @@ repoAction mdist opts header needsSpec action (pkg:rest) = do
   withCurrentDirectory "." $ do
     let branchGiven = isJust mdist
         branch = maybe "master" distBranch mdist
-    when header $ do
+    when header $
       putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ "=="
     -- muser <- getEnv "USER"
     home <- getHomeDirectory
     haveSSH <- doesFileExist $ home </> ".ssh/id_rsa"
     dirExists <- doesDirectoryExist pkg
     unless dirExists $
-      cmd_ (rpkg mdist) $ ["clone"] ++ ["-a" | not haveSSH] ++ (if OptNull 'B' `elem` opts then ["-B"] else ["-b", branch]) ++ [pkg]
+      cmd_ (rpkg mdist) $ ["clone"] ++ ["-a" | not haveSSH] ++ (if hasOptNull 'B' opts then ["-B"] else ["-b", branch]) ++ [pkg]
     singleDir <- doesFileExist $ pkg </> ".git/config"
     unless singleDir $ do
       branchDir <- doesDirectoryExist $ pkg </> branch
@@ -492,7 +492,7 @@ gitDiff :: [Option] -> Package -> IO ()
 gitDiff opts pkg = do
   let mbrnch = getOptVal (OptArg 'w' "branch") opts
       branch = maybeToList mbrnch
-      short  = OptNull 's' `elem` opts
+      short  = hasOptNull 's' opts
   out <- git "diff" branch
   if short
     then unless (null out) $ putStrLn pkg
@@ -533,7 +533,7 @@ checkLeafPkg opts pkg = do
   subpkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
   allpkgs <- listDirectory top
   let other = map (\ p -> top </> p </> (if branchdir then dir else "") </> p ++ ".spec") $ allpkgs \\ [pkg]
-      verb = OptNull 'v' `elem` opts
+      verb = hasOptNull 'v' opts
   found <- filterM (dependsOn subpkgs) other
   if null found
     then putStrLn pkg
@@ -551,7 +551,7 @@ checkLeafPkg opts pkg = do
 gitLogOneLine :: Maybe Dist -> [Option] -> Package -> IO ()
 gitLogOneLine mdist opts pkg = do
   out <- git "log" [maybe "origin" ("origin/" ++) mdist ++ "..HEAD", "--pretty=oneline"]
-  let short = OptNull 's' `elem` opts
+  let short = hasOptNull 's' opts
   unless (null out) $
     putStrLn $ pkg ++ if short then "" else (unwords . map replaceHash . words) out
   where
