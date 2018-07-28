@@ -41,8 +41,9 @@ dists = [rawhide, "f28", "f27", "f26", "epel7"]
 rawhide :: String
 rawhide = "f29"
 
-sidetag :: Maybe String
-sidetag = Nothing -- Just "ghc"
+sidetag :: Dist -> Maybe String
+sidetag "f29" = Just "ghc"
+sidetag _ = Nothing
 
 hackageRelease :: String
 hackageRelease = "f28"
@@ -74,10 +75,10 @@ distOverride :: Dist -> Bool
 distOverride d = d `notElem` [rawhide, "f29" , "epel8"]
 
 distTag :: Dist -> String
-distTag d = d ++ "-" ++ fromMaybe "build" sidetag
+distTag d = d ++ "-" ++ fromMaybe "build" (sidetag d)
 
 distTarget  :: Dist -> String
-distTarget d = maybe d (\ suff -> d ++ "-" ++ suff) sidetag
+distTarget d = maybe d (\ suff -> d ++ "-" ++ suff) (sidetag d)
 
 releaseVersion :: Dist -> Maybe String
 releaseVersion r | r == rawhide = Just "rawhide"
