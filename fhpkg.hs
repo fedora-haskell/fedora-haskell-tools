@@ -113,7 +113,7 @@ runCommand (com, os, ps) = do
         Refresh -> repoAction mdist global True True (updateOrRefreshPackage True) pkgs
         Prep -> repoAction_ mdist global True True (cmd_ (rpkg mdist) ["prep"]) pkgs
         Commit -> repoAction_ mdist global True True (commitChanges mdist opts) pkgs
-        Subpkgs -> repoAction mdist global True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= putStrLn) pkgs
+        Subpkgs -> repoAction mdist global True True (\ p -> rpmspec [] (Just "%{name}-%{version}\n") (p ++ ".spec") >>= putStrLn) pkgs
         Missing -> repoAction mdist global True True (checkForMissingDeps mdist) pkgs
         Leaf -> repoAction mdist global (OptNull 'v' `elem` opts) True (checkLeafPkg opts) pkgs
         Cmd -> repoAction_ mdist global True True (execCmd opts) pkgs
