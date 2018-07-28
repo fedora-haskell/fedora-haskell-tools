@@ -103,9 +103,9 @@ runCommand (com, os, ps) = do
         Pull -> repoAction_ mdist global True False (git_ "pull" ["--rebase"]) pkgs
         Push -> repoAction_ mdist global True False (git_ "push" []) pkgs
         Merge -> repoAction_ mdist global True False (gitMerge opts) pkgs
-        Diff -> repoAction_ mdist global False False (gitDiff opts) pkgs
+        Diff -> repoAction mdist global False False (gitDiff opts) pkgs
         DiffOrigin -> repoAction_ mdist global True False (git_ "diff" [maybe "origin" ("origin/" ++) mdist]) pkgs
-        Unpushed -> repoAction mdist global False False (gitLogOneLine mdist) pkgs
+        Unpushed -> repoAction mdist global False True (gitLogOneLine mdist opts) pkgs
         DiffBranch -> repoAction mdist global False True compareRawhide pkgs
         DiffStackage -> repoAction mdist global True True (compareStackage mdist) pkgs
         Verrel -> repoAction_ mdist global False True (cmd_ (rpkg mdist) ["verrel"]) pkgs
@@ -180,16 +180,18 @@ commands = [ Command Checkout "fedpkg switch-branch"
            , Command Subpkgs "list subpackages"
            , Command Verrel "show nvr of packages"]
 
--- (mandatory, optional)
---type CommandOptions = ([Option], [Option])
 type CommandOptions = [(Option, Bool)]
 
+-- True: mandatory
+-- False: optional
 cmdOpts :: CmdName ->  CommandOptions
-cmdOpts Commit = [(OptArg 'm' "\"COMMITMSG\"", False)]
-cmdOpts Diff = [(OptArg 'w' "BRANCH", True)]
-cmdOpts Merge = [(OptArg 'f' "BRANCH", False)]
-cmdOpts Cmd = [(OptLong "cmd" "\"command\"", False)]
+cmdOpts Commit = [(OptArg 'm' "\"COMMITMSG\"", True)]
+cmdOpts Diff = [(OptArg 'w' "BRANCH", False),
+                (OptNull 's', False)]
+cmdOpts Merge = [(OptArg 'f' "BRANCH", True)]
+cmdOpts Cmd = [(OptLong "cmd" "\"command\"", True)]
 cmdOpts Leaf = [(OptNull 'v', False)]
+cmdOpts Unpushed = [(OptNull 's', False)]
 cmdOpts _ = []
 
 globalOptsDesc :: [(Option, String)]
@@ -236,6 +238,9 @@ instance Eq Option
     OptLong s _ == OptLong s' _ = s == s'
     _ == _ = False
 
+--hasOpt :: Option -> [Option] -> Bool
+--hasOpt opt opts = any (== opt) opts
+
 getOptVal :: Option -> [Option] -> Maybe String
 getOptVal (OptNull _) _ = Nothing
 getOptVal opt opts = maybe Nothing mval optval
@@ -260,7 +265,7 @@ showOpts = unwords . map (\ s -> "[" ++ show s ++ "]")
 
 showCmdOpts :: CmdName -> String
 showCmdOpts = unwords . map
-              (\ (s,o) -> if o then "[" ++ show s ++ "]" else show s) . cmdOpts
+              (\ (s,o) -> if o then show s else "[" ++ show s ++ "]") . cmdOpts
 
 describeOpt :: (Option, String) -> String
 describeOpt (opt, desc) =
@@ -268,6 +273,7 @@ describeOpt (opt, desc) =
 
 type Arguments = (CmdName, [Option], [Package])
 
+-- FIXME: should check mandatory opts present
 parseCmdArgs :: [String] -> Arguments
 parseCmdArgs [] = error "Need to pass more arguments" -- should not happen
 parseCmdArgs as =
@@ -482,10 +488,15 @@ gitMerge :: [Option] -> IO ()
 gitMerge [OptArg 'f' branch] = git_ "merge" [branch]
 gitMerge _ = error "merge needs -f=BRANCH option"
 
-gitDiff :: [Option] -> IO ()
-gitDiff [OptArg 'w' branch] = git_ "diff" [branch]
-gitDiff [] = git_ "diff" []
-gitDiff _ = error "diff does not take this option"
+gitDiff :: [Option] -> Package -> IO ()
+gitDiff opts pkg = do
+  let mbrnch = getOptVal (OptArg 'w' "branch") opts
+      branch = maybeToList mbrnch
+      short  = OptNull 's' `elem` opts
+  out <- git "diff" branch
+  if short
+    then unless (null out) $ putStrLn pkg
+    else putStrLn out
 
 execCmd :: [Option] -> IO ()
 execCmd [OptLong "cmd" cs]
@@ -537,8 +548,11 @@ checkLeafPkg opts pkg = do
         return $ any (`elem` deps) subpkgs
         else return False
 
-gitLogOneLine :: Maybe Dist -> Package -> IO ()
-gitLogOneLine mdist pkg = do
+gitLogOneLine :: Maybe Dist -> [Option] -> Package -> IO ()
+gitLogOneLine mdist opts pkg = do
   out <- git "log" [maybe "origin" ("origin/" ++) mdist ++ "..HEAD", "--pretty=oneline"]
+  let short = OptNull 's' `elem` opts
   unless (null out) $
-    putStrLn $ pkg +-+ ":" +-+ (unwords . tail . words) out
+    putStrLn $ pkg ++ if short then "" else (unwords . map replaceHash . words) out
+  where
+    replaceHash h = if length h /= 40 then h else ":"
