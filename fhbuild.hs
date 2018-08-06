@@ -351,7 +351,7 @@ processDeps [] = error "processDeps: empty string!"
 dependent :: String -> String -> String -> FilePath -> IO Bool
 dependent dep pkg branch topdir = do
   pkgpath <- pkgDir pkg branch topdir
-  cmdBool "grep" ["-q", dep, pkgpath </> pkg ++ ".spec"]
+  grep dep $ pkgpath </> pkg ++ ".spec"
 
 displayLogTail :: FilePath -> IO ()
 displayLogTail f = do

@@ -25,7 +25,7 @@ import System.FilePath ((</>))
 
 import Dists (Dist)
 import RPM (pkgDir)
-import Utils (cmd, cmd_, cmdBool)
+import Utils (cmd, cmd_, cmdBool, grep)
 
 koji :: Dist -> String
 koji dist = if "rhel" `isPrefixOf` dist then "brew" else "koji"
@@ -46,7 +46,7 @@ kojiWaitPkg topdir dist nvr = do
 kojiCheckFHBuilt :: FilePath -> String -> IO Bool
 kojiCheckFHBuilt topdir nvr = do
   let fhbuilt = topdir </> ".fhbuilt"
-  cmdBool "grep" ["-q", nvr, fhbuilt]
+  grep nvr fhbuilt
 
 kojiBuilding :: String -> String -> Dist -> IO Bool
 kojiBuilding pkg build dist = do

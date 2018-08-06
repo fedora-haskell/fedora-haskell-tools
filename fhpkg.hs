@@ -45,7 +45,7 @@ import Dists (Dist, dists, distBranch, hackageRelease, rawhide, releaseVersion)
 import Koji (kojiListPkgs, rpkg)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)
-import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent,
+import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent, grep,
               git, git_, gitBranch, maybeRemovePrefix, removePrefix, removeSuffix,
               withCurrentDirectory)
 
@@ -469,7 +469,7 @@ compareRawhide p = do
 
 isFromHackage :: Package -> IO Bool
 isFromHackage pkg =
-  cmdBool "grep" ["-q", "hackage.haskell.org/package/", pkg ++ ".spec"]
+  grep "hackage.haskell.org/package/" $ pkg ++ ".spec"
 
 
 updateOrRefreshPackage :: Bool -> Package -> IO ()

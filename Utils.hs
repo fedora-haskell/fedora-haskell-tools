@@ -26,6 +26,7 @@ module Utils (checkPkgsGit,
               git,
               git_,
               gitBranch,
+              grep,
               logMsg,
               maybeRemovePrefix,
               removePrefix,
@@ -175,7 +176,7 @@ withCurrentDirectory dir action =
 
 checkPkgsGit :: IO Bool
 checkPkgsGit =
-  cmdBool "grep" ["-q", "-e", "\\(pkgs\\|src\\).", ".git/config"]
+  grep "\\(pkgs\\|src\\)." ".git/config"
 
 git :: String -> [String] -> IO String
 git c as =
@@ -188,4 +189,8 @@ git_ c as =
 gitBranch :: IO String
 gitBranch =
   removePrefix "* " . head . filter (isPrefixOf "* ") . lines <$> cmd "git" ["branch"]
+
+grep :: String -> FilePath -> IO Bool
+grep pat file =
+  cmdBool "grep" ["-q", pat, file]
 
