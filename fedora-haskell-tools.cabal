@@ -25,6 +25,7 @@ Executable fhbuild
                    directory,
                    filepath,
                    process,
+                   time < 1.9,
                    unix
     Other-modules: Dists, Koji, RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
@@ -46,6 +47,7 @@ Executable fhpkg
                    filepath,
                    HTTP,
                    process,
+                   time < 1.9,
                    unix
     if impl(ghc<8.0)
         Build-depends: semigroups
