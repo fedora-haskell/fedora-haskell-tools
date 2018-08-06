@@ -29,14 +29,13 @@ import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), dropExtension)
 import System.IO (hPutStrLn, stderr)
 
-import Dists (Dist, dists, distBranch, distOverride, distTag, distTarget,
-              rpmDistTag)
-import Koji (koji, kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
-             notInKoji, rpkg)
+import Dists (Dist, dists, distBranch, distOverride, distTag, rpmDistTag)
+import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
+             notInKoji, rpkg, rpkgBuild)
 import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package,
             packageManager, pkgDir, rpmInstall, rpmspec)
 import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
-              git_, gitBranch, logMsg, removePrefix, removeSuffix, sudo)
+              git_, gitBranch, grep, removePrefix, removeSuffix, sudo)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built | Bump
              deriving (Eq)
@@ -311,16 +310,6 @@ showNVRChange pkg (Just latest) nvr = do
   putStrLn $ replicate (length pkg - 1) ' ' ++ "->" +-+ removePrefix prefix nvr
   where
     prefix = pkg ++ "-"
-
-rpkgBuild :: FilePath -> Dist -> String -> Maybe String -> IO ()
-rpkgBuild topdir dist nvr waittag = do
-  giturl <- cmd (rpkg (Just dist)) ["giturl"]
-  success <- cmdBool (koji dist) ["build", "--fail-fast", distTarget dist, giturl]
-  if success
-    then do
-    logMsg $ nvr +-+ "built"
-    maybe (return ()) (\ t -> kojiWaitPkg topdir t nvr) waittag
-    else waitForEnter
 
 bodhiOverride :: Dist -> String -> IO ()
 bodhiOverride dist nvr =

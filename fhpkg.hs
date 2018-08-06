@@ -95,8 +95,11 @@ runCommand (com, os, ps) = do
           checkHackageDist mdist
           withPackages (Just hackageRelease) pkgs $ compareHackage (null pkgs) hackageRelease
         New -> newPackages mdist >>= mapM_ putStrLn
+        OldPackages -> do
+          repopkgs <- repoqueryHaskell True mdist
+          mapM_ putStrLn $ pkgs \\ repopkgs
 
-        -- repo actions
+        -- repo actions (header, needs-spec :: Bool)
         Checkout -> repoAction_ mdist global True False (return ()) pkgs
         Clone -> repoAction_ mdist global True False (return ()) pkgs
         CloneNew ->
@@ -130,9 +133,10 @@ runCommand (com, os, ps) = do
 -- name, summary
 data Command = Command { cmdName :: CmdName , cmdDescription :: String}
 
-data CmdName = Checkout | Clone | CloneNew | Cmd | Count | Diff | DiffOrigin
-             | DiffBranch | DiffStackage | Hackage | CompareHackage
-             | List | Merge | New | Prep | Commit | Pull | Push | Pushed
+data CmdName = Checkout | Clone | CloneNew | Cmd | Count
+             | Diff | DiffOrigin | DiffBranch | DiffStackage
+             | Hackage | HackageCompare | HeadOrigin
+             | List | Merge | New | OldPackages | Prep | Commit | Pull | Push
              | Unpushed | Update | Refresh | Subpkgs | Missing | Leaf | Verrel
   deriving (Read, Show, Eq)
 
@@ -173,6 +177,7 @@ commands = [ Command Checkout "fedpkg switch-branch"
            , Command Merge "git merge"
            , Command Missing "missing dependency source packages"
            , Command New "new unbuilt packages"
+           , Command OldPackages "packages not in repoquery"
            , Command Prep "fedpkg prep"
            , Command Commit "fedpkg commit"
            , Command Pull "git pull repos"

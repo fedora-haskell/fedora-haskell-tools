@@ -17,6 +17,8 @@ module Utils (checkPkgsGit,
               cmd,
               cmd_,
               cmdBool,
+              cmdFragile,
+              cmdFragile_,
               cmdlog,
               cmdMaybe,
               cmdN,
@@ -40,10 +42,12 @@ module Utils (checkPkgsGit,
 #else
 import Control.Applicative ((<$>))
 #endif
+import Control.Concurrent (threadDelay)
 import Control.Monad (void)
 import Data.List (isPrefixOf, stripPrefix)
 import Data.Maybe (fromMaybe)
 import System.Exit (ExitCode (..))
+import System.IO (hPutStrLn, stderr)
 import System.Process (readProcess, readProcessWithExitCode, rawSystem)
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
@@ -88,6 +92,13 @@ cmdStdErr c as = do
   (_ret, out, err) <- readProcessWithExitCode c as ""
   return (removeTrailingNewline out, removeTrailingNewline err)
 
+-- cmdBoolStd :: String -> [String] -> IO (Bool, String)
+-- cmdBoolStd c as = do
+--   (ret, out, err) <- readProcessWithExitCode c as ""
+--   case ret of
+--     ExitSuccess -> return (True, out)
+--     ExitFailure n -> hPutStrLn stderr ("\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n ++ "\n" ++ err) >> return (False, out)
+
 cmdStdIn_ :: String -> [String] -> String -> IO ()
 cmdStdIn_ c as inp = void $ cmdStdIn c as inp
 
@@ -97,6 +108,26 @@ cmd_ c as = do
   case ret of
     ExitSuccess -> return ()
     ExitFailure n -> error $ "\"" ++ c +-+ unwords as ++ "\" failed with exit code" +-+ show n
+
+cmdFragile :: String -> [String] -> IO String
+cmdFragile c as = do
+  (ret, out, err) <- readProcessWithExitCode c as ""
+  case ret of
+    ExitSuccess -> return out
+    ExitFailure n -> do
+      hPutStrLn stderr $ "\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n ++ "\n" ++ err
+      threadDelay 2000000
+      cmdFragile c as
+
+cmdFragile_ :: String -> [String] -> IO ()
+cmdFragile_ c as = do
+  ret <- rawSystem c as
+  case ret of
+    ExitSuccess -> return ()
+    ExitFailure _ -> do
+      hPutStrLn stderr $ "retrying \"" ++ c +-+ unwords as ++ "\""
+      threadDelay 2000000
+      cmdFragile_ c as
 
 -- dry-run
 cmdN :: String -> [String] -> IO ()
@@ -132,11 +163,11 @@ cmdBool c as = do
 
 -- hide stdout
 cmdSilent :: String -> [String] -> IO ()
-cmdSilent c args = do
-  (ret, _, err) <- readProcessWithExitCode c args ""
+cmdSilent c as = do
+  (ret, _, err) <- readProcessWithExitCode c as ""
   case ret of
     ExitSuccess -> return ()
-    ExitFailure n -> error $ "\"" ++ c +-+ unwords args ++ "\"" +-+ "failed with status" +-+ show n ++ "\n" ++ err
+    ExitFailure n -> error $ "\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n ++ "\n" ++ err
 
 sudo :: String -> [String] -> IO ()
 sudo c as = cmdlog "sudo" (c:as)
