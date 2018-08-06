@@ -76,7 +76,7 @@ runCommand (com, os, ps) = do
     Just d -> if d `elem` dists || "rhel" `isPrefixOf` d
       then return ()
       else putStrLn "Unknown branch"
-  when (not allpkgs && null ps && com `notElem` [Hackage, CompareHackage, Count]) $
+  when (not allpkgs && null ps && com `notElem` [Hackage, HackageCompare, Count]) $
     help "Please specify package(s)"
   if allpkgs && (not . null) ps
     then error "Cannot have '-A' and list of packages"
@@ -91,7 +91,7 @@ runCommand (com, os, ps) = do
           -- add check for no pkg args
           checkHackageDist mdist
           repoqueryHackageCSV hackageRelease
-        CompareHackage -> do
+        HackageCompare -> do
           checkHackageDist mdist
           withPackages (Just hackageRelease) pkgs $ compareHackage (null pkgs) hackageRelease
         New -> newPackages mdist >>= mapM_ putStrLn
@@ -107,12 +107,12 @@ runCommand (com, os, ps) = do
         DiffBranch -> repoAction mdist global False True compareRawhide pkgs
         DiffOrigin -> repoAction_ mdist global True False (git_ "diff" [maybe "origin" ("origin/" ++) mdist]) pkgs
         DiffStackage -> repoAction mdist global True True (compareStackage mdist) pkgs
+        HeadOrigin -> repoAction mdist global False False (gitHeadAtOrigin mdist) pkgs
         Leaf -> repoAction mdist global (OptNull 'v' `elem` opts) True (checkLeafPkg opts) pkgs
         Merge -> repoAction_ mdist global True False (gitMerge opts) pkgs
         Missing -> repoAction mdist global True True (checkForMissingDeps mdist) pkgs
         Pull -> repoAction_ mdist global True False (git_ "pull" ["--rebase"]) pkgs
         Push -> repoAction_ mdist global True False (git_ "push" []) pkgs
-        Pushed -> repoAction mdist global False False (gitHeadAtOrigin mdist) pkgs
         Prep -> repoAction_ mdist global True True (cmd_ (rpkg mdist) ["prep"]) pkgs
         Refresh -> repoAction mdist global True True (updateOrRefreshPackage True) pkgs
         Unpushed -> repoAction mdist global False True (gitLogOneLine mdist opts) pkgs
@@ -166,7 +166,8 @@ commands = [ Command Checkout "fedpkg switch-branch"
            , Command DiffBranch "compare branch with master"
            , Command DiffStackage "compare with stackage"
            , Command Hackage "generate Hackage distro data"
-           , Command CompareHackage "compare with Hackage distro data"
+           , Command HackageCompare "compare with Hackage distro data"
+           , Command HeadOrigin "head in sync with origin"
            , Command Leaf "list leaf packages"
            , Command List "list packages"
            , Command Merge "git merge"
@@ -176,7 +177,6 @@ commands = [ Command Checkout "fedpkg switch-branch"
            , Command Commit "fedpkg commit"
            , Command Pull "git pull repos"
            , Command Push "git push repos"
-           , Command Pushed "head in sync with origin"
            , Command Unpushed "show unpushed commits"
            , Command Update "cabal-rpm update"
            , Command Refresh "cabal-rpm refresh"
