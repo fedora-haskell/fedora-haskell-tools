@@ -452,10 +452,11 @@ repoAction_ mdist opts header needsSpec action =
 compareStackage :: Maybe Dist -> Package -> IO ()
 compareStackage mdist p = do
   nvr <- cmd (rpkg mdist) ["verrel"]
-  stkg <- cmdMaybe "stackage" ["package", "lts", maybeRemovePrefix "ghc-" p]
+  let stream = "lts-11"
+  stkg <- cmdMaybe "stackage" ["package", stream, maybeRemovePrefix "ghc-" p]
   let same = isJust stkg && fromJust stkg `isInfixOf` nvr
   putStrLn $ removePrefix (p ++ "-") nvr +-+ "(fedora)"
-  putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(lts)"
+  putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(" ++ stream ++ ")"
 
 
 compareRawhide :: Package -> IO ()
