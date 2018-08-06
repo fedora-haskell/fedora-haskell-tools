@@ -41,7 +41,8 @@ import System.IO (BufferMode(..), hPutStrLn, hSetBuffering, stderr,
 import Text.CSV (parseCSV)
 import Text.Read (readMaybe)
 
-import Dists (Dist, dists, distBranch, hackageRelease, rawhide, releaseVersion)
+import Dists (Dist, dists, distBranch, distRepo, distUpdates, hackageRelease,
+              rawhide, releaseVersion)
 import Koji (kojiListPkgs, rpkg)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)
@@ -382,7 +383,9 @@ repoqueryHaskell :: Bool -> Maybe Dist -> IO [Package]
 repoqueryHaskell verbose mdist = do
   let relver = maybe Nothing releaseVersion mdist
   when verbose $ putStrLn "Getting packages from repoquery"
-  bin <- words <$> repoquery relver ["--qf=%{source_name}", "--whatrequires", "libHSbase-*-ghc*.so()(64bit)"]
+  let repo = maybe "rawhide" distRepo mdist
+      updates = maybeToList $ maybe Nothing distUpdates mdist
+  bin <- words <$> repoquery relver (["--repo=" ++ repo] ++ ["--repo=" ++ u | u <- updates] ++ ["--qf=%{source_name}", "--whatrequires", "libHSbase-*-ghc*.so()(64bit)"])
   when (null bin) $ error "No libHSbase consumers found!"
   return $ sort $ nub bin
 

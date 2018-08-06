@@ -9,9 +9,6 @@
 - compare with LTS
 - query-format string
 
-
-repoquery system repos
-
 deps query tool
 
 Parallelize builds
