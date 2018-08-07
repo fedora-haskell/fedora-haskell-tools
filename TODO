@@ -1,3 +1,5 @@
+split into separate packages or merge??
+
 # fhpkg
 - use optparse-applicative
 - only print header if output

@@ -1,3 +1,23 @@
+* 0.6 (2018-08-07)
+- fhpkg
+  - new commands: hackage-compare, merge, missing, count, leaf, unpushed, head-origin
+  - command options including arguments and global options
+  - new -A option for all packages replaces default of all packages
+  - new -b=branch option
+  - some support for private git repos and branches
+  - use line buffering for synchronous stdout
+  - new -s short output option for diff and unpushed
+  - compare-stackage now uses lts-11
+- fhbuild
+  - install: pause after failure
+  - install: print number of packages left
+  - install: dnf remove existing package
+  - koji client robustness against broken connections
+- use fedora and updates repos only for repoquery
+- initial support for rpkg other than fedpkg
+- ghc-8.4
+- lot refactoring for utils etc
+
 * 0.5 (2018-02-16)
 - fhpkg
   - add commands for prep, refresh, diff-origin, push, and commit
