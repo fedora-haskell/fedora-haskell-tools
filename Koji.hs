@@ -35,7 +35,7 @@ import System.FilePath ((</>))
 
 import Dists (Dist, distTarget)
 import RPM (pkgDir)
-import Utils (cmd, cmd_, cmdBool, cmdFragile, cmdFragile_, grep, logMsg)
+import Utils (cmd, cmd_, cmdBool, cmdFragile, cmdFragile_, grep, logMsg, (+-+))
 
 kojicmd :: Dist -> String
 kojicmd dist = if "rhel" `isPrefixOf` dist then "brew" else "koji"
@@ -54,6 +54,7 @@ kojiWaitPkg topdir dist nvr = do
   let fhbuilt = topdir </> ".fhbuilt"
   already <- kojiCheckFHBuilt topdir nvr
   unless already $ do
+    putStrLn $ "Waiting for" +-+ nvr +-+ "in" +-+ dist
     cmdFragile_ (kojicmd dist) ["wait-repo", dist, "--build=" ++ nvr]
     appendFile fhbuilt $ nvr ++ "\n"
 
