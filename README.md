@@ -12,6 +12,8 @@ Builds set of packages locally or in Koji or Mock.
 For local builds unbuilt dependent packages are also built recursive.
 
 For updates built in Koji, buildroot overrides are created and waited for.
+Chain builds packages with wait-repo.
+Also checks that updated dependencies have been built first.
 
 Please be careful using this: eg for Rawhide this can easily cause
 package builds to take place in Koji when packages haven't been built
