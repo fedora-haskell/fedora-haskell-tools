@@ -43,7 +43,7 @@ module Utils (checkPkgsGit,
 import Control.Applicative ((<$>))
 #endif
 import Control.Concurrent (threadDelay)
-import Control.Monad (void)
+import Control.Monad (unless, void, when)
 import Data.List (isPrefixOf, stripPrefix)
 import Data.Maybe (fromMaybe)
 import System.Exit (ExitCode (..))
@@ -115,7 +115,10 @@ cmdFragile c as = do
   case ret of
     ExitSuccess -> return out
     ExitFailure n -> do
-      hPutStrLn stderr $ "\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n ++ "\n" ++ err
+      unless (null out) $ putStrLn out
+      when (null (out ++ err)) $
+        hPutStrLn stderr $ "\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n
+      unless (null err) $ hPutStrLn stderr err
       threadDelay 2000000
       cmdFragile c as
 
