@@ -36,17 +36,17 @@ import Utils ((+-+))
 type Dist = String
 
 dists :: [Dist]
-dists = [rawhide, "f28", "f27", "f26", "epel7"]
+dists = [rawhide, "f29", "f28", "f27", "epel7"]
 
 rawhide :: String
-rawhide = "f29"
+rawhide = "f30"
 
 sidetag :: Dist -> Maybe String
-sidetag "f29" = Just "ghc"
+--sidetag "f30" = Just "ghc"
 sidetag _ = Nothing
 
 hackageRelease :: String
-hackageRelease = "f28"
+hackageRelease = "f29"
 
 distBranch :: Dist -> String
 distBranch d | d == rawhide = "master"
