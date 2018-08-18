@@ -42,7 +42,7 @@ data BugState = BugState {
   whiteboard :: String
   }
 
-data Flag = Close | Force | DryRun | NoComment | Refresh | State String
+data Flag = Check | Force | DryRun | NoComment | Refresh | State String
    deriving (Eq, Show)
 
 isState :: Flag -> Bool
@@ -56,7 +56,7 @@ options =
  , Option "r" ["refresh"] (NoArg Refresh) "update if status changed"
  , Option "s" ["state"]  (ReqArg State "BUGSTATE") "bug state (default NEW)"
  , Option "N" ["no-comment"]  (NoArg NoComment) "update the whiteboard only"
- , Option "c" ["close"]  (NoArg Close) "close bugs whose version is in Rawhide"
+ , Option "c" ["check"]  (NoArg Check) "check update for missing deps"
  ]
 
 parseOpts :: [String] -> IO ([Flag], [String])
@@ -101,7 +101,7 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
     -- should not happen!
     unless (hkg `isPrefixOf` hkgver') $
       putStrLn $ "Component and Summary inconsistent!" +-+ hkg +-+ hkgver' +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
-    if Close `elem` opts then closeBug opts bid bcomp pkgver else do
+    if Check `notElem` opts then closeBug opts bid bcomp pkgver else do
       let force = Force `elem` opts
           refresh = Refresh `elem` opts
       when (hkgver /= hkgver' || force || refresh) $ do
