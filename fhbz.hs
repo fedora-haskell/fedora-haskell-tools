@@ -105,7 +105,7 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
       let force = Force `elem` opts
           refresh = Refresh `elem` opts
       when (hkgver /= hkgver' || force || refresh) $ do
-        updateCabalPackages
+        cabalUpdate
         (missing, err) <- cmdStdErr "cblrpm" ["missingdeps", hkgver']
         let state' = if null missing && null err then "ok" else "deps"
         when ((hkgver, state) /= (hkgver', state') || force) $ do
@@ -163,11 +163,11 @@ updateBug bid _bcomp hkgver missing state nocomment = do
   bugzillaModify $ ["--whiteboard==" ++ hkgver ++ ":" ++ state] ++
     (if nocomment then [] else ["--comment=" ++ comment]) ++ [bid]
 
-updateCabalPackages :: IO ()
-updateCabalPackages = do
+cabalUpdate :: IO ()
+cabalUpdate = do
   home <- getEnv "HOME"
-  pkgs <- getModificationTime (home </> ".cabal/packages/hackage.haskell.org/00-index.tar.gz")
+  pkgs <- getModificationTime (home </> ".cabal/packages/hackage.haskell.org/01-index.tar.gz")
   now <- getCurrentTime
   let diff = diffUTCTime now pkgs
-  when (diff > 36000) $
+  when (diff > 3600) $
     cmd_ "cabal" ["update"]
