@@ -27,6 +27,7 @@ Executable fhbuild
                    process,
                    time < 1.9,
                    unix
+    Hs-Source-Dirs: src, .
     Other-modules: Dists, Koji, RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
@@ -35,6 +36,7 @@ Executable fhbz
     Main-is:       fhbz.hs
     Build-depends: base < 5,
                    time
+    Hs-Source-Dirs: src, .
     Other-modules: Dists, Koji, RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
@@ -51,6 +53,7 @@ Executable fhpkg
                    unix
     if impl(ghc<8.0)
         Build-depends: semigroups
+    Hs-Source-Dirs: src, .
     Other-modules: Dists,
                    Koji,
                    RPM,
