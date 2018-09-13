@@ -62,3 +62,11 @@ Executable fhpkg
                    Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
+
+Executable fhmock
+    Main-is:       fhmock.hs
+    Build-depends: base < 5, optparse-simple, process, simple-cmd
+    Hs-Source-Dirs: src, .
+    Other-modules: Dists, Utils, Paths_fedora_haskell_tools
+    GHC-options:   -fwarn-missing-signatures -Wall
+    Extensions:    CPP
