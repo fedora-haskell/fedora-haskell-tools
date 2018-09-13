@@ -35,7 +35,7 @@ import System.Exit (ExitCode (..), exitFailure, exitWith)
 import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, distBranch, dists, distTag, releaseVersion)
-import Utils (cmd, removePrefix, removeSuffix, sudo, (+-+))
+import SimpleCmd (cmd, removeStrictPrefix, removeSuffix, sudo, (+-+))
 
 -- @since base 4.8.0.0
 die :: String -> IO a
@@ -109,7 +109,7 @@ derefSrcPkg topdir dist verb pkg =
          then return lib
          else do
          -- todo: check bin has lib
-         let bin = removePrefix "ghc-" lib
+         let bin = removeStrictPrefix "ghc-" lib
          binExists <- doesDirectoryExist $ topdir </> bin
          if binExists
            then return bin

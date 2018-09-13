@@ -35,7 +35,8 @@ import System.FilePath ((</>))
 
 import Dists (Dist, distTarget)
 import RPM (pkgDir)
-import Utils (cmd, cmd_, cmdBool, cmdFragile, cmdFragile_, grep, logMsg, (+-+))
+import SimpleCmd (cmd, cmd_, cmdBool, grep_, logMsg, (+-+))
+import Utils (cmdFragile, cmdFragile_)
 
 kojicmd :: Dist -> String
 kojicmd dist = if "rhel" `isPrefixOf` dist then "brew" else "koji"
@@ -61,7 +62,7 @@ kojiWaitPkg topdir dist nvr = do
 kojiCheckFHBuilt :: FilePath -> String -> IO Bool
 kojiCheckFHBuilt topdir nvr = do
   let fhbuilt = topdir </> ".fhbuilt"
-  grep nvr fhbuilt
+  grep_ nvr fhbuilt
 
 kojiBuilding :: String -> String -> Dist -> IO Bool
 kojiBuilding pkg build dist = do
@@ -70,7 +71,7 @@ kojiBuilding pkg build dist = do
 
 -- parseKojiTask :: [String] -> Maybe String
 -- parseKojiTask [] = Nothing
--- parseKojiTask (l:ls) | "Created task:" `isPrefixOf` l = Just $ removePrefix "Created task: " l
+-- parseKojiTask (l:ls) | "Created task:" `isPrefixOf` l = Just $ removeStrictPrefix "Created task: " l
 --                       | otherwise = parseKojiTask ls
 
 notInKoji :: String -> FilePath -> String -> String -> IO Bool

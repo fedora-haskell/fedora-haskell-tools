@@ -32,7 +32,7 @@ import System.FilePath ((</>))
 
 import Dists (rawhide)
 import Koji (kojicmd)
-import Utils ((+-+), cmd, cmd_, cmdStdErr, removePrefix, removeSuffix)
+import SimpleCmd ((+-+), cmd, cmd_, cmdStdErr, removeStrictPrefix, removeSuffix)
 
 data BugState = BugState {
   bugNo :: String,
@@ -135,7 +135,7 @@ comma nv = reverse eman ++ "," ++ reverse rev
 
 colon :: String -> (String, String)
 colon "" = ("","")
-colon ps = (nv, if null s then "" else removePrefix ":" s)
+colon ps = (nv, if null s then "" else removeStrictPrefix ":" s)
   where
     (nv, s) = break (== ':') ps
 

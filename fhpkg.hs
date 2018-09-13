@@ -46,9 +46,10 @@ import Dists (Dist, dists, distBranch, distRepo, distUpdates, hackageRelease,
 import Koji (kojiListPkgs, rpkg)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)
-import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdSilent, grep,
-              git, git_, gitBranch, maybeRemovePrefix, removePrefix, removeSuffix,
-              withCurrentDirectory)
+import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdSilent, grep_,
+              removePrefix, removeStrictPrefix, removeSuffix)
+import SimpleCmd.Git (git, git_, gitBranch)
+import Utils (checkPkgsGit, withCurrentDirectory)
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
 #else
@@ -60,11 +61,10 @@ listDirectory path =
 
 main :: IO ()
 main = do
-  as <- getArgs
-  if null as
+  args <- getArgs
+  if null args
     then help ""
-    else
-    runCommand $ parseCmdArgs as
+    else runCommand $ parseCmdArgs args
 
 runCommand :: Arguments -> IO ()
 runCommand (com, os, ps) = do
@@ -453,9 +453,9 @@ compareStackage :: Maybe Dist -> Package -> IO ()
 compareStackage mdist p = do
   nvr <- cmd (rpkg mdist) ["verrel"]
   let stream = "lts-11"
-  stkg <- cmdMaybe "stackage" ["package", stream, maybeRemovePrefix "ghc-" p]
+  stkg <- cmdMaybe "stackage" ["package", stream, removePrefix "ghc-" p]
   let same = isJust stkg && fromJust stkg `isInfixOf` nvr
-  putStrLn $ removePrefix (p ++ "-") nvr +-+ "(fedora)"
+  putStrLn $ removeStrictPrefix (p ++ "-") nvr +-+ "(fedora)"
   putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(" ++ stream ++ ")"
 
 
@@ -478,7 +478,7 @@ compareRawhide p = do
 
 isFromHackage :: Package -> IO Bool
 isFromHackage pkg =
-  grep "hackage.haskell.org/package/" $ pkg ++ ".spec"
+  grep_ "hackage.haskell.org/package/" $ pkg ++ ".spec"
 
 
 updateOrRefreshPackage :: Bool -> Package -> IO ()

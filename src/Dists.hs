@@ -31,7 +31,7 @@ module Dists (Dist,
 import Data.Char (isDigit)
 import Data.Maybe (fromMaybe, maybe)
 
-import Utils ((+-+))
+import SimpleCmd ((+-+))
 
 type Dist = String
 

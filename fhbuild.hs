@@ -34,8 +34,10 @@ import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
              notInKoji, rpkg, rpkgBuild)
 import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package,
             packageManager, pkgDir, rpmInstall, rpmspec)
-import Utils ((+-+), checkPkgsGit, cmd, cmd_, cmdBool, cmdMaybe, cmdlog,
-              git_, gitBranch, grep, removePrefix, removeSuffix, sudo)
+import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdlog, cmdSilent,
+              grep_, removeStrictPrefix, removeSuffix, sudo)
+import SimpleCmd.Git (git_, gitBranch)
+import Utils (checkPkgsGit)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built | Bump
              deriving (Eq)
@@ -98,7 +100,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
   dirExists <- doesDirectoryExist pkg
   unless dirExists $ do
     let anon = ["-a" | mode `notElem` [Koji, Chain]]
-    cmdlog (rpkg (Just dist)) $ ["clone", "-b", branch, pkg] ++ anon
+    cmdSilent (rpkg (Just dist)) $ ["clone", "-b", branch, pkg] ++ anon
   wd <- pkgDir pkg branch ""
   setCurrentDirectory wd
   ignore <- doesFileExist ".fhbuild-ignore"
@@ -137,7 +139,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
           then putStrLn $ "No" +-+ spec
           else do
           nvr <- cmd (rpkg (Just dist)) ["verrel"]
-          let verrel = removePrefix (pkg ++ "-") nvr
+          let verrel = removeStrictPrefix (pkg ++ "-") nvr
               tag = distTag dist
           case mode of
             Install -> do
@@ -304,10 +306,10 @@ showChange pkg mlatest nvr = do
 
 showNVRChange :: Package -> Maybe String -> String -> IO ()
 showNVRChange pkg Nothing nvr =
-  putStrLn $ pkg +-+ "new" +-+ removePrefix (pkg ++ "-") nvr
+  putStrLn $ pkg +-+ "new" +-+ removeStrictPrefix (pkg ++ "-") nvr
 showNVRChange pkg (Just latest) nvr = do
-  putStrLn $ pkg ++ ":" +-+ removePrefix prefix latest
-  putStrLn $ replicate (length pkg - 1) ' ' ++ "->" +-+ removePrefix prefix nvr
+  putStrLn $ pkg ++ ":" +-+ removeStrictPrefix prefix latest
+  putStrLn $ replicate (length pkg - 1) ' ' ++ "->" +-+ removeStrictPrefix prefix nvr
   where
     prefix = pkg ++ "-"
 
@@ -340,7 +342,7 @@ processDeps [] = error "processDeps: empty string!"
 dependent :: String -> String -> String -> FilePath -> IO Bool
 dependent dep pkg branch topdir = do
   pkgpath <- pkgDir pkg branch topdir
-  grep dep $ pkgpath </> pkg ++ ".spec"
+  grep_ dep $ pkgpath </> pkg ++ ".spec"
 
 displayLogTail :: FilePath -> IO ()
 displayLogTail f = do
