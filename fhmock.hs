@@ -27,7 +27,7 @@ main = do
        addCmd "help" (pure Help) "mock help"
        addCmd "mockcmds" (pure MockCmds) "List mock commands"
        when (length args >= 2) $
-         let c = args !! 0 in
+         let c = head args in
            when (c `elem` allMockCmds) $
            addCmd c (arbitrary c False "OPT" False) ("Run mock " ++ c ++ " command")
   run
@@ -49,7 +49,7 @@ main = do
                      ]
 
 allMockCmds :: [String]
-allMockCmds = sort $
+allMockCmds = sort
   ["rebuild", "buildsrpm", "debug-config", "shell", "chroot",
     "clean", "scrub", "init", "installdeps", "install", "update",
     "remove", "orphanskill", "copyin", "copyout",
@@ -83,7 +83,7 @@ arbitrary c needarg var externopt =
   Arbitrary <$>
          strArgument distArg
          <*> pure cm
-         <*> (((if externopt then ["--"] else []) ++) <$> (if needarg then some else many) (strArg (var ++ "...") "mock command options and args"))
+         <*> ((["--" |  externopt] ++) <$> (if needarg then some else many) (strArg (var ++ "...") "mock command options and args"))
   where
     cm =
       case c of
