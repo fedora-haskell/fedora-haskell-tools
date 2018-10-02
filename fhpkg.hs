@@ -48,7 +48,7 @@ import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)
 import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdSilent, grep_,
               removePrefix, removeStrictPrefix, removeSuffix)
-import SimpleCmd.Git (git, git_, gitBranch)
+import SimpleCmd.Git (git, git_, gitBranch, isGitDir)
 import Utils (checkPkgsGit, withCurrentDirectory)
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
@@ -416,7 +416,7 @@ repoAction mdist opts header needsSpec action (pkg:rest) = do
     dirExists <- doesDirectoryExist pkg
     unless dirExists $
       cmd_ (rpkg mdist) $ ["clone"] ++ ["-a" | not haveSSH] ++ (if hasOptNull 'B' opts then ["-B"] else ["-b", branch]) ++ [pkg]
-    singleDir <- doesFileExist $ pkg </> ".git/config"
+    singleDir <- isGitDir pkg
     unless singleDir $ do
       branchDir <- doesDirectoryExist $ pkg </> branch
       unless branchDir $
@@ -425,7 +425,7 @@ repoAction mdist opts header needsSpec action (pkg:rest) = do
     wd <- pkgDir pkg branch ""
     setCurrentDirectory wd
     pkggit <- do
-      gd <- doesFileExist ".git/config"
+      gd <- isGitDir "."
       if gd
         then checkPkgsGit
         else return False

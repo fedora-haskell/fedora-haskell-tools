@@ -154,7 +154,7 @@ closeBug opts bid bcomp pkgver = do
 
 updateBug :: String -> String -> String -> String -> String -> Bool -> IO ()
 updateBug bid _bcomp hkgver missing state nocomment = do
---  rebuilds <- if null missing then tail . lines <$> cmd "cblrepo" ["build", removeGhcPrefix bcomp] else return []
+--  rebuilds <- if null missing then tail <$> cmdLines "cblrepo" ["build", removeGhcPrefix bcomp] else return []
   progname <- getProgName
   let comment = progname ++ ":" +-+
                 if null missing

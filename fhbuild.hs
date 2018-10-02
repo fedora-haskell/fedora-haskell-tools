@@ -34,9 +34,9 @@ import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
              notInKoji, rpkg, rpkgBuild)
 import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package,
             packageManager, pkgDir, rpmInstall, rpmspec)
-import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdlog, cmdSilent,
-              grep_, removeStrictPrefix, removeSuffix, sudo)
-import SimpleCmd.Git (git_, gitBranch)
+import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdMaybe, cmdlog,
+                  cmdSilent, grep_, removeStrictPrefix, removeSuffix, sudo)
+import SimpleCmd.Git (git_, gitBranch, isGitDir)
 import Utils (checkPkgsGit)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built | Bump
@@ -117,7 +117,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
       build topdir mode dist Nothing Nothing False rest
       else do
       pkggit <- do
-        gd <- doesFileExist ".git/config"
+        gd <- isGitDir "."
         if gd then checkPkgsGit
           else return False
       if not pkggit
@@ -176,7 +176,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   opkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
                   rpms <- lines <$> rpmspec ["--builtrpms", "--define=dist" +-+ rpmDistTag dist] (Just "%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n") spec
                   putStrLn $ nvr +-+ "built\n"
-                  instpkgs <- lines <$> cmd "rpm" ("-qa":opkgs)
+                  instpkgs <- cmdLines "rpm" ("-qa":opkgs)
                   if null instpkgs
                     -- maybe filter out pandoc-pdf if not installed
                     then rpmInstall rpms

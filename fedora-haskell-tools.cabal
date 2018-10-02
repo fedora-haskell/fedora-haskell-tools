@@ -25,7 +25,7 @@ Executable fhbuild
                    directory,
                    filepath,
                    process,
-                   simple-cmd,
+                   simple-cmd >= 0.1.1,
                    time < 1.9,
                    unix
     Hs-Source-Dirs: src, .
@@ -50,7 +50,7 @@ Executable fhpkg
                    filepath,
                    HTTP,
                    process,
-                   simple-cmd,
+                   simple-cmd >= 0.1.1,
                    time < 1.9,
                    unix
     if impl(ghc<8.0)

@@ -36,7 +36,9 @@ import Control.Exception (bracket)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 #endif
 
-import SimpleCmd (grep_, (+-+))
+import SimpleCmd ((+-+))
+import SimpleCmd.Git (grepGitConfig)
+
 
 -- singleLine :: String -> String
 -- singleLine "" = ""
@@ -90,7 +92,7 @@ withCurrentDirectory dir action =
 
 checkPkgsGit :: IO Bool
 checkPkgsGit =
-  grep_ "\\(pkgs\\|src\\)." ".git/config"
+  grepGitConfig "\\(pkgs\\|src\\)."
 
 -- git :: String -> [String] -> IO String
 -- git c as =
