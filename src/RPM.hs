@@ -35,7 +35,8 @@ import System.Exit (ExitCode (..), exitFailure, exitWith)
 import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, distBranch, dists, distTag, releaseVersion)
-import SimpleCmd (cmd, cmdLines, removeStrictPrefix, removeSuffix, sudo, (+-+))
+import SimpleCmd (cmd, removeStrictPrefix, removeSuffix, sudo, (+-+))
+import qualified SimpleCmd.Rpm as S
 
 -- @since base 4.8.0.0
 die :: String -> IO a
@@ -86,9 +87,8 @@ repoquerySrc dist key = do
     _ -> Nothing
 
 rpmspec :: [String] -> Maybe String -> FilePath -> IO [String]
-rpmspec args mqf spec = do
-  let qf = maybe [] (\ q -> ["--queryformat", q ++ "\n"]) mqf
-  cmdLines "rpmspec" (["-q"] ++ ["--define", "ghc_version any"] ++ args ++ qf ++ [spec])
+rpmspec args =
+  S.rpmspec (["--define", "ghc_version any"] ++ args)
 
 buildRequires :: FilePath -> IO [String]
 buildRequires spec =
