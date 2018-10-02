@@ -35,7 +35,7 @@ import System.Exit (ExitCode (..), exitFailure, exitWith)
 import System.IO (hPutStrLn, stderr)
 
 import Dists (Dist, distBranch, dists, distTag, releaseVersion)
-import SimpleCmd (cmd, removeStrictPrefix, removeSuffix, sudo, (+-+))
+import SimpleCmd (cmd, cmdLines, removeStrictPrefix, removeSuffix, sudo, (+-+))
 
 -- @since base 4.8.0.0
 die :: String -> IO a
@@ -85,15 +85,15 @@ repoquerySrc dist key = do
     ps | key `elem` ps -> Just key
     _ -> Nothing
 
-rpmspec :: [String] -> Maybe String -> FilePath -> IO String
+rpmspec :: [String] -> Maybe String -> FilePath -> IO [String]
 rpmspec args mqf spec = do
-  let qf = maybe [] (\ q -> ["--queryformat", q]) mqf
-  cmd "rpmspec" (["-q"] ++ ["--define", "ghc_version any"] ++ args ++ qf ++ [spec])
+  let qf = maybe [] (\ q -> ["--queryformat", q ++ "\n"]) mqf
+  cmdLines "rpmspec" (["-q"] ++ ["--define", "ghc_version any"] ++ args ++ qf ++ [spec])
 
 buildRequires :: FilePath -> IO [String]
 buildRequires spec =
   -- FIXME should resolve "pkgconfig()" etc
-  map (head . words) . lines <$> rpmspec ["--buildrequires"] Nothing spec
+  map (head . words) <$> rpmspec ["--buildrequires"] Nothing spec
 --    >>= mapM (whatProvides relver)
 
 type Package = String
@@ -136,7 +136,7 @@ haskellSrcPkgs topdir dist brs = do
   ghcLibs <- do
     let branch = distBranch dist
     ghcDir <- pkgDir "ghc" branch topdir
-    filter isHaskellDevelPkg . words <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
+    filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}") (ghcDir </> "ghc.spec")
   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
   nub <$> mapM (derefSrcPkg topdir dist False) hdeps
 

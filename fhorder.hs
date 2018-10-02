@@ -58,7 +58,7 @@ pkgDeps branch pkg = do
   fileExists <- doesFileExist file
   if fileExists
     then do
-    deps <- lines <$> rpmspec ["--buildrequires"] Nothing file
+    deps <- rpmspec ["--buildrequires"] Nothing file
     return $ Just (pkg, deps)
     else return Nothing
 

@@ -173,8 +173,8 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   waitForEnter
                   build topdir Install dist Nothing Nothing False [pkg]
                   else do
-                  opkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
-                  rpms <- lines <$> rpmspec ["--builtrpms", "--define=dist" +-+ rpmDistTag dist] (Just "%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm\n") spec
+                  opkgs <- rpmspec ["--builtrpms"] (Just "%{name}") spec
+                  rpms <- rpmspec ["--builtrpms", "--define=dist" +-+ rpmDistTag dist] (Just "%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm") spec
                   putStrLn $ nvr +-+ "built\n"
                   instpkgs <- cmdLines "rpm" ("-qa":opkgs)
                   if null instpkgs

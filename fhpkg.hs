@@ -122,7 +122,7 @@ runCommand (com, os, ps) = do
         Unpushed -> repoAction mdist global False True (gitLogOneLine mdist opts) pkgs
         Update -> repoAction mdist global True True (updateOrRefreshPackage False) pkgs
         Verrel -> repoAction_ mdist global False True (cmd_ (rpkg mdist) ["verrel"]) pkgs
-        Subpkgs -> repoAction mdist global True True (\ p -> rpmspec [] (Just "%{name}-%{version}\n") (p ++ ".spec") >>= putStrLn) pkgs
+        Subpkgs -> repoAction mdist global True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= mapM_ putStrLn) pkgs
   where
     checkHackageDist mdist =
       unless (isNothing mdist || mdist == Just hackageRelease) $ error $ "Hackage is currently for" +-+ hackageRelease ++ "!"
@@ -462,11 +462,11 @@ compareStackage mdist p = do
 compareRawhide :: Package -> IO ()
 compareRawhide p = do
   let spec = p ++ ".spec"
-  nvr <- removeDisttag <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
+  nvr <- removeDisttag . unwords <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
   nvr' <- withCurrentDirectory "../master" $ do
     haveSpec <- doesFileExist spec
     unless haveSpec $ cmdSilent "git" ["pull"]
-    removeDisttag <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
+    removeDisttag . unwords <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
   if nvr == nvr'
     then putStrLn nvr
     else do
@@ -543,7 +543,7 @@ checkLeafPkg opts pkg = do
   let branchdir = dir /= pkg
       top = if branchdir then "../.." else ".."
       spec = pkg ++ ".spec"
-  subpkgs <- lines <$> rpmspec ["--builtrpms"] (Just "%{name}\n") spec
+  subpkgs <- rpmspec ["--builtrpms"] (Just "%{name}") spec
   allpkgs <- listDirectory top
   let other = map (\ p -> top </> p </> (if branchdir then dir else "") </> p ++ ".spec") $ allpkgs \\ [pkg]
       verb = hasOptNull 'v' opts
