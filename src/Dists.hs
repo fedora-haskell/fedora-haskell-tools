@@ -72,7 +72,7 @@ distUpdates d | distShort d == "f" = Just "updates"
 distUpdates _ = Nothing
 
 distOverride :: Dist -> Bool
-distOverride d = d `notElem` [rawhide, "f29" , "epel8"]
+distOverride d = d `notElem` [rawhide, "f30" , "epel8"]
 
 distTag :: Dist -> String
 distTag d = d ++ "-" ++ fromMaybe "build" (sidetag d)
