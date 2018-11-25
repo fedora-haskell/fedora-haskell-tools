@@ -196,7 +196,8 @@ type CommandOptions = [(Option, Bool)]
 cmdOpts :: CmdName ->  CommandOptions
 cmdOpts Commit = [(OptArg 'm' "\"COMMITMSG\"", True)]
 cmdOpts Diff = [(OptArg 'w' "BRANCH", False),
-                (OptNull 's', False)]
+                (OptNull 's', False),
+                (OptArg 'u' "CONTEXT", False)]
 cmdOpts Merge = [(OptArg 'f' "BRANCH", True)]
 cmdOpts Cmd = [(OptLong "cmd" "\"command\"", True)]
 cmdOpts Leaf = [(OptNull 'v', False)]
@@ -506,7 +507,9 @@ gitDiff opts pkg = do
   let mbrnch = getOptVal (OptArg 'w' "branch") opts
       branch = maybeToList mbrnch
       short  = hasOptNull 's' opts
-  out <- git "diff" branch
+      mcontxt = getOptVal (OptArg 'u' "context") opts
+      contxt = maybe [] (\ n -> ["-U" ++ n]) mcontxt
+  out <- git "diff" $ branch ++ contxt
   if short
     then unless (null out) $ putStrLn pkg
     else putStrLn out
