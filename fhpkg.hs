@@ -266,7 +266,7 @@ getOptVal opt opts = maybe Nothing mval optval
 instance Show Option
   where
     show (OptNull c) = "-" ++ [c]
-    show (OptArg c v) = "-" ++ [c] ++ ('=':v)
+    show (OptArg c v) = "-" ++ [c] ++ v
     show (OptLong s v) = "--" ++ s ++ ('=':v)
 
 showOpts :: [Option] -> String
@@ -302,14 +302,14 @@ parseCmdArgs as =
              else (c, opts, pkgs)
   where
     isFlag ['-', c] | c /= '-' = True
-    isFlag ('-':c:'=':_) | c /= '-' = True
+    isFlag ('-':c:_) | c /= '-' = True
     isFlag ('-':'-':_) = True
     isFlag _ = False
 
     parseOpt :: String -> Option
     parseOpt [] = error "Empty option"
     parseOpt ['-',l] = OptNull l
-    parseOpt ('-':l:'=':val) = OptArg l val
+    parseOpt ('-':l:val) | l /= '-' = OptArg l val
     parseOpt ('-':'-':assgn)
       | '=' `elem` assgn =
           let (n,v) = break (== '=') assgn
