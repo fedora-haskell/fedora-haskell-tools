@@ -5,7 +5,7 @@ import Data.Maybe (fromMaybe)
 import Data.Version (showVersion)
 import System.Environment (getArgs)
 
-import Dists
+import FedoraDists
 import SimpleCmd (cmd_)
 import Paths_fedora_haskell_tools (version)
 
@@ -83,7 +83,7 @@ arbitrary c needarg var externopt =
   Arbitrary <$>
          strArgument distArg
          <*> pure cm
-         <*> ((["--" |  externopt] ++) <$> (if needarg then some else many) (strArg (var ++ "...") "mock command options and args"))
+         <*> ((["--" | externopt] ++) <$> (if needarg then some else many) (strArg (var ++ "...") "mock command options and args"))
   where
     cm =
       case c of

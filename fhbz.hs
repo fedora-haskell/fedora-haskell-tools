@@ -30,7 +30,7 @@ import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               getOpt, usageInfo)
 import System.FilePath ((</>))
 
-import Dists (rawhide)
+import FedoraDists (rawhide)
 import Koji (kojicmd)
 import SimpleCmd ((+-+), cmd, cmd_, cmdStdErr, removeStrictPrefix, removeSuffix)
 

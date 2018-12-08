@@ -23,22 +23,24 @@ Executable fhbuild
     Main-is:       fhbuild.hs
     Build-depends: base < 5,
                    directory,
+                   fedora-dists,
                    filepath,
                    process,
                    simple-cmd >= 0.1.1,
                    time < 1.9,
                    unix
     Hs-Source-Dirs: src, .
-    Other-modules: Dists, Koji, RPM, Utils
+    Other-modules: Koji, RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
 
 Executable fhbz
     Main-is:       fhbz.hs
     Build-depends: base < 5,
+                   fedora-dists,
                    time
     Hs-Source-Dirs: src, .
-    Other-modules: Dists, Koji, RPM, Utils
+    Other-modules: Koji, RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
 
@@ -47,6 +49,7 @@ Executable fhpkg
     Build-depends: base < 5,
                    csv,
                    directory,
+                   fedora-dists,
                    filepath,
                    HTTP,
                    process,
@@ -56,8 +59,7 @@ Executable fhpkg
     if impl(ghc<8.0)
         Build-depends: semigroups
     Hs-Source-Dirs: src, .
-    Other-modules: Dists,
-                   Koji,
+    Other-modules: Koji,
                    RPM,
                    Utils
     GHC-options:   -fwarn-missing-signatures -Wall
@@ -65,8 +67,20 @@ Executable fhpkg
 
 Executable fhmock
     Main-is:       fhmock.hs
-    Build-depends: base < 5, optparse-simple, process, simple-cmd
+    Build-depends: base < 5,
+                   fedora-dists,
+                   optparse-simple,
+                   process,
+                   simple-cmd >= 0.1.1
     Hs-Source-Dirs: src, .
-    Other-modules: Dists, Utils, Paths_fedora_haskell_tools
+    Other-modules: Utils, Paths_fedora_haskell_tools
+    GHC-options:   -fwarn-missing-signatures -Wall
+    Extensions:    CPP
+
+Executable fhcontainer
+    Main-is:       fhcontainer.hs
+    Build-depends: base < 5, fedora-dists, optparse-simple, process, simple-cmd
+    Hs-Source-Dirs: src, .
+    Other-modules: Utils, Paths_fedora_haskell_tools
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP

@@ -41,7 +41,7 @@ import System.IO (BufferMode(..), hPutStrLn, hSetBuffering, stderr,
 import Text.CSV (parseCSV)
 import Text.Read (readMaybe)
 
-import Dists (Dist, dists, distBranch, distRepo, distUpdates, hackageRelease,
+import FedoraDists (Dist, dists, distBranch, distRepo, distUpdates, hackageRelease,
               rawhide, releaseVersion)
 import Koji (kojiListPkgs, rpkg)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,

@@ -33,7 +33,7 @@ import Data.List (isInfixOf, isPrefixOf)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.FilePath ((</>))
 
-import Dists (Dist, distTarget)
+import FedoraDists (Dist, distTarget)
 import RPM (pkgDir)
 import SimpleCmd (cmd, cmd_, cmdBool, grep_, logMsg, (+-+))
 import Utils (cmdFragile, cmdFragile_)

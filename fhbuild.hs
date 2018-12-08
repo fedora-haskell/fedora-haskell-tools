@@ -29,7 +29,7 @@ import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), dropExtension)
 import System.IO (hPutStrLn, stderr)
 
-import Dists (Dist, dists, distBranch, distOverride, distTag, rpmDistTag)
+import FedoraDists (Dist, dists, distBranch, distOverride, distTag, rpmDistTag)
 import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
              notInKoji, rpkg, rpkgBuild)
 import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package,
