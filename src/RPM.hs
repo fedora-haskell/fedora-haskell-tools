@@ -63,24 +63,21 @@ rpmInstall rpms = do
   let (inst, arg) = if pkginstaller == "dnf" then ("dnf", "install") else ("yum", "localinstall")
   sudo inst $ ["-y", "--nogpgcheck", arg] ++ rpms
 
-repoquery :: Maybe String -> [String] -> IO String
-repoquery relver args = do
+repoquery :: Dist -> [String] -> IO String
+repoquery dist args = do
   havednf <- optionalProgram "dnf"
   let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet"]) else ("repoquery", [])
-      releasever = case relver of
-                     Nothing -> []
-                     Just rv -> ["--releasever=" ++ rv]
+      releasever = ["--releasever=" ++ releaseVersion dist]
   cmd prog (subcmd ++ releasever ++ args)
 
 repoquerySrc :: Dist -> String -> IO (Maybe String)
 repoquerySrc dist key = do
   havednf <- optionalProgram "dnf"
   let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}"]
-      relver = releaseVersion dist
       repo = if dist `elem` dists
              then ["--repo=koji-buildroot", "--repofrompath", "koji-buildroot,http://kojipkgs.fedoraproject.org/repos" </> distTag dist </> "latest/x86_64/"]
              else []
-  res <- words <$> repoquery relver (srcflag ++ repo ++ ["--whatprovides", key])
+  res <- words <$> repoquery dist (srcflag ++ repo ++ ["--whatprovides", key])
   return $ case res of
     [p] -> Just p
     ps | key `elem` ps -> Just key
@@ -131,7 +128,7 @@ isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg) |
 haskellTools :: [Package]
 haskellTools = ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]
 
-haskellSrcPkgs ::  FilePath -> String -> [Package] -> IO [Package]
+haskellSrcPkgs ::  FilePath -> Dist -> [Package] -> IO [Package]
 haskellSrcPkgs topdir dist brs = do
   ghcLibs <- do
     let branch = distBranch dist

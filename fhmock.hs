@@ -1,7 +1,6 @@
 import Control.Monad (when)
 import Data.List (sort)
 import Data.Semigroup ((<>))
-import Data.Maybe (fromMaybe)
 import Data.Version (showVersion)
 import System.Environment (getArgs)
 
@@ -63,25 +62,22 @@ data Args = Check Dist
           | MockCmds
   deriving Show
 
-distArg :: Mod ArgumentFields Dist
-distArg = metavar "DIST" <> help "Fedora release, eg fXY"
+distArg :: Parser Dist
+distArg = argument auto (metavar "DIST" <> help "Fedora release, eg fXY")
 
 strArg :: String -> String -> Parser String
 strArg var desc = strArgument (metavar var <> help desc)
 
 check :: Parser Args
-check = Check <$>
-          strArgument distArg
+check = Check <$> distArg
 
 repoquery :: Parser Args
-repoquery = Repoquery <$>
-         strArgument distArg
+repoquery = Repoquery <$> distArg
          <*> many (strArg "PKG..." "repoquery args")
 
 arbitrary :: String -> Bool -> String -> Bool -> Parser Args
 arbitrary c needarg var externopt =
-  Arbitrary <$>
-         strArgument distArg
+  Arbitrary <$> distArg
          <*> pure cm
          <*> ((["--" | externopt] ++) <$> (if needarg then some else many) (strArg (var ++ "...") "mock command options and args"))
   where
@@ -104,7 +100,7 @@ dispatch (Arbitrary dist a as) =
 
 runMock :: Dist -> String -> [String] -> IO ()
 runMock dist c cs = do
-  let release = fromMaybe "rawhide" $ releaseVersion dist
+  let release = releaseVersion dist
       conf = "fedora-" ++ release ++ "-x86_64"
       root = conf ++ "-haskell"
   let opts = ["-r", conf, "--config-opts=root=" ++ root]

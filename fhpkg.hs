@@ -41,8 +41,8 @@ import System.IO (BufferMode(..), hPutStrLn, hSetBuffering, stderr,
 import Text.CSV (parseCSV)
 import Text.Read (readMaybe)
 
-import FedoraDists (Dist, dists, distBranch, distRepo, distUpdates, hackageRelease,
-              rawhide, releaseVersion)
+import FedoraDists (Dist(..), dists, distBranch, distRepo, distUpdates,
+                    hackageRelease, rawhide)
 import Koji (kojiListPkgs, rpkg)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)
@@ -70,66 +70,64 @@ runCommand :: Arguments -> IO ()
 runCommand (com, os, ps) = do
   let (global, opts) = partition (`elem` globalOpts) os
       allpkgs = OptNull 'A' `elem` global
-      mdist = getOptVal (OptArg 'b' "brnch") global
+      dist = maybe rawhide read $ getOptVal (OptArg 'b' "brnch") global
   hSetBuffering stdout LineBuffering
-  case mdist of
-    Nothing -> return ()
-    Just d -> if d `elem` dists || "rhel" `isPrefixOf` d
-      then return ()
-      else putStrLn "Unknown branch"
+  if dist `elem` dists
+    then return ()
+    else putStrLn "Unknown branch"
   when (not allpkgs && null ps && com `notElem` [Hackage, HackageCompare, Count]) $
     help "Please specify package(s)"
   if allpkgs && (not . null) ps
     then error "Cannot have '-A' and list of packages"
     else do
       pkgs <- if allpkgs
-              then repoqueryHaskell False mdist
+              then repoqueryHaskell False dist
               else return ps
       case com of
         List -> mapM_ putStrLn pkgs
-        Count -> repoqueryHaskell False mdist >>= (print . length)
+        Count -> repoqueryHaskell False dist >>= (print . length)
         Hackage -> do
           -- add check for no pkg args
-          checkHackageDist mdist
+          checkHackageDist dist
           repoqueryHackageCSV hackageRelease
         HackageCompare -> do
-          checkHackageDist mdist
-          withPackages (Just hackageRelease) pkgs $ compareHackage (null pkgs) hackageRelease
-        New -> newPackages mdist >>= mapM_ putStrLn
+          checkHackageDist dist
+          withPackages hackageRelease pkgs $ compareHackage (null pkgs) hackageRelease
+        New -> newPackages dist >>= mapM_ putStrLn
         OldPackages -> do
-          repopkgs <- repoqueryHaskell True mdist
+          repopkgs <- repoqueryHaskell True dist
           mapM_ putStrLn $ pkgs \\ repopkgs
 
         -- repo actions (header, needs-spec :: Bool)
-        Checkout -> repoAction_ mdist global True False (return ()) pkgs
-        Clone -> repoAction_ mdist global True False (return ()) pkgs
+        Checkout -> repoAction_ dist global True False (return ()) pkgs
+        Clone -> repoAction_ dist global True False (return ()) pkgs
         CloneNew ->
-          newPackages mdist >>= repoAction_ mdist global True False (return ())
-        Commit -> repoAction_ mdist global True True (commitChanges mdist opts) pkgs
-        Cmd -> repoAction_ mdist global True True (execCmd opts) pkgs
-        Diff -> repoAction mdist global False False (gitDiff opts) pkgs
-        DiffBranch -> repoAction mdist global False True compareRawhide pkgs
-        DiffOrigin -> repoAction_ mdist global True False (git_ "diff" [maybe "origin" ("origin/" ++) mdist]) pkgs
-        DiffStackage -> repoAction mdist global True True (compareStackage mdist) pkgs
-        HeadOrigin -> repoAction mdist global False False (gitHeadAtOrigin mdist) pkgs
-        Leaf -> repoAction mdist global (OptNull 'v' `elem` opts) True (checkLeafPkg opts) pkgs
-        Merge -> repoAction_ mdist global True False (gitMerge opts) pkgs
-        Missing -> repoAction mdist global True True (checkForMissingDeps mdist) pkgs
-        Pull -> repoAction_ mdist global True False (git_ "pull" ["--rebase"]) pkgs
-        Push -> repoAction_ mdist global True False (git_ "push" []) pkgs
-        Prep -> repoAction_ mdist global True True (cmd_ (rpkg mdist) ["prep"]) pkgs
-        Refresh -> repoAction mdist global True True (updateOrRefreshPackage True) pkgs
-        Unpushed -> repoAction mdist global False True (gitLogOneLine mdist opts) pkgs
-        Update -> repoAction mdist global True True (updateOrRefreshPackage False) pkgs
-        Verrel -> repoAction_ mdist global False True (cmd_ (rpkg mdist) ["verrel"]) pkgs
-        Subpkgs -> repoAction mdist global True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= mapM_ putStrLn) pkgs
+          newPackages dist >>= repoAction_ dist global True False (return ())
+        Commit -> repoAction_ dist global True True (commitChanges dist opts) pkgs
+        Cmd -> repoAction_ dist global True True (execCmd opts) pkgs
+        Diff -> repoAction dist global False False (gitDiff opts) pkgs
+        DiffBranch -> repoAction dist global False True compareRawhide pkgs
+        DiffOrigin -> repoAction_ dist global True False (git_ "diff" ["origin/" ++ show dist]) pkgs
+        DiffStackage -> repoAction dist global True True (compareStackage dist) pkgs
+        HeadOrigin -> repoAction dist global False False (gitHeadAtOrigin dist) pkgs
+        Leaf -> repoAction dist global (OptNull 'v' `elem` opts) True (checkLeafPkg opts) pkgs
+        Merge -> repoAction_ dist global True False (gitMerge opts) pkgs
+        Missing -> repoAction dist global True True (checkForMissingDeps dist) pkgs
+        Pull -> repoAction_ dist global True False (git_ "pull" ["--rebase"]) pkgs
+        Push -> repoAction_ dist global True False (git_ "push" []) pkgs
+        Prep -> repoAction_ dist global True True (cmd_ (rpkg dist) ["prep"]) pkgs
+        Refresh -> repoAction dist global True True (updateOrRefreshPackage True) pkgs
+        Unpushed -> repoAction dist global False True (gitLogOneLine dist opts) pkgs
+        Update -> repoAction dist global True True (updateOrRefreshPackage False) pkgs
+        Verrel -> repoAction_ dist global False True (cmd_ (rpkg dist) ["verrel"]) pkgs
+        Subpkgs -> repoAction dist global True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p ++ ".spec") >>= mapM_ putStrLn) pkgs
   where
-    checkHackageDist mdist =
-      unless (isNothing mdist || mdist == Just hackageRelease) $ error $ "Hackage is currently for" +-+ hackageRelease ++ "!"
+    checkHackageDist dist =
+      unless (dist == hackageRelease) $ error $ "Hackage is currently for" +-+ show hackageRelease ++ "!"
 
-    withPackages :: Maybe Dist -> [Package] -> ([Package] -> IO ()) -> IO ()
-    withPackages mdst pkgs act =
-      (if null pkgs then repoqueryHaskell False mdst else return pkgs) >>= act
+    withPackages :: Dist -> [Package] -> ([Package] -> IO ()) -> IO ()
+    withPackages dst pkgs act =
+      (if null pkgs then repoqueryHaskell False dst else return pkgs) >>= act
 
 -- name, summary
 data Command = Command { cmdName :: CmdName , cmdDescription :: String}
@@ -320,10 +318,9 @@ parseCmdArgs as =
 
 repoqueryHackageCSV :: Dist -> IO ()
 repoqueryHackageCSV dist = do
-  pkgs <- repoqueryHaskell False (Just dist)
-  let relver = releaseVersion dist
+  pkgs <- repoqueryHaskell False dist
   -- Hackage csv chokes on final newline so remove it
-  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery relver (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ pkgs) >>= putStr
+  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ pkgs) >>= putStr
 
 data PkgVer = PV { pvPkg :: String, pvVer :: String}
   deriving (Eq)
@@ -340,8 +337,7 @@ compareHackage :: Bool -> Dist -> [Package] -> IO ()
 compareHackage all' dist pkgs = do
   hck <- simpleHTTP (getRequest "http://hackage.haskell.org/distro/Fedora/packages.csv") >>= getResponseBody
   let hackage = sort . either (error "Malformed Hackage csv") (map mungeHackage) $ parseCSV "packages.csv" hck
-      relver = releaseVersion dist
-  fedora <- sort . map mungeRepo . lines <$> repoquery relver (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ pkgs)
+  fedora <- sort . map mungeRepo . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ pkgs)
   compareSets all' hackage fedora
   where
     mungeHackage :: [String] -> PkgVer
@@ -380,49 +376,47 @@ replace a b s@(x:xs) =
   else x:replace a b xs
 replace _ _ [] = []
 
-repoqueryHaskell :: Bool -> Maybe Dist -> IO [Package]
-repoqueryHaskell verbose mdist = do
-  let relver = maybe Nothing releaseVersion mdist
+repoqueryHaskell :: Bool -> Dist -> IO [Package]
+repoqueryHaskell verbose dist = do
   when verbose $ putStrLn "Getting packages from repoquery"
-  let repo = maybe "rawhide" distRepo mdist
-      updates = maybeToList $ maybe Nothing distUpdates mdist
-  bin <- words <$> repoquery relver (["--repo=" ++ repo] ++ ["--repo=" ++ u | u <- updates] ++ ["--qf=%{source_name}", "--whatrequires", "libHSbase-*-ghc*.so()(64bit)"])
+  let repo = distRepo dist
+      updates = maybeToList $ distUpdates dist
+  bin <- words <$> repoquery dist (["--repo=" ++ repo] ++ ["--repo=" ++ u | u <- updates] ++ ["--qf=%{source_name}", "--whatrequires", "libHSbase-*-ghc*.so()(64bit)"])
   when (null bin) $ error "No libHSbase consumers found!"
   return $ sort $ nub bin
 
-newPackages :: Maybe Dist -> IO [Package]
-newPackages mdist = do
-  ps <- repoqueryHaskell True mdist
-  kps <- kojiListHaskell True mdist
+newPackages :: Dist -> IO [Package]
+newPackages dist = do
+  ps <- repoqueryHaskell True dist
+  kps <- kojiListHaskell True dist
   return $ kps \\ ps
 
-kojiListHaskell :: Bool -> Maybe Dist -> IO [Package]
-kojiListHaskell verbose mdist = do
+kojiListHaskell :: Bool -> Dist -> IO [Package]
+kojiListHaskell verbose dist = do
   when verbose $ putStrLn "Getting package list from Koji"
-  libs <- filter (\ p -> "ghc-" `isPrefixOf` p && p `notElem` ["ghc-rpm-macros", "ghc-srpm-macros"]) <$> kojiListPkgs (fromMaybe "rawhide" mdist)
+  libs <- filter (\ p -> "ghc-" `isPrefixOf` p && p `notElem` ["ghc-rpm-macros", "ghc-srpm-macros"]) <$> kojiListPkgs dist
   when (null libs) $ error "No library packages found"
   return $ sort $ nub libs
 
-repoAction :: Maybe Dist -> [Option] -> Bool -> Bool -> (Package -> IO ()) -> [Package] -> IO ()
+repoAction :: Dist -> [Option] -> Bool -> Bool -> (Package -> IO ()) -> [Package] -> IO ()
 repoAction _ _ _ _ _ [] = return ()
-repoAction mdist opts header needsSpec action (pkg:rest) = do
+repoAction dist opts header needsSpec action (pkg:rest) = do
   withCurrentDirectory "." $ do
-    let branchGiven = isJust mdist
-        branch = maybe "master" distBranch mdist
+    let branch = distBranch dist
     when header $
-      putStrLn $ "\n==" +-+ pkg ++ (if branchGiven then ":" ++ branch else "") +-+ "=="
+      putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
     -- muser <- getEnv "USER"
     home <- getHomeDirectory
     haveSSH <- doesFileExist $ home </> ".ssh/id_rsa"
     dirExists <- doesDirectoryExist pkg
     unless dirExists $
-      cmd_ (rpkg mdist) $ ["clone"] ++ ["-a" | not haveSSH] ++ (if hasOptNull 'B' opts then ["-B"] else ["-b", branch]) ++ [pkg]
+      cmd_ (rpkg dist) $ ["clone"] ++ ["-a" | not haveSSH] ++ (if hasOptNull 'B' opts then ["-B"] else ["-b", branch]) ++ [pkg]
     singleDir <- isGitDir pkg
     unless singleDir $ do
       branchDir <- doesDirectoryExist $ pkg </> branch
       unless branchDir $
         withCurrentDirectory pkg $
-          cmd_ (rpkg mdist) ["clone", "-b", branch, pkg, branch]
+          cmd_ (rpkg dist) ["clone", "-b", branch, pkg, branch]
     wd <- pkgDir pkg branch ""
     setCurrentDirectory wd
     pkggit <- do
@@ -435,7 +429,7 @@ repoAction mdist opts header needsSpec action (pkg:rest) = do
     when dirExists $ do
       actual <- gitBranch
       when (branch /= actual) $
-        cmd_ (rpkg mdist) ["switch-branch", branch]
+        cmd_ (rpkg dist) ["switch-branch", branch]
     isDead <- doesFileExist "dead.package"
     unless isDead $ do
       let spec = pkg ++ ".spec"
@@ -444,15 +438,15 @@ repoAction mdist opts header needsSpec action (pkg:rest) = do
       unless hasSpec $ putStrLn $ (if header then "" else pkg ++ ": ") ++ "No spec file!"
       unless (needsSpec && not hasSpec) $
         action pkg
-  repoAction mdist opts header needsSpec action rest
+  repoAction dist opts header needsSpec action rest
 
-repoAction_ :: Maybe Dist -> [Option] -> Bool -> Bool -> IO () -> [Package] -> IO ()
-repoAction_ mdist opts header needsSpec action =
-  repoAction mdist opts header needsSpec (const action)
+repoAction_ :: Dist -> [Option] -> Bool -> Bool -> IO () -> [Package] -> IO ()
+repoAction_ dist opts header needsSpec action =
+  repoAction dist opts header needsSpec (const action)
 
-compareStackage :: Maybe Dist -> Package -> IO ()
-compareStackage mdist p = do
-  nvr <- cmd (rpkg mdist) ["verrel"]
+compareStackage :: Dist -> Package -> IO ()
+compareStackage dist p = do
+  nvr <- cmd (rpkg dist) ["verrel"]
   let stream = "lts-11"
   stkg <- cmdMaybe "stackage" ["package", stream, removePrefix "ghc-" p]
   let same = isJust stkg && fromJust stkg `isInfixOf` nvr
@@ -490,12 +484,12 @@ updateOrRefreshPackage refresh pkg = do
     then cmd_ "cabal-rpm" [mode]
     else putStrLn "skipping since not hackage"
 
-commitChanges :: Maybe Dist -> [Option] -> IO ()
-commitChanges mdist [OptArg 'm' msg] = do
+commitChanges :: Dist -> [Option] -> IO ()
+commitChanges dist [OptArg 'm' msg] = do
   chgs <- cmd "git" ["diff"]
   if null chgs
     then putStrLn "no changes"
-    else cmd_ (rpkg mdist) ["commit", "-m", msg]
+    else cmd_ (rpkg dist) ["commit", "-m", msg]
 commitChanges _ _ = error "commit requires: -m=\"commit message\""
 
 gitMerge :: [Option] -> IO ()
@@ -521,11 +515,10 @@ execCmd [OptLong "cmd" cs]
                   cmd_ c args
 execCmd _ = error "cmd needs --cmd= option"
 
-checkForMissingDeps :: Maybe Dist -> Package -> IO ()
-checkForMissingDeps mdist pkg = do
+checkForMissingDeps :: Dist -> Package -> IO ()
+checkForMissingDeps dist pkg = do
   dir <- takeFileName <$> getCurrentDirectory
   let top = if dir == pkg then ".." else "../.."
-      dist = fromMaybe rawhide mdist
       spec = pkg ++ ".spec"
   hasSpec <- doesFileExist spec
   if hasSpec
@@ -564,16 +557,16 @@ checkLeafPkg opts pkg = do
         return $ any (`elem` deps) subpkgs
         else return False
 
-gitLogOneLine :: Maybe Dist -> [Option] -> Package -> IO ()
-gitLogOneLine mdist opts pkg = do
-  out <- git "log" [maybe "origin" ("origin/" ++) mdist ++ "..HEAD", "--pretty=oneline"]
+gitLogOneLine :: Dist -> [Option] -> Package -> IO ()
+gitLogOneLine dist opts pkg = do
+  out <- git "log" ["origin/" ++ show dist ++ "..HEAD", "--pretty=oneline"]
   let short = hasOptNull 's' opts
   unless (null out) $
     putStrLn $ pkg ++ if short then "" else (unwords . map replaceHash . words) out
   where
     replaceHash h = if length h /= 40 then h else ":"
 
-gitHeadAtOrigin :: Maybe Dist -> Package -> IO ()
-gitHeadAtOrigin mdist pkg = do
-  same <- cmdBool "git" ["diff", "--quiet", maybe "origin" ("origin/" ++) mdist ++ "..HEAD"]
+gitHeadAtOrigin :: Dist -> Package -> IO ()
+gitHeadAtOrigin dist pkg = do
+  same <- cmdBool "git" ["diff", "--quiet", "origin/" ++ show dist ++ "..HEAD"]
   when same $ putStrLn pkg

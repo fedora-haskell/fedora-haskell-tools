@@ -29,17 +29,14 @@ module Koji (kojiBuilding,
 import Control.Applicative ((<$>))
 #endif
 import Control.Monad (unless, when)
-import Data.List (isInfixOf, isPrefixOf)
+import Data.List (isInfixOf)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.FilePath ((</>))
 
-import FedoraDists (Dist, distTarget)
+import FedoraDists (Dist, distTag, distTarget, kojicmd, rpkg)
 import RPM (pkgDir)
 import SimpleCmd (cmd, cmd_, cmdBool, grep_, logMsg, (+-+))
 import Utils (cmdFragile, cmdFragile_)
-
-kojicmd :: Dist -> String
-kojicmd dist = if "rhel" `isPrefixOf` dist then "brew" else "koji"
 
 kojisafe :: Dist -> String -> [String] -> IO String
 kojisafe dist c as =
@@ -47,16 +44,17 @@ kojisafe dist c as =
 
 kojiLatestPkg :: Dist -> String -> IO (Maybe String)
 kojiLatestPkg dist pkg = do
-  res <- words <$> kojisafe dist "latest-pkg" ["--quiet", dist, pkg]
+  res <- words <$> kojisafe dist "latest-pkg" ["--quiet", distTag dist, pkg]
   return $ if null res then Nothing else Just $ head res
 
 kojiWaitPkg :: FilePath -> Dist -> String -> IO ()
 kojiWaitPkg topdir dist nvr = do
   let fhbuilt = topdir </> ".fhbuilt"
+      tag = distTag dist
   already <- kojiCheckFHBuilt topdir nvr
   unless already $ do
-    putStrLn $ "Waiting for" +-+ nvr +-+ "in" +-+ dist
-    cmdFragile_ (kojicmd dist) ["wait-repo", dist, "--build=" ++ nvr]
+    putStrLn $ "Waiting for" +-+ nvr +-+ "in" +-+ tag
+    cmdFragile_ (kojicmd dist) ["wait-repo", tag, "--build=" ++ nvr]
     appendFile fhbuilt $ nvr ++ "\n"
 
 kojiCheckFHBuilt :: FilePath -> String -> IO Bool
@@ -74,26 +72,22 @@ kojiBuilding pkg build dist = do
 -- parseKojiTask (l:ls) | "Created task:" `isPrefixOf` l = Just $ removeStrictPrefix "Created task: " l
 --                       | otherwise = parseKojiTask ls
 
-notInKoji :: String -> FilePath -> String -> String -> IO Bool
-notInKoji branch topdir tag pkg = do
-  latest <- kojiLatestPkg tag pkg
+notInKoji :: String -> FilePath -> Dist -> String -> IO Bool
+notInKoji branch topdir dist pkg = do
+  latest <- kojiLatestPkg dist pkg
   pkgpath <- pkgDir pkg branch topdir
-  local <- cmd (rpkg (Just tag)) ["--path", pkgpath, "verrel"]
+  local <- cmd (rpkg dist) ["--path", pkgpath, "verrel"]
   if latest == Just local
-    then kojiWaitPkg topdir tag local >> return False
+    then kojiWaitPkg topdir dist local >> return False
     else return True
 
 kojiListPkgs :: Dist -> IO [String]
 kojiListPkgs dist =
-  words <$> cmd (kojicmd dist) ["list-pkgs", "--tag=" ++ dist]
+  words <$> cmd (kojicmd dist) ["list-pkgs", "--tag=" ++ distTag dist]
 
-rpkg :: Maybe String -> String
-rpkg Nothing = "fedpkg"
-rpkg (Just dist) = if "rhel" `isPrefixOf` dist then "rhpkg" else "fedpkg"
-
-rpkgBuild :: FilePath -> Dist -> String -> Maybe String -> IO ()
-rpkgBuild topdir dist nvr waittag = do
-  giturl <- cmd (rpkg (Just dist)) ["giturl"]
+rpkgBuild :: FilePath -> Dist -> String -> Bool -> IO ()
+rpkgBuild topdir dist nvr waitrepo = do
+  giturl <- cmd (rpkg dist) ["giturl"]
   out <- cmd (kojicmd dist) ["build", "--nowait", "--fail-fast", distTarget dist, giturl]
   putStrLn out
   let task = last . words . head $ lines out
@@ -102,7 +96,7 @@ rpkgBuild topdir dist nvr waittag = do
   if success
     then do
     logMsg $ nvr ++ " built"
-    maybe (return ()) (\ t -> kojiWaitPkg topdir t nvr) waittag
+    when waitrepo $ kojiWaitPkg topdir dist nvr
     else do
     now <- getCurrentTime
     -- koji srpms typically take 2 minutes
