@@ -486,8 +486,8 @@ updateOrRefreshPackage refresh pkg = do
 
 commitChanges :: Dist -> [Option] -> IO ()
 commitChanges dist [OptArg 'm' msg] = do
-  chgs <- cmd "git" ["diff"]
-  if null chgs
+  nochgs <- cmdBool "git" ["diff", "--quiet"]
+  if nochgs
     then putStrLn "no changes"
     else cmd_ (rpkg dist) ["commit", "-m", msg]
 commitChanges _ _ = error "commit requires: -m=\"commit message\""
