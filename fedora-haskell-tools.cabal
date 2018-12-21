@@ -1,5 +1,5 @@
 Name:                fedora-haskell-tools
-Version:             0.6
+Version:             0.7
 Synopsis:            Building and maintenance tools for Fedora Haskell
 Description:
     Tools for building and managing Fedora Haskell packages.

@@ -25,9 +25,9 @@ import Data.List (dropWhileEnd, intercalate, isPrefixOf)
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.Directory ({-doesFileExist, getCurrentDirectory,-} getModificationTime)
-import System.Environment (getArgs, getEnv, getProgName)
 import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               getOpt, usageInfo)
+import System.Environment (getArgs, getEnv, getProgName)
 import System.FilePath ((</>))
 
 import FedoraDists (rawhide)
