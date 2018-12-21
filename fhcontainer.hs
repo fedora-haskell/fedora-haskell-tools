@@ -5,6 +5,7 @@ import System.Environment (getArgs, getProgName)
 
 import FedoraDists
 import SimpleCmd ({-cmd,-} cmd_, cmdBool, (+-+))
+import Utils (error')
 
 main :: IO ()
 main = do
@@ -34,8 +35,6 @@ parseOpts argv =
 
     header prog =
       "Usage:" +-+ prog +-+ "[option] DIST [cmd]...\n"
-
-    error' = errorWithoutStackTrace
 
 runContainer :: [Flag] -> Dist -> [String] -> IO ()
 runContainer opts dist args = do

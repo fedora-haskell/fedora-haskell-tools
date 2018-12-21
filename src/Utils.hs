@@ -16,7 +16,7 @@
 module Utils (checkPkgsGit,
               cmdFragile,
               cmdFragile_,
-              error_,
+              error',
               withCurrentDirectory) where
 
 #if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,0))
@@ -74,11 +74,11 @@ cmdFragile_ c as = do
       threadDelay 2000000
       cmdFragile_ c as
 
-error_ :: String -> a
+error' :: String -> a
 #if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,9,0))
-error_ = errorWithoutStackTrace
+error' = errorWithoutStackTrace
 #else
-error_ = error
+error' = error
 #endif
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
