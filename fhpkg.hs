@@ -486,6 +486,7 @@ updateOrRefreshPackage refresh pkg = do
 
 commitChanges :: Dist -> [Option] -> IO ()
 commitChanges dist [OptArg 'm' msg] = do
+  -- use gitDiffQuiet
   nochgs <- cmdBool "git" ["diff", "--quiet"]
   if nochgs
     then putStrLn "no changes"
@@ -568,5 +569,6 @@ gitLogOneLine dist opts pkg = do
 
 gitHeadAtOrigin :: Dist -> Package -> IO ()
 gitHeadAtOrigin dist pkg = do
+  -- use gitDiffQuiet
   same <- cmdBool "git" ["diff", "--quiet", "origin/" ++ show dist ++ "..HEAD"]
   when same $ putStrLn pkg
