@@ -14,8 +14,6 @@
 -- (at your option) any later version.
 
 module Utils (checkPkgsGit,
-              cmdFragile,
-              cmdFragile_,
               error',
               withCurrentDirectory) where
 
@@ -23,11 +21,6 @@ module Utils (checkPkgsGit,
 #else
 import Control.Applicative ((<$>))
 #endif
-import Control.Concurrent (threadDelay)
-import Control.Monad (unless, when)
-import System.Exit (ExitCode (..))
-import System.IO (hPutStrLn, stderr)
-import System.Process (readProcessWithExitCode, rawSystem)
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
 import System.Directory (withCurrentDirectory)
@@ -36,7 +29,6 @@ import Control.Exception (bracket)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 #endif
 
-import SimpleCmd ((+-+))
 import SimpleCmd.Git (grepGitConfig)
 
 
@@ -50,29 +42,6 @@ import SimpleCmd.Git (grepGitConfig)
 --   case ret of
 --     ExitSuccess -> return (True, out)
 --     ExitFailure n -> hPutStrLn stderr ("\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n ++ "\n" ++ err) >> return (False, out)
-
-cmdFragile :: String -> [String] -> IO String
-cmdFragile c as = do
-  (ret, out, err) <- readProcessWithExitCode c as ""
-  case ret of
-    ExitSuccess -> return out
-    ExitFailure n -> do
-      unless (null out) $ putStrLn out
-      when (null (out ++ err)) $
-        hPutStrLn stderr $ "\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n
-      unless (null err) $ hPutStrLn stderr err
-      threadDelay 2000000
-      cmdFragile c as
-
-cmdFragile_ :: String -> [String] -> IO ()
-cmdFragile_ c as = do
-  ret <- rawSystem c as
-  case ret of
-    ExitSuccess -> return ()
-    ExitFailure _ -> do
-      hPutStrLn stderr $ "retrying \"" ++ c +-+ unwords as ++ "\""
-      threadDelay 2000000
-      cmdFragile_ c as
 
 error' :: String -> a
 #if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,9,0))
