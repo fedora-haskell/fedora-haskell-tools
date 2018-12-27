@@ -69,6 +69,8 @@ Executable fhmock
     Main-is:       fhmock.hs
     Build-depends: base < 5,
                    fedora-dists,
+                   -- needed for cpp
+                   optparse-applicative,
                    optparse-simple,
                    simple-cmd >= 0.1.1
     Hs-Source-Dirs: src, .

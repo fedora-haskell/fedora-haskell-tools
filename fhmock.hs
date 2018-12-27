@@ -1,6 +1,5 @@
 import Control.Monad (when)
 import Data.List (sort)
-import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Environment (getArgs)
 
@@ -9,6 +8,9 @@ import SimpleCmd (cmd_)
 import Paths_fedora_haskell_tools (version)
 
 import Options.Applicative.Simple
+#if (defined(MIN_VERSION_optparse_applicative) && MIN_VERSION_optparse_applicative(0,13,0))
+import Data.Semigroup ((<>))
+#endif
 
 -- mock :: [String] -> IO String
 -- mock os = cmd "mock" os
