@@ -77,18 +77,3 @@ Executable fhmock
     Other-modules: Paths_fedora_haskell_tools
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
-
-Executable fhcontainer
-    Main-is:       fhcontainer.hs
-    Build-depends: base < 5,
-                   fedora-dists,
-                   optparse-simple,
-                   process,
-                   microlens,
-                   microlens-aeson,
-                   simple-cmd,
-                   text
-    Hs-Source-Dirs: src, .
-    Other-modules: Utils, Paths_fedora_haskell_tools
-    GHC-options:   -fwarn-missing-signatures -Wall
-    Extensions:    CPP
