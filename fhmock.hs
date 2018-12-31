@@ -102,8 +102,7 @@ dispatch (Arbitrary dist a as) =
 
 runMock :: Dist -> String -> [String] -> IO ()
 runMock dist c cs = do
-  let release = releaseVersion dist
-      conf = "fedora-" ++ release ++ "-x86_64"
+  let conf = distRepo dist ++ "-" ++ releaseVersion dist ++ "-x86_64"
       root = conf ++ "-haskell"
   let opts = ["-r", conf, "--config-opts=root=" ++ root]
   mock_ $ opts ++ (c:cs)
