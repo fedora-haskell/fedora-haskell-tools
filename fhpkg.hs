@@ -108,7 +108,7 @@ runCommand (com, os, ps) = do
         Diff -> repoAction dist global False False (gitDiff opts) pkgs
         DiffBranch -> repoAction dist global False True compareRawhide pkgs
         DiffOrigin -> repoAction_ dist global True False (git_ "diff" ["origin/" ++ show dist]) pkgs
-        DiffStackage -> repoAction dist global True True (compareStackage dist) pkgs
+        DiffStackage -> repoAction dist global False True (compareStackage dist opts) pkgs
         HeadOrigin -> repoAction dist global False False (gitHeadAtOrigin dist) pkgs
         Leaf -> repoAction dist global (OptNull 'v' `elem` opts) True (checkLeafPkg opts) pkgs
         Merge -> repoAction_ dist global True False (gitMerge opts) pkgs
@@ -196,6 +196,7 @@ cmdOpts Commit = [(OptArg 'm' "\"COMMITMSG\"", True)]
 cmdOpts Diff = [(OptArg 'w' "BRANCH", False),
                 (OptNull 's', False),
                 (OptArg 'u' "CONTEXT", False)]
+cmdOpts DiffStackage = [(OptNull 'm', False)]
 cmdOpts Merge = [(OptArg 'f' "BRANCH", True)]
 cmdOpts Cmd = [(OptLong "cmd" "\"command\"", True)]
 cmdOpts Leaf = [(OptNull 'v', False)]
@@ -444,14 +445,18 @@ repoAction_ :: Dist -> [Option] -> Bool -> Bool -> IO () -> [Package] -> IO ()
 repoAction_ dist opts header needsSpec action =
   repoAction dist opts header needsSpec (const action)
 
-compareStackage :: Dist -> Package -> IO ()
-compareStackage dist p = do
+compareStackage :: Dist -> [Option] -> Package -> IO ()
+compareStackage dist opts p = do
   nvr <- cmd (rpkg dist) ["verrel"]
-  let stream = "lts-11"
+  let stream = "lts-12"
   stkg <- cmdMaybe "stackage" ["package", stream, removePrefix "ghc-" p]
   let same = isJust stkg && fromJust stkg `isInfixOf` nvr
-  putStrLn $ removeStrictPrefix (p ++ "-") nvr +-+ "(fedora)"
-  putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(" ++ stream ++ ")"
+      missingOnly = hasOptNull 'm' opts
+  unless missingOnly $
+    putStrLn $ nvr +-+ "(fedora)"
+  if missingOnly then when (isNothing stkg) $ putStrLn p
+    else
+    putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(" ++ stream ++ ")"
 
 
 compareRawhide :: Package -> IO ()
