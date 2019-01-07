@@ -57,8 +57,6 @@ Executable fhpkg
                    simple-cmd >= 0.1.1,
                    time < 1.9,
                    unix
-    if impl(ghc<8.0)
-        Build-depends: semigroups
     Hs-Source-Dirs: src, .
     Other-modules: Koji, Utils
                    RPM
@@ -69,13 +67,11 @@ Executable fhmock
     Main-is:       fhmock.hs
     Build-depends: base < 5,
                    fedora-dists,
-                   -- needed for cpp
                    optparse-applicative,
-                   optparse-simple,
-                   simple-cmd >= 0.1.1
-    -- for optparse-simple
-    if impl(ghc<7.6)
-        Build-depends: either < 5
+                   simple-cmd >= 0.1.1,
+                   simple-cmd-args
+    if impl(ghc<8.0)
+        Build-depends: semigroups
     Hs-Source-Dirs: src, .
     Other-modules: Paths_fedora_haskell_tools
     GHC-options:   -fwarn-missing-signatures -Wall

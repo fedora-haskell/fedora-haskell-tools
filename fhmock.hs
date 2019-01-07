@@ -1,15 +1,14 @@
-import Control.Monad (when)
 import Data.List (sort)
-import Data.Version (showVersion)
 import System.Environment (getArgs)
 
 import FedoraDists
 import SimpleCmd (cmd_)
 import Paths_fedora_haskell_tools (version)
 
-import Options.Applicative.Simple
+import SimpleCmdArgs
+import Options.Applicative
 #if (defined(MIN_VERSION_optparse_applicative) && MIN_VERSION_optparse_applicative(0,13,0))
-import Data.Semigroup ((<>))
+--import Data.Semigroup ((<>))
 #endif
 
 -- mock :: [String] -> IO String
@@ -18,25 +17,31 @@ import Data.Semigroup ((<>))
 main :: IO ()
 main = do
   args <- getArgs
-  (_,run) <-
-    simpleOptions (showVersion version) "Fedora Haskell mock chroot tool"
-    "Mock chroot setup for doing Fedora Haskell building and checking.\nYou can also use any mock command without '--'."
-    (pure ()) $
-    do mapM_ addMockCmd commonMockCmds
-       addCmd "check" check "Check all Haskell libs installable"
-       addCmd "repoquery" repoquery "Repoquery"
-       addCmd "help" (pure Help) "mock help"
-       addCmd "mockcmds" (pure MockCmds) "List mock commands"
-       when (length args >= 2) $
-         let c = head args in
-           when (c `elem` allMockCmds) $
-           addCmd c (arbitrary c False "OPT" False) ("Run mock " ++ c ++ " command")
-  run
+  simpleCmdArgs (Just version) "Fedora Haskell mock chroot tool"
+    "Mock chroot setup for doing Fedora Haskell building and checking.\nYou can also use any mock command without '--'." $ subcommands $
+    map mockCmd commonMockCmds ++
+    [ Subcommand "check" (check <$> distArg) "Check all Haskell libs installable"
+    , Subcommand "repoquery" (repoquery <$> distArg <*> many (strArg "PKG...")) "Repoquery"
+    , Subcommand "help" (pure $ mock_ ["--help"]) "mock help"
+    , Subcommand "mockcmds" (pure $ putStrLn $ unwords $ sort allMockCmds) "List mock commands"
+    ] ++
+    [ Subcommand c (runMock <$> distArg <*> optCmdArg <*> some (strArg "OPT")) ("Run mock " ++ c ++ " command") | length args >= 2, let c = head args, c `elem` allMockCmds]
   where
-    addCmd c parse desc = addCommand c desc dispatch parse
+    mockCmd :: (String, Bool, String, Bool, String) -> Subcommand
+    mockCmd (com,needarg,var,externopt,desc) =
+      Subcommand com (runMock <$> distArg <*> optCmdArg <*> arbitrary needarg var externopt) desc
 
-    addMockCmd (com,needarg,var,externopt,desc) =
-      addCmd com (arbitrary com needarg var externopt) desc
+    optCmdArg =
+      mkOpt <$> strArg "CMD"
+      where
+        mkOpt c =
+          case c of
+            ('-':'-':_) -> c
+            _ -> "--" ++ c
+
+    arbitrary :: Bool -> String -> Bool -> Parser [String]
+    arbitrary needarg var externopt =
+      (["--" | externopt] ++) <$> (if needarg then some else many) (strArg (var ++ "..."))
 
     -- (cmd, needarg, VAR, externalopts, desc)
     commonMockCmds = [ ("chroot", True, "CMD", True, "Exec command in chroot")
@@ -57,48 +62,15 @@ allMockCmds = sort
     "pm-cmd", "yum-cmd", "dnf-cmd", "snapshot", "remove-snapshot",
     "rollback-to", "umount", "mount"]
 
-data Args = Check Dist
-          | Repoquery Dist [String]
-          | Arbitrary Dist String [String]
-          | Help
-          | MockCmds
-  deriving Show
-
 distArg :: Parser Dist
-distArg = argument auto (metavar "DIST" <> help "Fedora release, eg fXY")
+distArg = argument auto (metavar "DIST")
 
-strArg :: String -> String -> Parser String
-strArg var desc = strArgument (metavar var <> help desc)
+check :: Dist -> IO ()
+check dist = runMock dist "--dnf-cmd" ["install", "ghc*devel"]
 
-check :: Parser Args
-check = Check <$> distArg
+repoquery :: Dist -> [String] -> IO ()
+repoquery dist ps = runMock dist "--dnf-cmd" $ "repoquery" : ps
 
-repoquery :: Parser Args
-repoquery = Repoquery <$> distArg
-         <*> many (strArg "PKG..." "repoquery args")
-
-arbitrary :: String -> Bool -> String -> Bool -> Parser Args
-arbitrary c needarg var externopt =
-  Arbitrary <$> distArg
-         <*> pure cm
-         <*> ((["--" | externopt] ++) <$> (if needarg then some else many) (strArg (var ++ "...") "mock command options and args"))
-  where
-    cm =
-      case c of
-        ('-':'-':_) -> c
-        _ -> "--" ++ c
-
-dispatch :: Args -> IO ()
-dispatch (Check dist) =
-  runMock dist "--dnf-cmd" ["install", "ghc*devel"]
-dispatch (Repoquery dist ps) =
-  runMock dist "--dnf-cmd" $ "repoquery" : ps
-dispatch Help =
-  mock_ ["--help"]
-dispatch MockCmds =
-  putStrLn $ unwords $ sort allMockCmds
-dispatch (Arbitrary dist a as) =
-  runMock dist a as
 
 runMock :: Dist -> String -> [String] -> IO ()
 runMock dist c cs = do
