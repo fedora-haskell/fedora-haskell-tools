@@ -114,12 +114,12 @@ main = do
       repoAction_ True False (git_ "pull" ["--rebase"]) <$> distArg <*> pkgArgs
     , Subcommand "push" "git push repos" $
       repoAction_ True False (git_ "push" []) <$> distArg <*> pkgArgs
+    , Subcommand "refresh" "cabal-rpm refresh" $
+      repoAction True True refresh <$> distArg <*> pkgArgs
     , Subcommand "unpushed" "show unpushed commits" $
       unpushed <$> switch (switchMods 's' "short" "no log") <*> distArg <*> pkgArgs
     , Subcommand "update" "cabal-rpm update" $
-      repoAction True True (updateOrRefreshPackage False) <$> distArg <*> pkgArgs
-    , Subcommand "refresh" "cabal-rpm refresh" $
-      repoAction True True (updateOrRefreshPackage True) <$> distArg <*> pkgArgs
+      update <$> strOption (optionMods 's' "stream" "STACKAGESTREAM" "Stackage stream (lts-X)") <*> distArg <*> pkgArgs
     , Subcommand "subpkgs" "list subpackages" $
       repoAction True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= mapM_ putStrLn) <$> distArg <*> pkgArgs
     , Subcommand "verrel" "show nvr of packages" $
@@ -479,11 +479,21 @@ isFromHackage pkg =
   grep_ "hackage.haskell.org/package/" $ pkg <.> "spec"
 
 
-updateOrRefreshPackage :: Bool -> Package -> IO ()
-updateOrRefreshPackage refresh pkg = do
+update :: String -> Dist -> [Package] -> IO ()
+update stream =
+  repoAction True True doUpdate
+  where
+    doUpdate :: Package -> IO ()
+    doUpdate pkg = do
+      hckg <- isFromHackage pkg
+      if hckg
+        then cmd_ "cabal-rpm" ["update", "-s", stream]
+        else putStrLn "skipping since not hackage"
+
+refresh :: Package -> IO ()
+refresh pkg = do
   hckg <- isFromHackage pkg
-  let mode = if refresh then "refresh" else "update"
   if hckg
-    then cmd_ "cabal-rpm" [mode]
+    then cmd_ "cabal-rpm" ["refresh"]
     else putStrLn "skipping since not hackage"
 
