@@ -17,7 +17,7 @@ module Main where
 import Control.Applicative (optional, some, (<|>)
 #if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,0))
 #else
-                           ,(<$>)
+                           ,(<$>), (<*>)
 #endif
                            )
 import Control.Monad (filterM, unless, when, (>=>))
