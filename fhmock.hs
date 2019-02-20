@@ -2,9 +2,10 @@ import Data.List (sort)
 import System.Environment (getArgs)
 
 import FedoraDists
-import SimpleCmd (cmd_)
+import Options (distArg)
 import Paths_fedora_haskell_tools (version)
 
+import SimpleCmd (cmd_)
 import SimpleCmdArgs
 import Options.Applicative
 #if (defined(MIN_VERSION_optparse_applicative) && MIN_VERSION_optparse_applicative(0,13,0))
@@ -20,16 +21,20 @@ main = do
   simpleCmdArgs (Just version) "Fedora Haskell mock chroot tool"
     "Mock chroot setup for doing Fedora Haskell building and checking.\nYou can also use any mock command without '--'." $ subcommands $
     map mockCmd commonMockCmds ++
-    [ Subcommand "check" (check <$> distArg) "Check all Haskell libs installable"
-    , Subcommand "repoquery" (repoquery <$> distArg <*> many (strArg "PKG...")) "Repoquery"
-    , Subcommand "help" (pure $ mock_ ["--help"]) "mock help"
-    , Subcommand "mockcmds" (pure $ putStrLn $ unwords $ sort allMockCmds) "List mock commands"
+    [ Subcommand "check" "Check all Haskell libs installable" $
+      check <$> distArg
+    , Subcommand "repoquery" "Repoquery" $
+      repoquery <$> distArg <*> many (strArg "PKG...")
+    , Subcommand "help" "mock help" $ pure $ mock_ ["--help"]
+    , Subcommand "mockcmds" "List mock commands" $
+      pure $ putStrLn $ unwords $ sort allMockCmds
     ] ++
-    [ Subcommand c (runMock <$> distArg <*> optCmdArg <*> some (strArg "OPT")) ("Run mock " ++ c ++ " command") | length args >= 2, let c = head args, c `elem` allMockCmds]
+    [ Subcommand c ("Run mock " ++ c ++ " command") (runMock <$> distArg <*> optCmdArg <*> some (strArg "OPT")) | length args >= 2, let c = head args, c `elem` allMockCmds]
   where
     mockCmd :: (String, Bool, String, Bool, String) -> Subcommand
     mockCmd (com,needarg,var,externopt,desc) =
-      Subcommand com (runMock <$> distArg <*> optCmdArg <*> arbitrary needarg var externopt) desc
+      Subcommand com desc $
+      runMock <$> distArg <*> optCmdArg <*> arbitrary needarg var externopt
 
     optCmdArg =
       mkOpt <$> strArg "CMD"
@@ -61,9 +66,6 @@ allMockCmds = sort
     "remove", "orphanskill", "copyin", "copyout",
     "pm-cmd", "yum-cmd", "dnf-cmd", "snapshot", "remove-snapshot",
     "rollback-to", "umount", "mount"]
-
-distArg :: Parser Dist
-distArg = argument auto (metavar "DIST")
 
 check :: Dist -> IO ()
 check dist = runMock dist "--dnf-cmd" ["install", "ghc*devel"]

@@ -58,7 +58,7 @@ Executable fhpkg
                    time < 1.9,
                    unix
     Hs-Source-Dirs: src, .
-    Other-modules: Koji, Utils
+    Other-modules: Koji, Options, Paths_fedora_haskell_tools, Utils
                    RPM
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
@@ -73,6 +73,6 @@ Executable fhmock
     if impl(ghc<8.0)
         Build-depends: semigroups
     Hs-Source-Dirs: src, .
-    Other-modules: Paths_fedora_haskell_tools
+    Other-modules: Options, Paths_fedora_haskell_tools
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
