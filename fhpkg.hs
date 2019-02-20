@@ -14,7 +14,7 @@
 
 module Main where
 
-import Control.Applicative (optional, some
+import Control.Applicative (optional, some, (<|>)
 #if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,0))
 #else
                            ,(<$>)
@@ -25,7 +25,7 @@ import Data.Maybe
 import Data.List (isInfixOf, isPrefixOf, nub, sort, (\\))
 
 import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
-import Options.Applicative (Parser, auto, option, switch, strOption)
+import Options.Applicative (Parser, auto, flag', option, switch, strOption)
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, getHomeDirectory,
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
@@ -82,7 +82,9 @@ main = do
     , Subcommand "count" "count number of packages" $
       (repoqueryHaskell False >=> (print . length)) <$> distArg
     , Subcommand "diff" "git diff" $
-      gitDiff <$> gitDiffOpts <*> distArg <*> pkgArgs
+      gitDiff <$> optional gitFormat
+      <*> optional (strOption (optionMods 'w' "with-branch" "BRANCH" "Branch to compare"))
+      <*> distArg <*> pkgArgs
     , Subcommand "diff-origin" "git diff origin" $
       gitDiffOrigin <$> distArg <*> pkgArgs
     , Subcommand "diff-branch" "compare branch with master" $
@@ -130,16 +132,14 @@ main = do
 
     branching = switch (switchMods 'B' "branches" "clone branch dirs (fedpkg clone -B)")
 
-    gitDiffOpts :: Parser GitDiffOpts
-    gitDiffOpts = GitDiffOpts <$>
-      optional (strOption (optionMods 'w' "with-branch" "BRANCH" "Branch to compare")) <*>
-      switch (switchMods 's' "short" "Just output package name") <*>
-      optional (option auto (optionMods 'u' "unified" "CONTEXT" "Lines of context"))
+    gitFormat :: Parser DiffFormat
+    gitFormat =
+      flag' DiffShort (switchMods 's' "short" "Just output package name") <|>
+      DiffContext <$> option auto (optionMods 'u' "unified" "CONTEXT" "Lines of context")
 
-data GitDiffOpts = GitDiffOpts
-  { withBranch :: Maybe String
-  , short :: Bool
-  , context :: Maybe Int }
+data DiffFormat =
+  DiffShort | DiffContext Int
+  deriving (Eq)
 
 bump :: String -> Dist -> [Package] -> IO ()
 bump msg =
@@ -166,19 +166,20 @@ execCmd cs dist pkgs =
   where
     (c:args) = words cs
 
-gitDiff :: GitDiffOpts -> Dist -> [Package] -> IO ()
-gitDiff opts =
+gitDiff :: Maybe DiffFormat -> Maybe String -> Dist -> [Package] -> IO ()
+gitDiff fmt mbrnch =
   repoAction False False doGitDiff
   where
     doGitDiff pkg = do
-      let mbrnch = withBranch opts
-          branch = maybeToList mbrnch
-          mcontxt = context opts
-          contxt = maybe [] (\ n -> ["-U" ++ n]) $ show <$> mcontxt
+      let branch = maybeToList mbrnch
+          contxt = case fmt of
+                     (Just (DiffContext n)) -> ["-u", show n]
+                     _ -> []
+          short = fmt == Just DiffShort
       out <- git "diff" $ branch ++ contxt
       unless (null out) $ do
-        putStrLn $ if short opts then pkg else "==" +-+ pkg +-+ "=="
-        unless (short opts) $ putStrLn out
+        putStrLn $ if short then pkg else "==" +-+ pkg +-+ "=="
+        unless short $ putStrLn out
 
 gitDiffOrigin :: Dist -> [Package] -> IO ()
 gitDiffOrigin dist =
