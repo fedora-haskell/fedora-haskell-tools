@@ -43,7 +43,7 @@ import FedoraDists (Dist(..), distBranch, distRepo, distUpdates,
                     hackageRelease, rawhide)
 
 import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdSilent, grep_,
-              removePrefix)
+              removePrefix, shell_)
 import SimpleCmd.Git (git, git_, gitBranch, isGitDir)
 import SimpleCmdArgs
 
@@ -162,9 +162,7 @@ cloneNew False dist =
 execCmd :: String -> Dist -> [Package] -> IO ()
 execCmd "" _ _ = error "CMD string must be given"
 execCmd cs dist pkgs =
-  repoAction_ True True (cmd_ c args) dist pkgs
-  where
-    (c:args) = words cs
+  repoAction_ True True (shell_ cs) dist pkgs
 
 gitDiff :: Maybe DiffFormat -> Maybe String -> Dist -> [Package] -> IO ()
 gitDiff fmt mbrnch =
