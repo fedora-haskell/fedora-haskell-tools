@@ -40,6 +40,7 @@ import SimpleCmd.Git (git_, gitBranch, isGitDir)
 import Utils (checkPkgsGit)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built | Bump
+             | NotInstalled
              deriving (Eq)
 
 main :: IO ()
@@ -60,11 +61,12 @@ main = do
     mode "changed" = Changed
     mode "built" = Built
     mode "bump" = Bump
+    mode "notinstalled" = NotInstalled
     mode _ = error "Unknown command"
 
 commands :: [String]
 commands = ["install", "mock" , "koji", "chain", "pending", "changed", "built", 
-            "bump"]
+            "bump", "notinstalled"]
 
 help :: IO ()
 help = do
@@ -95,7 +97,7 @@ build _ _ _ _ _ _ [] = return ()
 build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
   setCurrentDirectory topdir
   let branch = distBranch dist
-  unless (mode `elem` [Pending, Changed, Built]) $
+  unless (mode `elem` [Pending, Changed, Built, NotInstalled]) $
     putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
   dirExists <- doesDirectoryExist pkg
   unless dirExists $ do
@@ -112,7 +114,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
       exitWith (ExitFailure 1)
     retired <- doesFileExist "dead.package"
     if retired then do
-      unless (mode == Pending) $
+      unless (mode `elem` [NotInstalled,Pending]) $
         putStrLn "skipping dead.package"
       build topdir mode dist Nothing Nothing False rest
       else do
@@ -177,7 +179,7 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                   putStrLn $ nvr +-+ "built\n"
                   instpkgs <- cmdLines "rpm" ("-qa":opkgs)
                   if null instpkgs
-                    -- maybe filter out pandoc-pdf if not installed
+                    -- maybe filter out pandoc-pdf and xmonad* if not installed
                     then rpmInstall rpms
                     else do
                     pkgmgr <- packageManager
@@ -248,6 +250,11 @@ build topdir mode dist msubpkg mlast waitrepo (pkg:rest) = do
                 cmd_ "rpmdev-bumpspec" ["-c", "rebuild", spec]
                 cmd_ (rpkg dist) ["commit", "-m", "bump release"]
               build topdir Bump dist Nothing Nothing False rest
+            NotInstalled -> do
+              opkg <- head <$> rpmspec ["--builtrpms"] (Just "%{name}") spec
+              inst <- cmdMaybe "rpm" ["-q", opkg] :: IO (Maybe String)
+              when (isNothing inst) $ putStrLn pkg
+              build topdir NotInstalled dist Nothing Nothing False rest
             Chain -> do
               fhbuilt <- kojiCheckFHBuilt topdir nvr
               latest <- if fhbuilt
