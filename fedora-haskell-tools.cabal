@@ -21,16 +21,6 @@ source-repository head
   type:     git
   location: https://github.com/fedora-haskell/fedora-haskell-tools
 
-Executable fhbz
-    Main-is:       fhbz.hs
-    Build-depends: base < 5,
-                   fedora-dists,
-                   time
-    Hs-Source-Dirs: src, .
-    Other-modules: Koji, RPM
-    GHC-options:   -fwarn-missing-signatures -Wall
-    Extensions:    CPP
-
 Executable fhpkg
     Main-is:       fhpkg.hs
     Build-depends: base >= 4.6 && < 5,
@@ -46,6 +36,16 @@ Executable fhpkg
     Hs-Source-Dirs: src, .
     Other-modules: Build, Koji, Options, Paths_fedora_haskell_tools, Utils
                    RPM
+    GHC-options:   -fwarn-missing-signatures -Wall
+    Extensions:    CPP
+
+Executable fhbz
+    Main-is:       fhbz.hs
+    Build-depends: base < 5,
+                   fedora-dists,
+                   time
+    Hs-Source-Dirs: src, .
+    Other-modules: Koji, RPM
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
 
