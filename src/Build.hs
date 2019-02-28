@@ -98,10 +98,10 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
              else build topdir Nothing Nothing False mode dist rest
         else do
         when dirExists $ do
+          git_ "pull" ["-q"]
           actual <- gitBranch
           when (branch /= actual) $
             cmd_ (rpkg dist) ["switch-branch", branch]
-          git_ "pull" ["-q"]
         -- noupdate <- doesFileExist ".noupdate"
         -- unless noupdate $
         --   void $ cmdBool "cabal-rpm" ["update"]
