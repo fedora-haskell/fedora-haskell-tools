@@ -31,6 +31,7 @@ import Control.Applicative ((<$>))
 import Control.Concurrent (threadDelay)
 import Control.Monad (unless, when)
 import Data.List (isInfixOf)
+import Data.Maybe (fromMaybe)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
@@ -88,10 +89,11 @@ kojiListPkgs :: Dist -> IO [String]
 kojiListPkgs dist =
   words <$> cmd (kojicmd dist) ["list-pkgs", "--tag=" ++ distTag dist]
 
-rpkgBuild :: FilePath -> Dist -> String -> Bool -> IO ()
-rpkgBuild topdir dist nvr waitrepo = do
+rpkgBuild :: FilePath -> Dist -> Maybe String -> String -> Bool -> IO ()
+rpkgBuild topdir dist mtarget nvr waitrepo = do
   giturl <- cmd (rpkg dist) ["giturl"]
-  out <- cmd (kojicmd dist) ["build", "--nowait", "--fail-fast", distTarget dist, giturl]
+  let target = fromMaybe (distTarget dist) mtarget
+  out <- cmd (kojicmd dist) ["build", "--nowait", "--fail-fast", target, giturl]
   putStrLn out
   let task = last . words . head $ lines out
   start <- getCurrentTime
