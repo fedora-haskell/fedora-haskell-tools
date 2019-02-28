@@ -1,6 +1,6 @@
 -- |
 -- Module      :  Koji
--- Copyright   :  (C) 2016-2017  Jens Petersen
+-- Copyright   :  (C) 2016-2019  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
 -- Stability   :  alpha

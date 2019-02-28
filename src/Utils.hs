@@ -1,6 +1,6 @@
 -- |
 -- Module      :  Cmd
--- Copyright   :  (C) 2014  Jens Petersen
+-- Copyright   :  (C) 2014, 2016-2018  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
 -- Stability   :  alpha

@@ -1,6 +1,6 @@
 -- |
 -- Module      :  Packages
--- Copyright   :  (C) 2017  Jens Petersen
+-- Copyright   :  (C) 2017-2019  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
 -- Stability   :  alpha

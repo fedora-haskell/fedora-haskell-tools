@@ -1,6 +1,6 @@
 -- |
 -- Module      :  RPM
--- Copyright   :  (C) 2015-2017  Jens Petersen
+-- Copyright   :  (C) 2015-2019  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
 --
