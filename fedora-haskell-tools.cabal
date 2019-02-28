@@ -31,6 +31,7 @@ Executable fhpkg
                    HTTP,
                    process,
                    simple-cmd >= 0.1.1,
+                   split,
                    time < 1.9,
                    unix
     Hs-Source-Dirs: src, .

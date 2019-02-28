@@ -22,8 +22,9 @@ import Control.Applicative (optional, some, (<|>)
                            )
 import Control.Monad (filterM, unless, when, (>=>))
 import Data.Maybe
-import Data.List (isInfixOf, isPrefixOf, nub, sort, (\\))
+import Data.List (intercalate, isInfixOf, isPrefixOf, nub, sort, (\\))
 
+import Data.List.Split (splitOn)
 import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
 import Options.Applicative (Parser, auto, flag', option, switch, strOption)
 import System.Directory (doesDirectoryExist, doesFileExist,
@@ -42,8 +43,8 @@ import Text.CSV (parseCSV)
 import FedoraDists (Dist(..), distBranch, distRepo, distUpdates,
                     hackageRelease, rawhide)
 
-import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdSilent, grep_,
-              removePrefix, shell_)
+import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdMaybe, cmdSilent,
+                  grep_, removePrefix, shell_)
 import SimpleCmd.Git (git, git_, gitBranch, isGitDir)
 import SimpleCmdArgs
 
@@ -125,6 +126,8 @@ main = do
       update <$> strOption (optionMods 's' "stream" "STACKAGESTREAM" "Stackage stream (lts-X)") <*> distArg <*> pkgArgs
     , Subcommand "subpkgs" "list subpackages" $
       repoAction True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= mapM_ putStrLn) <$> distArg <*> pkgArgs
+    , Subcommand "tagged" "list koji DIST tagged builds" $
+      listTagged <$> switch (switchMods 's' "short" "list packages not builds") <*> strArg "TAG"
     , Subcommand "verrel" "show nvr of packages" $
       verrel <$> distArg <*> pkgArgs] ++
     map (buildCmd cwd) [ ("install", "build locally and install")
@@ -510,3 +513,12 @@ refresh pkg = do
     then cmd_ "cabal-rpm" ["refresh"]
     else putStrLn "skipping since not hackage"
 
+listTagged :: Bool -> String -> IO ()
+listTagged short tag = do
+  builds <- map (head . words) <$> cmdLines "koji" ["list-tagged", "--quiet", tag]
+  mapM_ putStrLn $ nub $ map (if short then dropVerrel else id) builds
+  where
+    dropVerrel :: String -> String
+    dropVerrel nvr =
+      let parts = splitOn "-" nvr in
+        intercalate "-" $ take ((length parts) - 2) parts
