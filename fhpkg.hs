@@ -47,6 +47,7 @@ import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdMaybe, cmdSilent, grep_,
 import SimpleCmd.Git (git, git_, gitBranch, isGitDir)
 import SimpleCmdArgs
 
+import Build (build, readBuildCmd)
 import Koji (kojiListPkgs, rpkg)
 import Options (distArg)
 import Paths_fedora_haskell_tools (version)
@@ -65,10 +66,10 @@ listDirectory path =
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
-  -- args <- getArgs
+  cwd <- getCurrentDirectory
   simpleCmdArgs (Just version) "Fedora Haskell packages tool"
     "Fedora packages maintenance tool" $
-    subcommands
+    subcommands $
     [ Subcommand "bump" "bump package release" $
       bump <$> strOption (optionMods 'm' "message" "CHANGELOG" "changelog message") <*> distArg <*> pkgArgs
     , Subcommand "checkout" "fedpkg switch-branch" $
@@ -125,8 +126,17 @@ main = do
     , Subcommand "subpkgs" "list subpackages" $
       repoAction True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= mapM_ putStrLn) <$> distArg <*> pkgArgs
     , Subcommand "verrel" "show nvr of packages" $
-      verrel <$> distArg <*> pkgArgs
-    ]
+      verrel <$> distArg <*> pkgArgs] ++
+    map (buildCmd cwd) [ ("install", "build locally and install")
+                       , ("mock", "build in mock")
+                       , ("chain", "build deps recursively in Koji")
+                       , ("koji", "build in Koji (deprecated)")
+                       , ("pending", "show planned changes")
+                       , ("changed", "show changed pkgs")
+                       , ("built", "show pkgs whose NVR already built")
+                       , ("bump", "bump release for NVRs already built")
+                       , ("notinstalled", "list packages not locally installed")
+                       ]
   where
     pkgArgs = some (strArg "PKG...")
 
@@ -136,6 +146,10 @@ main = do
     gitFormat =
       flag' DiffShort (switchMods 's' "short" "Just output package name") <|>
       DiffContext <$> option auto (optionMods 'u' "unified" "CONTEXT" "Lines of context")
+
+    buildCmd cwd (c, desc) =
+      Subcommand c desc  $
+      build cwd Nothing Nothing False (readBuildCmd c) <$> distArg <*> pkgArgs
 
 data DiffFormat =
   DiffShort | DiffContext Int

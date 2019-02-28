@@ -12,7 +12,11 @@
 -- the Free Software Foundation, either version 3 of the License, or
 -- (at your option) any later version.
 
-module Main where
+module Build
+  (build,
+   readBuildCmd
+  )
+where
 
 #if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,0))
 #else
@@ -23,19 +27,17 @@ import Data.Maybe
 import Data.List (intercalate, isPrefixOf, nub)
 
 import System.Directory (doesDirectoryExist, doesFileExist,
-                         getCurrentDirectory, setCurrentDirectory)
-import System.Environment (getArgs, getProgName)
+                         setCurrentDirectory)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), dropExtension)
-import System.IO (hPutStrLn, stderr)
 
-import FedoraDists (Dist, dists, distBranch, distOverride, rpmDistTag)
+import FedoraDists (Dist, distBranch, distOverride, rpmDistTag)
 import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
              notInKoji, rpkg, rpkgBuild)
 import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package,
             packageManager, pkgDir, rpmInstall, rpmspec)
 import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdMaybe, cmdlog,
-                  cmdSilent, grep_, removeStrictPrefix, removeSuffix, sudo)
+                  cmdSilent, grep_, removeStrictPrefix, sudo)
 import SimpleCmd.Git (git_, gitBranch, isGitDir)
 import Utils (checkPkgsGit)
 
@@ -43,56 +45,24 @@ data Command = Install | Mock | Koji | Chain | Pending | Changed | Built | Bump
              | NotInstalled
              deriving (Eq)
 
-main :: IO ()
-main = do
-  args <- getArgs
-  case args of
-    (c:d:ps) -> do
-      (com, dist, pkgs) <- parseArgs c d ps
-      cwd <- getCurrentDirectory
-      build cwd Nothing Nothing False (mode com) dist pkgs
-    _ -> help
-  where
-    mode "install" = Install
-    mode "mock" = Mock
-    mode "koji" = Koji
-    mode "chain" = Chain
-    mode "pending" = Pending
-    mode "changed" = Changed
-    mode "built" = Built
-    mode "bump" = Bump
-    mode "notinstalled" = NotInstalled
-    mode _ = error "Unknown command"
+readBuildCmd :: String -> Command
+readBuildCmd "install" = Install
+readBuildCmd "mock" = Mock
+readBuildCmd "koji" = Koji
+readBuildCmd "chain" = Chain
+readBuildCmd "pending" = Pending
+readBuildCmd "changed" = Changed
+readBuildCmd "built" = Built
+readBuildCmd "bump" = Bump
+readBuildCmd "notinstalled" = NotInstalled
+readBuildCmd _ = error "Unknown command"
 
-commands :: [String]
-commands = ["install", "mock" , "koji", "chain", "pending", "changed", "built", 
-            "bump", "notinstalled"]
+-- commands :: [String]
+-- commands = ["install", "mock" , "koji", "chain", "pending", "changed", "built", 
+--             "bump", "notinstalled"]
 
-help :: IO ()
-help = do
-  progName <- getProgName
-  hPutStrLn stderr $ "Usage:" +-+ progName +-+ "CMD DIST PKG...\n"
-    ++ "\n"
-    ++ "Commands:\n"
-    ++ "  install\t- build locally and install\n"
-    ++ "  mock\t\t- build in mock\n"
-    ++ "  koji\t\t- build in Koji\n"
-    ++ "  chain\t\t- build deps recursively in Koji\n"
-    ++ "  pending\t- show planned changes\n"
-    ++ "  changed\t- show changed pkgs\n"
-    ++ "  built\t\t- show pkgs whose NVR already built\n"
-    ++ "  bump\t\t- bump release for NVRs already built\n"
-  exitWith (ExitFailure 1)
-
-type Arguments = (String, Dist, [String])
-
-parseArgs :: String -> String -> [String] -> IO Arguments
-parseArgs c dst pkgs | read dst `notElem` dists = error $ "Unknown dist '" ++ dst ++ "'"
-                   | null pkgs = error "Please specify a package."
-                   | otherwise =
-                       return (c, read dst, map (removeSuffix "/") pkgs)
-
-build :: FilePath -> Maybe String -> Maybe (String, String) -> Bool -> Command -> Dist -> [String] -> IO ()
+build :: FilePath -> Maybe String -> Maybe (String, String) -> Bool ->
+         Command -> Dist -> [String] -> IO ()
 build _ _ _ _ _ _ [] = return ()
 build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
   setCurrentDirectory topdir
@@ -297,9 +267,6 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
                     putStrLn $ show (length rest) +-+ "packages left"
                     build topdir Nothing (Just (pkg, nvr)) waitrepo Chain dist rest
 
-maybePkgVer :: String -> Maybe String -> String
-maybePkgVer pkg mver = pkg ++ maybe "" ("-" ++) mver
-
 notInstalled :: String -> IO Bool
 notInstalled pkg =
   not <$> cmdBool "rpm" ["--quiet", "-q", pkg]
@@ -325,38 +292,14 @@ bodhiOverride dist nvr =
     -- FIXME: improve Notes with recursive info
     cmd_ "bodhi" ["overrides", "save", "--notes", "Haskell stack", nvr]
 
--- -- dereference meta BRs
--- whatProvides :: String -> String -> IO String
--- whatProvides relver pkg = do
---   res <- repoquery relver ["--qf", "%{name}", "--whatprovides", pkg]
---   --print res
---   when (null res) $ do
---     installed <- not <$> notInstalled pkg
---     unless installed $ putStrLn $ "Warning:" +-+ pkg +-+ "not found by repoquery"
---   return $ if null res then pkg else res
-
 eqNVR :: String -> Maybe String -> Bool
 eqNVR p1 p2 =
   Just (dropExtension p1) == fmap dropExtension p2
-
--- "pkg = X.Y" -> ["pkg", "=", "X.Y"] -> ("pkg", Just "X.Y")
-processDeps :: [String] -> (String, Maybe String)
-processDeps [p, "=", v] = (p, Just v)
-processDeps (p:_) = (p, Nothing)
-processDeps [] = error "processDeps: empty string!"
 
 dependent :: String -> String -> String -> FilePath -> IO Bool
 dependent dep pkg branch topdir = do
   pkgpath <- pkgDir pkg branch topdir
   grep_ dep $ pkgpath </> pkg ++ ".spec"
-
-displayLogTail :: FilePath -> IO ()
-displayLogTail f = do
-  ls <- lines <$> readFile f
-  let foot = 3
-      disp = 12
-      start = length ls - (disp + foot)
-  mapM_ putStrLn $ take disp $ drop start ls
 
 waitForEnter :: IO ()
 waitForEnter = do
