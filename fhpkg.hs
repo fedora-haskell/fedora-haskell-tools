@@ -120,6 +120,8 @@ main = do
       repoAction_ True False (git_ "push" []) <$> distArg <*> pkgArgs
     , Subcommand "refresh" "cabal-rpm refresh" $
       repoAction True True refresh <$> distArg <*> pkgArgs
+    , Subcommand "remaining" "remaining packages to be built in TAG" $
+      remaining <$> strArg "TAG" <*> pkgArgs
     , Subcommand "unpushed" "show unpushed commits" $
       unpushed <$> switch (switchMods 's' "short" "no log") <*> distArg <*> pkgArgs
     , Subcommand "update" "cabal-rpm update" $
@@ -127,7 +129,7 @@ main = do
     , Subcommand "subpkgs" "list subpackages" $
       repoAction True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= mapM_ putStrLn) <$> distArg <*> pkgArgs
     , Subcommand "tagged" "list koji DIST tagged builds" $
-      listTagged <$> switch (switchMods 's' "short" "list packages not builds") <*> strArg "TAG"
+      listTagged_ <$> switch (switchMods 's' "short" "list packages not builds") <*> strArg "TAG"
     , Subcommand "verrel" "show nvr of packages" $
       verrel <$> distArg <*> pkgArgs] ++
     map (buildCmd cwd) [ ("install", "build locally and install")
@@ -513,12 +515,21 @@ refresh pkg = do
     then cmd_ "cabal-rpm" ["refresh"]
     else putStrLn "skipping since not hackage"
 
-listTagged :: Bool -> String -> IO ()
+listTagged_ :: Bool -> String -> IO ()
+listTagged_ short tag =
+  listTagged short tag >>= mapM_ putStrLn
+
+listTagged :: Bool -> String -> IO [String]
 listTagged short tag = do
   builds <- map (head . words) <$> cmdLines "koji" ["list-tagged", "--quiet", tag]
-  mapM_ putStrLn $ nub $ map (if short then dropVerrel else id) builds
+  return $ nub $ map (if short then dropVerrel else id) builds
   where
     dropVerrel :: String -> String
     dropVerrel nvr =
       let parts = splitOn "-" nvr in
-        intercalate "-" $ take ((length parts) - 2) parts
+        intercalate "-" $ take (length parts - 2) parts
+
+remaining :: String -> [Package] -> IO ()
+remaining tag pkgs = do
+  built <- listTagged True tag
+  cmd_ "rpmbuild-order" $ ["sort", "-p"] ++ (pkgs \\ built)
