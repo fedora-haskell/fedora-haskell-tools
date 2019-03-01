@@ -33,8 +33,9 @@ import Control.Monad (unless, when)
 import Data.List (isInfixOf)
 import Data.Maybe (fromMaybe)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
+import System.Directory (doesFileExist)
 import System.Exit (ExitCode (..))
-import System.FilePath ((</>))
+import System.FilePath ((</>), (<.>))
 import System.IO (hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode, rawSystem)
 
@@ -80,10 +81,15 @@ notInKoji :: String -> FilePath -> Dist -> String -> IO Bool
 notInKoji branch topdir dist pkg = do
   latest <- kojiLatestPkg dist pkg
   pkgpath <- pkgDir pkg branch topdir
-  local <- cmd (rpkg dist) ["--path", pkgpath, "verrel"]
-  if latest == Just local
-    then kojiWaitPkg topdir dist local >> return False
-    else return True
+  let spec = pkg <.> "spec"
+  specExists <- doesFileExist $ pkgpath </> spec
+  if not specExists
+    then error $ spec +-+ "not found"
+    else do
+    local <- cmd (rpkg dist) ["--path", pkgpath, "verrel"]
+    if latest == Just local
+      then kojiWaitPkg topdir dist local >> return False
+      else return True
 
 kojiListPkgs :: Dist -> IO [String]
 kojiListPkgs dist =

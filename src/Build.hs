@@ -108,7 +108,7 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
         let spec = pkg ++ ".spec"
         hasSpec <- doesFileExist spec
         if not hasSpec
-          then putStrLn $ "No" +-+ spec
+          then error $ "No" +-+ spec
           else do
           nvr <- cmd (rpkg dist) ["verrel"]
           let verrel = removeStrictPrefix (pkg ++ "-") nvr
