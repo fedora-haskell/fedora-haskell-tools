@@ -27,3 +27,6 @@ See TODO for more planned features.
 
 ## fhbz
 Update version update bugs in Bugzilla for Haskell packages.
+
+## fhmock
+Tool for standalone mock chroots for building and development.
