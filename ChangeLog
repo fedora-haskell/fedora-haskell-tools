@@ -1,16 +1,16 @@
 * 0.7 (2019-02-28)
 - merge fhbuild into fhpkg (please delete fhbuild)
-- fhbz: close is now default
 - use simple-cmd and fedora-dists
-- fhpkg now uses simple-cmd-args
+- fhpkg:
+  - now uses simple-cmd-args
+  - diff accepts -u or -s
+  - diff-stackage -m flag
+  - separate refresh and update with stream option
+  - cmd now uses shell
+  - new commands: not-installed, tagged, remaining
+- fhbz: close is now default
 - new fhmock program
-- fhpkg diff accepts -u or -s
-- Dist type
-- fhpkg diff-stackage -m flag
-- fhpkg: separate refresh and update with stream option
-- fhpkg cmd now uses shell
-- fhpkg notinstalled command
-- fhpkg tagged command
+- use Dist type
 
 * 0.6 (2018-08-07)
 - fhpkg
