@@ -121,7 +121,7 @@ main = do
     , Subcommand "refresh" "cabal-rpm refresh" $
       repoAction True True refresh <$> distArg <*> pkgArgs
     , Subcommand "remaining" "remaining packages to be built in TAG" $
-      remaining <$> strArg "TAG" <*> pkgArgs
+      remaining <$> switch (switchMods 'c' "count" "show many packages left") <*> strArg "TAG" <*> pkgArgs
     , Subcommand "unpushed" "show unpushed commits" $
       unpushed <$> switch (switchMods 's' "short" "no log") <*> distArg <*> pkgArgs
     , Subcommand "update" "cabal-rpm update" $
@@ -535,7 +535,10 @@ listTagged short tag = do
       let parts = splitOn "-" nvr in
         intercalate "-" $ take (length parts - 2) parts
 
-remaining :: String -> [Package] -> IO ()
-remaining tag pkgs = do
+remaining :: Bool -> String -> [Package] -> IO ()
+remaining count tag pkgs = do
   built <- listTagged True tag
-  cmd_ "rpmbuild-order" $ ["sort", "-p"] ++ (pkgs \\ built)
+  let left = pkgs \\ built
+  if count
+    then print $ length left
+    else cmd_ "rpmbuild-order" $ ["sort", "-p"] ++ left
