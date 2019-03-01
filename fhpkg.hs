@@ -140,7 +140,7 @@ main = do
                        , ("changed", "show changed pkgs")
                        , ("built", "show pkgs whose NVR already built")
                        , ("bump", "bump release for NVRs already built")
-                       , ("notinstalled", "list packages not locally installed")
+                       , ("not-installed", "list packages not locally installed")
                        ]
   where
     pkgArgs = some (strArg "PKG...")
