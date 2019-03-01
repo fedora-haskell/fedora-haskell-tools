@@ -141,7 +141,9 @@ main = do
                        , ("built", "show pkgs whose NVR already built")
                        , ("bump", "bump release for NVRs already built")
                        , ("not-installed", "list packages not locally installed")
-                       ]
+                       ] ++
+    map (buildCmdTarget cwd) [ ("chain", "build deps recursively in Koji")
+                             , ("koji", "build in Koji (deprecated)")]
   where
     pkgArgs = some (strArg "PKG...")
 
@@ -154,7 +156,11 @@ main = do
 
     buildCmd cwd (c, desc) =
       Subcommand c desc  $
-      build cwd Nothing Nothing False (readBuildCmd c) <$> distArg <*> pkgArgs
+      build cwd Nothing Nothing False (readBuildCmd c) Nothing <$> distArg <*> pkgArgs
+
+    buildCmdTarget cwd (c, desc) =
+      Subcommand c desc  $
+      build cwd Nothing Nothing False (readBuildCmd c) <$> optional (strOption (optionMods 't' "target" "TARGET" "Koji dist target")) <*> distArg <*> pkgArgs
 
 data DiffFormat =
   DiffShort | DiffContext Int
