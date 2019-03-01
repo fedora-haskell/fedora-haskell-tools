@@ -67,7 +67,7 @@ build _ _ _ _ _ _ [] = return ()
 build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
   setCurrentDirectory topdir
   let branch = distBranch dist
-  unless (mode `elem` [Pending, Changed, Built, NotInstalled]) $
+  when (mode `notElem` [Pending, Changed, Built, NotInstalled]) $
     putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
   dirExists <- doesDirectoryExist pkg
   unless dirExists $ do
