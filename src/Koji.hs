@@ -30,7 +30,7 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Concurrent (threadDelay)
 import Control.Monad (unless, when)
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, isPrefixOf)
 import Data.Maybe (fromMaybe)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.Directory (doesFileExist)
@@ -41,7 +41,8 @@ import System.Process (readProcessWithExitCode, rawSystem)
 
 import FedoraDists (Dist, distTag, distTarget, kojicmd, rpkg)
 import RPM (pkgDir)
-import SimpleCmd (cmd, cmd_, cmdBool, grep_, logMsg, (+-+))
+import SimpleCmd (cmd, cmd_, cmdBool, cmdLines, grep_, logMsg,
+                  removeStrictPrefix, (+-+))
 
 kojisafe :: Dist -> String -> [String] -> IO String
 kojisafe dist c as =
@@ -103,7 +104,7 @@ rpkgBuild topdir dist mtarget nvr waitrepo = do
   putStrLn out
   let task = last . words . head $ lines out
   start <- getCurrentTime
-  success <- cmdBool "koji" ["watch-task", task]
+  success <- kojiWatchTask dist task
   if success
     then do
     logMsg $ nvr ++ " built"
@@ -114,6 +115,30 @@ rpkgBuild topdir dist mtarget nvr waitrepo = do
     let countdown = 120 - round (diffUTCTime now start) :: Int
     when (countdown >= 0) $
       cmd_ "sleep" [show countdown]
+
+data TaskState = TaskOpen | TaskFailed | TaskClosed
+
+kojiWatchTask :: Dist -> String -> IO Bool
+kojiWatchTask dist task = do
+  res <- cmdBool (kojicmd dist) ["watch-task", task]
+  if res then return True
+    else do
+    ti <- kojiTaskInfo
+    case ti of
+      TaskOpen -> kojiWatchTask dist task
+      TaskClosed -> return True
+      TaskFailed -> error "Task failed!"
+      where
+        kojiTaskInfo :: IO TaskState
+        kojiTaskInfo = do
+          info <- cmdLines (kojicmd dist) ["taskinfo", task]
+          let state = removeStrictPrefix "State: " <$> filter ("State: " `isPrefixOf`) info
+          return $
+            case state of
+              ["open"] -> TaskOpen
+              ["failed"] -> TaskFailed
+              ["closed"] -> TaskClosed
+              _ -> error "unknown task state!"
 
 cmdFragile :: String -> [String] -> IO String
 cmdFragile c as = do
