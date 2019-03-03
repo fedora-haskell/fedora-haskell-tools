@@ -62,9 +62,9 @@ readBuildCmd _ = error "Unknown command"
 --             "bump", "notinstalled"]
 
 build :: FilePath -> Maybe String -> Maybe (String, String) -> Bool ->
-         Command -> Maybe String -> Dist -> [String] -> IO ()
-build _ _ _ _ _ _ _ [] = return ()
-build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
+         Command -> Dist -> [String] -> IO ()
+build _ _ _ _ _ _ [] = return ()
+build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
   setCurrentDirectory topdir
   let branch = distBranch dist
   when (mode `notElem` [Pending, Changed, Built, NotInstalled]) $
@@ -86,7 +86,7 @@ build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
     if retired then do
       unless (mode `elem` [NotInstalled,Pending]) $
         putStrLn "skipping dead.package"
-      build topdir Nothing Nothing False mode mtarget dist rest
+      build topdir Nothing Nothing False mode dist rest
       else do
       pkggit <- do
         gd <- isGitDir "."
@@ -95,7 +95,7 @@ build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
       if not pkggit
         then if mode `elem` [Install, Koji, Chain]
              then error $ "not a Fedora pkg git dir!:" +-+ wd
-             else build topdir Nothing Nothing False mode Nothing dist rest
+             else build topdir Nothing Nothing False mode dist rest
         else do
         when dirExists $ do
           git_ "pull" ["-q"]
@@ -129,7 +129,7 @@ build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
                 unless (null srcs) $ do
                   putStrLn "Missing:"
                   mapM_ putStrLn srcs
-                  build topdir Nothing Nothing False Install Nothing dist srcs
+                  build topdir Nothing Nothing False Install dist srcs
                   setCurrentDirectory $ topdir </> wd
                 stillMissing <- filterM notInstalled missing
                 unless (null stillMissing) $ do
@@ -142,7 +142,7 @@ build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
                 if not success
                   then do
                   waitForEnter
-                  build topdir Nothing Nothing False Install Nothing dist [pkg]
+                  build topdir Nothing Nothing False Install dist [pkg]
                   else do
                   opkgs <- rpmspec ["--builtrpms"] (Just "%{name}") spec
                   rpms <- rpmspec ["--builtrpms", "--define=dist" +-+ rpmDistTag dist] (Just "%{arch}/%{name}-%{version}-%{release}.%{arch}.rpm") spec
@@ -157,11 +157,11 @@ build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
                     sudo pkgmgr ("install":"-y":rpms)
               putStrLn ""
               putStrLn $ show (length rest) +-+ "packages left"
-              build topdir Nothing Nothing False Install Nothing dist rest
+              build topdir Nothing Nothing False Install dist rest
             Mock -> do
               putStrLn $ "Mock building" +-+ nvr
               cmdlog (rpkg dist) ["mockbuild"]
-              build topdir Nothing Nothing False Mock Nothing dist rest
+              build topdir Nothing Nothing False Mock dist rest
             Koji -> do
               unless (null rest) $ do
                 putStrLn $ show (length rest) +-+ "more packages"
@@ -171,14 +171,14 @@ build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
                 then do
                 putStrLn $ nvr +-+ "already built!"
                 kojiWaitPkg topdir dist nvr
-                build topdir Nothing mlast False Koji mtarget dist rest
+                build topdir Nothing mlast False Koji dist rest
                 else do
                 building <- kojiBuilding pkg nvr dist
                 if building
                   then do
                   putStrLn $ nvr +-+ "is already building"
                   kojiWaitPkg topdir dist nvr
-                  build topdir Nothing Nothing False Koji mtarget dist rest
+                  build topdir Nothing Nothing False Koji dist rest
                   else do
                   case mlast of
                     Nothing -> return ()
@@ -190,41 +190,41 @@ build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
                   showChange pkg latest nvr
                   putStrLn ""
                   git_ "push" []
-                  rpkgBuild topdir dist mtarget nvr waitrepo
+                  rpkgBuild topdir dist nvr waitrepo
                   bodhiOverride dist nvr
                   unless (null rest) $ do
                     dep <- dependent pkg (head rest) branch topdir
                     when dep $ do
                       putStrLn $ "Waiting for" +-+ nvr
                       kojiWaitPkg topdir dist nvr
-                    build topdir Nothing (if dep then Just (pkg, nvr) else Nothing) False Koji mtarget dist rest
+                    build topdir Nothing (if dep then Just (pkg, nvr) else Nothing) False Koji dist rest
             Pending -> do
               latest <- kojiLatestPkg dist pkg
               unless (eqNVR nvr latest) $
                 showNVRChange pkg latest nvr
-              build topdir Nothing Nothing False Pending Nothing dist rest
+              build topdir Nothing Nothing False Pending dist rest
             Changed -> do
               latest <- kojiLatestPkg dist pkg
               unless (eqNVR nvr latest) $
                 putStrLn pkg
-              build topdir Nothing Nothing False Changed Nothing dist rest
+              build topdir Nothing Nothing False Changed dist rest
             Built -> do
               latest <- kojiLatestPkg dist pkg
               when (eqNVR nvr latest) $
                 putStrLn pkg
-              build topdir Nothing Nothing False Built Nothing dist rest
+              build topdir Nothing Nothing False Built dist rest
             Bump -> do
               latest <- kojiLatestPkg dist pkg
               when (eqNVR nvr latest) $ do
                 putStrLn pkg
                 cmd_ "rpmdev-bumpspec" ["-c", "rebuild", spec]
                 cmd_ (rpkg dist) ["commit", "-m", "bump release"]
-              build topdir Nothing Nothing False Bump Nothing dist rest
+              build topdir Nothing Nothing False Bump dist rest
             NotInstalled -> do
               opkg <- head <$> rpmspec ["--builtrpms"] (Just "%{name}") spec
               inst <- cmdMaybe "rpm" ["-q", opkg] :: IO (Maybe String)
               when (isNothing inst) $ putStrLn pkg
-              build topdir Nothing Nothing False NotInstalled Nothing dist rest
+              build topdir Nothing Nothing False NotInstalled dist rest
             Chain -> do
               fhbuilt <- kojiCheckFHBuilt topdir nvr
               latest <- if fhbuilt
@@ -235,7 +235,7 @@ build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
                 putStrLn $ nvr +-+ "already built!"
                 unless (null rest) $ --do
                   --kojiWaitPkg topdir dist nvr
-                  build topdir Nothing Nothing False Chain mtarget dist rest
+                  build topdir Nothing Nothing False Chain dist rest
                 else do
                 building <- kojiBuilding pkg nvr dist
                 if building
@@ -243,7 +243,7 @@ build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
                   putStrLn $ nvr +-+ "is already building"
                   kojiWaitPkg topdir dist nvr
                   unless (null rest) $
-                    build topdir Nothing Nothing False Chain mtarget dist rest
+                    build topdir Nothing Nothing False Chain dist rest
                   else do
                   showChange pkg latest nvr
                   putStrLn ""
@@ -254,18 +254,18 @@ build topdir msubpkg mlast waitrepo mode mtarget dist (pkg:rest) = do
                   unless (null hmissing) $ do
                     putStrLn "Missing:"
                     mapM_ putStrLn hmissing
-                    build topdir Nothing Nothing True Chain mtarget dist hmissing
+                    build topdir Nothing Nothing True Chain dist hmissing
                     setCurrentDirectory $ topdir </> wd
                     putStrLn ""
                   -- note "fedpkg --path dir local" saves .build.log in cwd
                   git_ "push" []
                   putStrLn ""
-                  rpkgBuild topdir dist mtarget nvr waitrepo
+                  rpkgBuild topdir dist nvr waitrepo
                   bodhiOverride dist nvr
                   unless (null rest) $ do
                     putStrLn ""
                     putStrLn $ show (length rest) +-+ "packages left"
-                    build topdir Nothing (Just (pkg, nvr)) waitrepo Chain mtarget dist rest
+                    build topdir Nothing (Just (pkg, nvr)) waitrepo Chain dist rest
 
 notInstalled :: String -> IO Bool
 notInstalled pkg =
