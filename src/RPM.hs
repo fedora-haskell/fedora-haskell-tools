@@ -34,7 +34,8 @@ import System.FilePath ((</>))
 import System.Exit (ExitCode (..), exitFailure, exitWith)
 import System.IO (hPutStrLn, stderr)
 
-import FedoraDists (Dist, distBranch, dists, distTag, releaseVersion)
+import Dist (distTag)
+import FedoraDists (Dist, distBranch, dists, releaseVersion)
 import SimpleCmd (cmd, removeStrictPrefix, removeSuffix, sudo, (+-+))
 import qualified SimpleCmd.Rpm as S
 

@@ -14,10 +14,10 @@
 import Data.List (sort)
 import System.Environment (getArgs)
 
-import FedoraDists
-import Options (distArg)
+import Dist (distArg)
 import Paths_fedora_haskell_tools (version)
 
+import FedoraDists (Dist, distRepo, releaseVersion)
 import SimpleCmd (cmd_)
 import SimpleCmdArgs
 import Options.Applicative

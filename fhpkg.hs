@@ -49,8 +49,8 @@ import SimpleCmd.Git (git, git_, gitBranch, isGitDir)
 import SimpleCmdArgs
 
 import Build (build, readBuildCmd)
+import Dist (distArg)
 import Koji (kojiListPkgs, rpkg)
-import Options (distArg)
 import Paths_fedora_haskell_tools (version)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)

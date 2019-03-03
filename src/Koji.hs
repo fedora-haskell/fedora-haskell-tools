@@ -39,10 +39,12 @@ import System.FilePath ((</>), (<.>))
 import System.IO (hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode, rawSystem)
 
-import FedoraDists (Dist, distTag, distTarget, kojicmd, rpkg)
-import RPM (pkgDir)
+import FedoraDists (Dist, kojicmd, rpkg)
 import SimpleCmd (cmd, cmd_, cmdBool, cmdLines, grep_, logMsg,
                   removeStrictPrefix, (+-+))
+import Dist (distTag, distTarget)
+import RPM (pkgDir)
+
 
 kojisafe :: Dist -> String -> [String] -> IO String
 kojisafe dist c as =
