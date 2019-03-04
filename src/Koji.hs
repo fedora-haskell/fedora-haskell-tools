@@ -116,7 +116,7 @@ rpkgBuild topdir dist nvr waitrepo = do
     when (countdown >= 0) $
       cmd_ "sleep" [show countdown]
 
-data TaskState = TaskOpen | TaskFailed | TaskClosed
+data TaskState = TaskOpen | TaskFailed | TaskClosed | TaskFree
 
 kojiWatchTask :: Dist -> String -> IO Bool
 kojiWatchTask dist task = do
@@ -125,9 +125,9 @@ kojiWatchTask dist task = do
     else do
     ti <- kojiTaskInfo
     case ti of
-      TaskOpen -> kojiWatchTask dist task
       TaskClosed -> return True
       TaskFailed -> error "Task failed!"
+      _ -> kojiWatchTask dist task
       where
         kojiTaskInfo :: IO TaskState
         kojiTaskInfo = do
@@ -138,6 +138,7 @@ kojiWatchTask dist task = do
               ["open"] -> TaskOpen
               ["failed"] -> TaskFailed
               ["closed"] -> TaskClosed
+              ["free"] -> TaskFree
               _ -> error "unknown task state!"
 
 cmdFragile :: String -> [String] -> IO String
