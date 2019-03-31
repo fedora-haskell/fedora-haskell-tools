@@ -20,7 +20,7 @@ distTag d = show d ++ "-" ++ fromMaybe "build" (sidetag d)
 
 -- | Maps `Dist` to target tag
 distTarget  :: Dist -> String
-distTarget d = show d ++ "-" ++ fromMaybe "" (sidetag d)
+distTarget d = show d ++ maybe "" ("-" ++) (sidetag d)
 
 -- | optparse-application DIST arg
 distArg :: Parser Dist
