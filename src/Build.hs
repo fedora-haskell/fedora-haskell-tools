@@ -184,8 +184,7 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
                     Nothing -> return ()
                     Just (pkg', nvr') -> do
                       dep <- dependent pkg' pkg branch topdir
-                      when dep $ do
-                        putStrLn $ "Waiting for" +-+ nvr'
+                      when dep $
                         kojiWaitPkg topdir dist nvr'
                   showChange pkg latest nvr
                   putStrLn ""
@@ -194,8 +193,7 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
                   bodhiOverride dist nvr
                   unless (null rest) $ do
                     dep <- dependent pkg (head rest) branch topdir
-                    when dep $ do
-                      putStrLn $ "Waiting for" +-+ nvr
+                    when dep $
                       kojiWaitPkg topdir dist nvr
                     build topdir Nothing (if dep then Just (pkg, nvr) else Nothing) False Koji dist rest
             Pending -> do
