@@ -40,7 +40,7 @@ import System.IO (BufferMode(..), hSetBuffering, stdout)
 --import System.Posix.Env (getEnv)
 import Text.CSV (parseCSV)
 
-import FedoraDists (Dist(..), distBranch, distRepo, distUpdates,
+import FedoraDists (Dist(..), distBranch, distRemote, distRepo, distUpdates,
                     hackageRelease, rawhide)
 
 import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdMaybe, cmdSilent,
@@ -200,7 +200,7 @@ gitDiff fmt mbrnch =
 
 gitDiffOrigin :: Dist -> [Package] -> IO ()
 gitDiffOrigin dist =
-  repoAction_ True False (git_ "diff" ["origin/" ++ show dist]) dist
+  repoAction_ True False (git_ "diff" [distRemote dist]) dist
 
 diffStackage :: Bool -> Dist -> [Package] -> IO ()
 diffStackage missingOnly dist =
@@ -266,7 +266,7 @@ headOrigin dist =
     gitHeadAtOrigin :: Package -> IO ()
     gitHeadAtOrigin pkg = do
       -- use gitDiffQuiet
-      same <- cmdBool "git" ["diff", "--quiet", "origin/" ++ show dist ++ "..HEAD"]
+      same <- cmdBool "git" ["diff", "--quiet", distRemote dist ++ "..HEAD"]
       when same $ putStrLn pkg
 
 leaves :: Bool -> Dist -> [Package] -> IO ()
@@ -350,7 +350,7 @@ unpushed nolog dist =
   where
     gitLogOneLine :: Package -> IO ()
     gitLogOneLine pkg = do
-      out <- git "log" ["origin/" ++ show dist ++ "..HEAD", "--pretty=oneline"]
+      out <- git "log" [distRemote dist ++ "..HEAD", "--pretty=oneline"]
       unless (null out) $
         putStrLn $ pkg ++ if nolog then "" else (unwords . map replaceHash . words) out
         where
