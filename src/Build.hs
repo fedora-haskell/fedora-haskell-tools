@@ -167,9 +167,9 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
                 putStrLn $ show (length rest) +-+ "more packages"
                 putStrLn ""
               latest <- kojiLatestPkg dist pkg
-              if Just nvr == latest
+              if eqNVR nvr latest
                 then do
-                putStrLn $ nvr +-+ "already built!"
+                putStrLn $ fromJust latest +-+ "already built!"
                 kojiWaitPkg topdir dist nvr
                 build topdir Nothing mlast False Koji dist rest
                 else do
@@ -228,9 +228,9 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
               latest <- if fhbuilt
                          then return $ Just nvr
                          else kojiLatestPkg dist pkg
-              if Just nvr == latest
+              if eqNVR nvr latest
                 then do
-                putStrLn $ nvr +-+ "already built!"
+                putStrLn $ fromJust latest +-+ "already built!"
                 unless (null rest) $ --do
                   --kojiWaitPkg topdir dist nvr
                   build topdir Nothing Nothing False Chain dist rest
