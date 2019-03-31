@@ -11,7 +11,7 @@ import Options.Applicative
 
 -- | Used for Koji sidetag when needed.
 sidetag :: Dist -> Maybe String
-sidetag (Fedora n) | n == 30 = Just "ghc"
+-- sidetag (Fedora n) | n == 31 = Just "ghc"
 sidetag _ = Nothing
 
 -- | Maps `Dist` to build tag
