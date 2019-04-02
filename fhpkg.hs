@@ -94,9 +94,9 @@ main = do
     , Subcommand "diff-stackage" "compare with stackage" $
       diffStackage <$> switch (switchMods 'm' "missing" "only list missing packages") <*> distArg <*> pkgArgs
     , Subcommand "hackage" "generate Hackage distro data" $
-      pure $ repoqueryHackageCSV hackageRelease
+      repoqueryHackageCSV hackageRelease <$> switchRefresh
     , Subcommand "hackage-compare" "compare with Hackage distro data" $
-      pure hackageCompare
+      hackageCompare <$> switchRefresh
     , Subcommand "head-origin" "head in sync with origin" $
       headOrigin  <$> distArg <*> pkgArgs
     , Subcommand "leaf" "list leaf packages" $
@@ -119,7 +119,7 @@ main = do
     , Subcommand "push" "git push repos" $
       repoAction_ True False (git_ "push" []) <$> distArg <*> pkgArgs
     , Subcommand "refresh" "cabal-rpm refresh" $
-      repoAction True True refresh <$> distArg <*> pkgArgs
+      repoAction True True refreshPkg <$> distArg <*> pkgArgs
     , Subcommand "remaining" "remaining packages to be built in TAG" $
       remaining <$> switch (switchMods 'c' "count" "show many packages left") <*> strArg "TAG" <*> pkgArgs
     , Subcommand "unpushed" "show unpushed commits" $
@@ -155,6 +155,8 @@ main = do
     buildCmd cwd (c, desc) =
       Subcommand c desc  $
       build cwd Nothing Nothing False (readBuildCmd c) <$> distArg <*> pkgArgs
+
+    switchRefresh = switch (switchMods 'r' "refresh" "repoquery --refresh")
 
 data DiffFormat =
   DiffShort | DiffContext Int
@@ -218,8 +220,8 @@ diffStackage missingOnly dist =
         else
         putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(" ++ stream ++ ")"
 
-hackageCompare :: IO ()
-hackageCompare =
+hackageCompare :: Bool -> IO ()
+hackageCompare refresh =
   repoqueryHaskell False hackageRelease >>=
   compareHackage hackageRelease
   where
@@ -227,8 +229,8 @@ hackageCompare =
     compareHackage dist pkgs' = do
       hck <- simpleHTTP (getRequest "http://hackage.haskell.org/distro/Fedora/packages.csv") >>= getResponseBody
       let hackage = sort . either (error "Malformed Hackage csv") (map mungeHackage) $ parseCSV "packages.csv" hck
-      fedora <- sort . map mungeRepo . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ pkgs')
-      compareSets True hackage fedora
+      sort . map mungeRepo . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ ["--refresh" | refresh] ++ pkgs') >>= 
+        compareSets True hackage
 
     mungeHackage :: [String] -> PkgVer
     mungeHackage [_,v,u] = PV (takeFileName u) v
@@ -360,11 +362,11 @@ verrel :: Dist -> [Package] -> IO ()
 verrel dist =
   repoAction_ False True (cmd_ (rpkg dist) ["verrel"]) dist
 
-repoqueryHackageCSV :: Dist -> IO ()
-repoqueryHackageCSV dist = do
+repoqueryHackageCSV :: Dist -> Bool -> IO ()
+repoqueryHackageCSV dist refresh = do
   pkgs <- repoqueryHaskell False dist
   -- Hackage csv chokes on final newline so remove it
-  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ pkgs) >>= putStr
+  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ ["--refresh" | refresh] ++ pkgs) >>= putStr
 
 data PkgVer = PV { pvPkg :: String, pvVer :: String}
   deriving (Eq)
@@ -508,8 +510,8 @@ update stream =
         then cmd_ "cabal-rpm" ["update", "-s", stream]
         else putStrLn "skipping since not hackage"
 
-refresh :: Package -> IO ()
-refresh pkg = do
+refreshPkg :: Package -> IO ()
+refreshPkg pkg = do
   hckg <- isFromHackage pkg
   if hckg
     then cmd_ "cabal-rpm" ["refresh"]
