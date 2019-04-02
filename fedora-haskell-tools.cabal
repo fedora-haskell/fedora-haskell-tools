@@ -30,7 +30,7 @@ Executable fhpkg
                    filepath,
                    HTTP,
                    process,
-                   simple-cmd >= 0.1.1,
+                   simple-cmd >= 0.1.4,
                    split,
                    time < 1.9,
                    unix

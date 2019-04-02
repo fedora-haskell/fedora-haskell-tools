@@ -36,7 +36,7 @@ import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
              notInKoji, rpkg, rpkgBuild)
 import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package,
             packageManager, pkgDir, rpmInstall, rpmspec)
-import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdMaybe, cmdlog,
+import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdLog, cmdMaybe,
                   cmdSilent, grep_, removeStrictPrefix, sudo)
 import SimpleCmd.Git (git_, gitBranch, isGitDir)
 import Utils (checkPkgsGit)
@@ -160,7 +160,7 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
               build topdir Nothing Nothing False Install dist rest
             Mock -> do
               putStrLn $ "Mock building" +-+ nvr
-              cmdlog (rpkg dist) ["mockbuild"]
+              cmdLog (rpkg dist) ["mockbuild"]
               build topdir Nothing Nothing False Mock dist rest
             Koji -> do
               unless (null rest) $ do
