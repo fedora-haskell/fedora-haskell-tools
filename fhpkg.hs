@@ -366,7 +366,7 @@ repoqueryHackageCSV :: Dist -> Bool -> IO ()
 repoqueryHackageCSV dist refresh = do
   pkgs <- repoqueryHaskell False dist
   -- Hackage csv chokes on final newline so remove it
-  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{name}\""] ++ ["--refresh" | refresh] ++ pkgs) >>= putStr
+  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{name}\""] ++ ["--refresh" | refresh] ++ pkgs) >>= putStr
 
 data PkgVer = PV { pvPkg :: String, pvVer :: String}
   deriving (Eq)
