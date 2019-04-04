@@ -173,6 +173,7 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
                 kojiWaitPkg topdir dist nvr
                 build topdir Nothing mlast False Koji dist rest
                 else do
+                git_ "diff" []
                 building <- kojiBuilding pkg nvr dist
                 if building
                   then do
@@ -235,6 +236,7 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
                   --kojiWaitPkg topdir dist nvr
                   build topdir Nothing Nothing False Chain dist rest
                 else do
+                git_ "diff" []
                 building <- kojiBuilding pkg nvr dist
                 if building
                   then do
