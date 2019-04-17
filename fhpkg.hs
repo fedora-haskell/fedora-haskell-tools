@@ -26,7 +26,7 @@ import Data.List (intercalate, isInfixOf, isPrefixOf, nub, sort, (\\))
 
 import Data.List.Split (splitOn)
 import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
-import Options.Applicative (Parser, auto, flag', option, switch, strOption)
+import Options.Applicative (Parser, auto, flag')
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, getHomeDirectory,
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
@@ -72,7 +72,7 @@ main = do
     "Fedora packages maintenance tool" $
     subcommands $
     [ Subcommand "bump" "bump package release" $
-      bump <$> strOption (optionMods 'm' "message" "CHANGELOG" "changelog message") <*> distArg <*> pkgArgs
+      bump <$> strOptionWith 'm' "message" "CHANGELOG" "changelog message" <*> distArg <*> pkgArgs
     , Subcommand "checkout" "fedpkg switch-branch" $
       repoAction_ True False (return ()) <$> distArg <*> pkgArgs
     , Subcommand "clone"  "clone repos" $
@@ -80,19 +80,19 @@ main = do
     , Subcommand "clone-new" "clone new packages" $
       cloneNew <$> branching <*> distArg
     , Subcommand "cmd" "arbitrary command (with args)" $
-      execCmd <$> strOption (optionMods 'c' "cmd" "CMD" "command to execute") <*> distArg <*> pkgArgs
+      execCmd <$> strOptionWith 'c' "cmd" "CMD" "command to execute" <*> distArg <*> pkgArgs
     , Subcommand "count" "count number of packages" $
       (repoqueryHaskell False >=> (print . length)) <$> distArg
     , Subcommand "diff" "git diff" $
       gitDiff <$> optional gitFormat
-      <*> optional (strOption (optionMods 'w' "with-branch" "BRANCH" "Branch to compare"))
+      <*> optional (strOptionWith 'w' "with-branch" "BRANCH" "Branch to compare")
       <*> distArg <*> pkgArgs
     , Subcommand "diff-origin" "git diff origin" $
       gitDiffOrigin <$> distArg <*> pkgArgs
     , Subcommand "diff-branch" "compare branch with master" $
       repoAction False True compareRawhide <$> distArg <*> pkgArgs
     , Subcommand "diff-stackage" "compare with stackage" $
-      diffStackage <$> switch (switchMods 'm' "missing" "only list missing packages") <*> distArg <*> pkgArgs
+      diffStackage <$> switchWith 'm' "missing" "only list missing packages" <*> distArg <*> pkgArgs
     , Subcommand "hackage" "generate Hackage distro data" $
       repoqueryHackageCSV hackageRelease <$> switchRefresh
     , Subcommand "hackage-compare" "compare with Hackage distro data" $
@@ -100,10 +100,10 @@ main = do
     , Subcommand "head-origin" "head in sync with origin" $
       headOrigin  <$> distArg <*> pkgArgs
     , Subcommand "leaf" "list leaf packages" $
-      leaves <$> switch (switchMods 'v' "deps" "show also deps") <*> distArg <*> pkgArgs
+      leaves <$> switchWith 'v' "deps" "show also deps" <*> distArg <*> pkgArgs
     , Subcommand "list" "list packages" $ mapM_ putStrLn <$> pkgArgs
     , Subcommand "merge" "git merge" $
-      merge <$> strOption (optionMods 'f' "from" "BRANCH" "specify branch to merge from") <*> distArg <*> pkgArgs
+      merge <$> strOptionWith 'f' "from" "BRANCH" "specify branch to merge from" <*> distArg <*> pkgArgs
     , Subcommand "missing" "missing dependency source packages" $
       missingDeps <$> distArg <*> pkgArgs
     , Subcommand "new" "new unbuilt packages" $
@@ -113,7 +113,7 @@ main = do
     , Subcommand "prep" "fedpkg prep" $
       prep <$> distArg <*> pkgArgs
     , Subcommand "commit" "fedpkg commit" $
-      commit <$> strOption (optionMods 'm' "message" "COMMITMSG" "commit message") <*> distArg <*> pkgArgs
+      commit <$> strOptionWith 'm' "message" "COMMITMSG" "commit message" <*> distArg <*> pkgArgs
     , Subcommand "pull" "git pull repos" $
       repoAction_ True False (git_ "pull" ["--rebase"]) <$> distArg <*> pkgArgs
     , Subcommand "push" "git push repos" $
@@ -121,15 +121,15 @@ main = do
     , Subcommand "refresh" "cabal-rpm refresh" $
       repoAction True True refreshPkg <$> distArg <*> pkgArgs
     , Subcommand "remaining" "remaining packages to be built in TAG" $
-      remaining <$> switch (switchMods 'c' "count" "show many packages left") <*> strArg "TAG" <*> pkgArgs
+      remaining <$> switchWith 'c' "count" "show many packages left" <*> strArg "TAG" <*> pkgArgs
     , Subcommand "unpushed" "show unpushed commits" $
-      unpushed <$> switch (switchMods 's' "short" "no log") <*> distArg <*> pkgArgs
+      unpushed <$> switchWith 's' "short" "no log" <*> distArg <*> pkgArgs
     , Subcommand "update" "cabal-rpm update" $
-      update <$> strOption (optionMods 's' "stream" "STACKAGESTREAM" "Stackage stream (lts-X)") <*> distArg <*> pkgArgs
+      update <$> strOptionWith 's' "stream" "STACKAGESTREAM" "Stackage stream (lts-X)" <*> distArg <*> pkgArgs
     , Subcommand "subpkgs" "list subpackages" $
       repoAction True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= mapM_ putStrLn) <$> distArg <*> pkgArgs
     , Subcommand "tagged" "list koji DIST tagged builds" $
-      listTagged_ <$> switch (switchMods 's' "short" "list packages not builds") <*> strArg "TAG"
+      listTagged_ <$> switchWith 's' "short" "list packages not builds" <*> strArg "TAG"
     , Subcommand "verrel" "show nvr of packages" $
       verrel <$> distArg <*> pkgArgs] ++
     map (buildCmd cwd) [ ("install", "build locally and install")
@@ -145,18 +145,18 @@ main = do
   where
     pkgArgs = some (strArg "PKG...")
 
-    branching = switch (switchMods 'B' "branches" "clone branch dirs (fedpkg clone -B)")
+    branching = switchWith 'B' "branches" "clone branch dirs (fedpkg clone -B)"
 
     gitFormat :: Parser DiffFormat
     gitFormat =
       flag' DiffShort (switchMods 's' "short" "Just output package name") <|>
-      DiffContext <$> option auto (optionMods 'u' "unified" "CONTEXT" "Lines of context")
+      DiffContext <$> optionWith auto 'u' "unified" "CONTEXT" "Lines of context"
 
     buildCmd cwd (c, desc) =
       Subcommand c desc  $
       build cwd Nothing Nothing False (readBuildCmd c) <$> distArg <*> pkgArgs
 
-    switchRefresh = switch (switchMods 'r' "refresh" "repoquery --refresh")
+    switchRefresh = switchWith 'r' "refresh" "repoquery --refresh"
 
 data DiffFormat =
   DiffShort | DiffContext Int
