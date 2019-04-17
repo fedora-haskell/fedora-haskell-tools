@@ -82,7 +82,7 @@ main = do
     , Subcommand "cmd" "arbitrary command (with args)" $
       execCmd <$> strOptionWith 'c' "cmd" "CMD" "command to execute" <*> distArg <*> pkgArgs
     , Subcommand "count" "count number of packages" $
-      (repoqueryHaskell False >=> (print . length)) <$> distArg
+      (repoqueryHaskellPkgs False >=> (print . length)) <$> distArg
     , Subcommand "diff" "git diff" $
       gitDiff <$> optional gitFormat
       <*> optional (strOptionWith 'w' "with-branch" "BRANCH" "Branch to compare")
@@ -222,7 +222,7 @@ diffStackage missingOnly dist =
 
 hackageCompare :: Bool -> IO ()
 hackageCompare refresh =
-  repoqueryHaskell False hackageRelease >>=
+  repoqueryHackages hackageRelease >>=
   compareHackage hackageRelease
   where
     compareHackage :: Dist -> [Package] -> IO ()
@@ -326,9 +326,8 @@ missingDeps dist =
 
 oldPackages :: Dist -> [Package] -> IO ()
 oldPackages dist pkgs = do
-  repopkgs <- repoqueryHaskell True dist
+  repopkgs <- repoqueryHaskellPkgs True dist
   mapM_ putStrLn (pkgs \\ repopkgs)
-
 
 prep :: Dist -> [Package] -> IO ()
 prep dist =
@@ -364,9 +363,9 @@ verrel dist =
 
 repoqueryHackageCSV :: Dist -> Bool -> IO ()
 repoqueryHackageCSV dist refresh = do
-  pkgs <- repoqueryHaskell False dist
+  pkgs <- repoqueryHackages dist
   -- Hackage csv chokes on final newline so remove it
-  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{name}\""] ++ ["--refresh" | refresh] ++ pkgs) >>= putStr
+  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{source_name}\""] ++ ["--refresh" | refresh] ++ pkgs) >>= putStr
 
 data PkgVer = PV { pvPkg :: String, pvVer :: String}
   deriving (Eq)
@@ -386,18 +385,35 @@ replace a b s@(x:xs) =
   else x:replace a b xs
 replace _ _ [] = []
 
-repoqueryHaskell :: Bool -> Dist -> IO [Package]
-repoqueryHaskell verbose dist = do
+repoqueryHaskellPkgs :: Bool -> Dist -> IO [Package]
+repoqueryHaskellPkgs verbose dist = do
   when verbose $ putStrLn "Getting packages from repoquery"
   let repo = distRepo dist
       updates = maybeToList $ distUpdates dist
-  bin <- words <$> repoquery dist (["--repo=" ++ repo] ++ ["--repo=" ++ u | u <- updates] ++ ["--qf=%{source_name}", "--whatrequires", "libHSbase-*-ghc*.so()(64bit)"])
-  when (null bin) $ error "No libHSbase consumers found!"
+  bin <- words <$> repoquery dist (["--repo=" ++ repo ++ "-source"] ++ ["--repo=" ++ u  ++ "-source" | u <- updates] ++ ["--qf=%{name}", "--whatrequires", "ghc-Cabal-devel"])
+  when (null bin) $ error "No packages using ghc-Cabal-devel found!"
   return $ sort $ nub bin
+
+repoqueryHackages :: Dist -> IO [Package]
+repoqueryHackages dist = do
+  srcs <- repoqueryHaskellPkgs False dist
+  libs <- repoqueryHaskellLibs False
+  let srclibs = filter ("ghc-" `isPrefixOf`) srcs
+      sublibs = libs \\ map ("ghc-" ++) (srcs \\ srclibs)
+  return $ sort $ nub (srcs ++ sublibs)
+  where
+    repoqueryHaskellLibs :: Bool -> IO [Package]
+    repoqueryHaskellLibs verbose = do
+      when verbose $ putStrLn "Getting libraries from repoquery"
+      let repo = distRepo dist
+          updates = maybeToList $ distUpdates dist
+      bin <- words <$> repoquery dist (["--repo=" ++ repo] ++ ["--repo=" ++ u | u <- updates] ++ ["--qf=%{name}", "--whatprovides", "libHS*-ghc*.so()(64bit)"])
+      when (null bin) $ error "No libHS*.so providers found!"
+      return $ sort $ nub bin
 
 newPackages :: Dist -> IO [Package]
 newPackages dist = do
-  ps <- repoqueryHaskell True dist
+  ps <- repoqueryHaskellPkgs True dist
   kps <- kojiListHaskell True dist
   return $ kps \\ ps
 
