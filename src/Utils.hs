@@ -14,7 +14,6 @@
 -- (at your option) any later version.
 
 module Utils (checkPkgsGit,
-              error',
               withCurrentDirectory) where
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
@@ -37,13 +36,6 @@ import SimpleCmd.Git (grepGitConfig)
 --   case ret of
 --     ExitSuccess -> return (True, out)
 --     ExitFailure n -> hPutStrLn stderr ("\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n ++ "\n" ++ err) >> return (False, out)
-
-error' :: String -> a
-#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,9,0))
-error' = errorWithoutStackTrace
-#else
-error' = error
-#endif
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
 #else
