@@ -233,13 +233,13 @@ hackageCompare refresh =
         compareSets True hackage
 
     mungeHackage :: [String] -> PkgVer
-    mungeHackage [_,v,u] = PV (takeFileName u) v
+    mungeHackage [n,v,_] = PV n v
     mungeHackage _ = error "Malformed Hackage csv"
 
     mungeRepo :: String -> PkgVer
     mungeRepo s | ',' `elem` s =
                   let (p,v) = break (== ',') s in
-                    PV p (tail v)
+                    PV (removePrefix "ghc-" p) (tail v)
                 | otherwise = error "Malformed repoquery output"
 
     compareSets :: Bool -> [PkgVer] -> [PkgVer] -> IO ()
@@ -398,8 +398,8 @@ repoqueryHackages :: Dist -> IO [Package]
 repoqueryHackages dist = do
   srcs <- repoqueryHaskellPkgs False dist
   libs <- repoqueryHaskellLibs False
-  let srclibs = filter ("ghc-" `isPrefixOf`) srcs
-      sublibs = libs \\ map ("ghc-" ++) (srcs \\ srclibs)
+  let binsrcs = filter (not . ("ghc-" `isPrefixOf`)) srcs
+      sublibs = libs \\ map ("ghc-" ++) binsrcs
   return $ sort $ nub (srcs ++ sublibs)
   where
     repoqueryHaskellLibs :: Bool -> IO [Package]
