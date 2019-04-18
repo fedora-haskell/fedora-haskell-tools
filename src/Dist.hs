@@ -1,5 +1,6 @@
 module Dist
   (distArg,
+   distRemote,
    distTag,
    distTarget)
   where
@@ -26,3 +27,6 @@ distTarget d = show d ++ maybe "" ("-" ++) (sidetag d)
 distArg :: Parser Dist
 distArg = argument auto (metavar "DIST")
 
+-- | Maps `Dist` to remote branch: eg "origin/master"
+distRemote :: Dist -> String
+distRemote d = "origin/" ++ distBranch d

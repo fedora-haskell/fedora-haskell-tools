@@ -40,7 +40,7 @@ import System.IO (BufferMode(..), hSetBuffering, stdout)
 --import System.Posix.Env (getEnv)
 import Text.CSV (parseCSV)
 
-import FedoraDists (Dist(..), distBranch, distRemote, distRepo, distUpdates,
+import FedoraDists (Dist(..), distBranch, distRepo, distUpdates,
                     hackageRelease, rawhide)
 
 import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdMaybe, cmdSilent,
@@ -49,7 +49,7 @@ import SimpleCmd.Git (git, git_, gitBranch, isGitDir)
 import SimpleCmdArgs
 
 import Build (build, readBuildCmd)
-import Dist (distArg)
+import Dist (distArg, distRemote)
 import Koji (kojiListPkgs, rpkg)
 import Paths_fedora_haskell_tools (version)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
