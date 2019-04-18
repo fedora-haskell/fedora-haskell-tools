@@ -6,7 +6,7 @@ module Dist
   where
 
 import Data.Maybe (fromMaybe)
-import FedoraDists (Dist(..))
+import FedoraDists (Dist(..), distBranch)
 import Options.Applicative
 
 
