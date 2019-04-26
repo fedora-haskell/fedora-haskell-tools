@@ -4,6 +4,7 @@ split into separate packages or merge??
 - use optparse-applicative
 - only print header if output
 - license-check command
+* use pagure-cli to get new ghc-* packages
 
 (from fhpkg.hs):
 - cache dist package lists?

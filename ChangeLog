@@ -1,3 +1,14 @@
+* 0.8 (2019-04-26)
+- remaining --counting option
+- make kojiWatchTask safe by checking taskinfo status
+- move distTag and distTarget from fedora-dists to Dist
+- use eqNVR to avoid trivial Rawhide rebuilds after branching
+- repoquery --refresh option for hackage and hackage-compare
+- change Hackage distro urls back to Fedora Packages app
+- output git diff before building package in koji (to show dirty)
+- use simple-cmd-opts-0.1.1 option wrappers
+- fix Hackage data generation repoqueries
+
 * 0.7 (2019-02-28)
 - merge fhbuild into fhpkg (please delete fhbuild)
 - use simple-cmd and fedora-dists
