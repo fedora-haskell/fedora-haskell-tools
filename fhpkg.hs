@@ -101,7 +101,8 @@ main = do
       headOrigin  <$> distArg <*> pkgArgs
     , Subcommand "leaf" "list leaf packages" $
       leaves <$> switchWith 'v' "deps" "show also deps" <*> distArg <*> pkgArgs
-    , Subcommand "list" "list packages" $ mapM_ putStrLn <$> pkgArgs
+    , Subcommand "list" "list packages that BR ghc-Cabal-devel" $
+      (repoqueryHaskellPkgs False >=> putStrList) <$> distArg
     , Subcommand "merge" "git merge" $
       merge <$> strOptionWith 'f' "from" "BRANCH" "specify branch to merge from" <*> distArg <*> pkgArgs
     , Subcommand "missing" "missing dependency source packages" $
@@ -161,6 +162,10 @@ main = do
 data DiffFormat =
   DiffShort | DiffContext Int
   deriving (Eq)
+
+putStrList :: [String] -> IO ()
+putStrList =
+  putStr . unlines
 
 bump :: String -> Dist -> [Package] -> IO ()
 bump msg =
