@@ -128,7 +128,7 @@ main = do
     , Subcommand "update" "cabal-rpm update" $
       update <$> strOptionWith 's' "stream" "STACKAGESTREAM" "Stackage stream (lts-X)" <*> distArg <*> pkgArgs
     , Subcommand "subpkgs" "list subpackages" $
-      repoAction True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= mapM_ putStrLn) <$> distArg <*> pkgArgs
+      repoAction True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= putStrList) <$> distArg <*> pkgArgs
     , Subcommand "tagged" "list koji DIST tagged builds" $
       listTagged_ <$> switchWith 's' "short" "list packages not builds" <*> strArg "TAG"
     , Subcommand "verrel" "show nvr of packages" $
@@ -293,7 +293,7 @@ leaves verb =
       found <- filterM (dependsOn subpkgs) other
       if null found
         then putStrLn pkg
-        else when verb $ mapM_ putStrLn found
+        else when verb $ putStrList found
         where
           dependsOn :: [Package] -> Package -> IO Bool
           dependsOn subpkgs p = do
@@ -332,7 +332,7 @@ missingDeps dist =
 oldPackages :: Dist -> [Package] -> IO ()
 oldPackages dist pkgs = do
   repopkgs <- repoqueryHaskellPkgs True dist
-  mapM_ putStrLn (pkgs \\ repopkgs)
+  putStrList (pkgs \\ repopkgs)
 
 prep :: Dist -> [Package] -> IO ()
 prep dist =
@@ -540,7 +540,7 @@ refreshPkg pkg = do
 
 listTagged_ :: Bool -> String -> IO ()
 listTagged_ short tag =
-  listTagged short tag >>= mapM_ putStrLn
+  listTagged short tag >>= putStrList
 
 listTagged :: Bool -> String -> IO [String]
 listTagged short tag = do
