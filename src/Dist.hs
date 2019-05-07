@@ -2,7 +2,8 @@ module Dist
   (distArg,
    distRemote,
    distTag,
-   distTarget)
+   distTarget,
+   hackageRelease)
   where
 
 import Data.Maybe (fromMaybe)
@@ -30,3 +31,7 @@ distArg = argument auto (metavar "DIST")
 -- | Maps `Dist` to remote branch: eg "origin/master"
 distRemote :: Dist -> String
 distRemote d = "origin/" ++ distBranch d
+
+-- | Fedora release being tracked in Hackage Distro data
+hackageRelease :: Dist
+hackageRelease = Fedora 30
