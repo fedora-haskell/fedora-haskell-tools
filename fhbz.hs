@@ -66,13 +66,14 @@ parseOpts argv =
       (_,_,errs) -> do
         prog <- getProgName
         error $ concat errs ++ usageInfo (header prog) options
-  where header prog = "Usage:" +-+ prog +-+ "[OPTION...] [package]..."
+  where header prog = "Usage:" +-+ prog +-+ "[OPTION...] [PACKAGE...]"
 
 main :: IO ()
 main = do
   (opts, args) <- getArgs >>= parseOpts
+  when (null args) $ error "must give one or more packages"
   let state = fromMaybe "NEW" $ listToMaybe $ map (\ (State s) -> s) $ filter isState opts
-  bugs <- parseLines . lines <$> bugzillaQuery (["--cc=haskell-devel@lists.fedoraproject.org", "--bug_status=" ++ state, "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ if null args then [] else ["--component=" ++ intercalate "," args])
+  bugs <- parseLines . lines <$> bugzillaQuery (["--bug_status=" ++ state, "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ ["--component=" ++ intercalate "," args])
   mapM_ (checkBug opts) bugs
 
 bugzillaQuery :: [String] -> IO String
@@ -148,7 +149,7 @@ closeBug opts bid bcomp pkgver = do
     when (nv == pkgver) $ do
       putStrLn $ "closing" +-+ bid ++ ":" +-+ nv +-+ "in rawhide"
       unless (DryRun `elem` opts) $
-        bugzillaModify ["--close=RAWHIDE", "--comment=" ++ nvr, bid]
+        bugzillaModify ["--close=RAWHIDE", "--fixed_in=" ++ nvr, "--comment=Closed with fhbz from fedora-haskell-tools", bid]
   where
     removeRelease = init . dropWhileEnd (/= '-')
 
