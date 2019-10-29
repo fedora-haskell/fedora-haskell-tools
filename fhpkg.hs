@@ -82,7 +82,7 @@ main = do
     , Subcommand "count" "count number of packages" $
       (repoqueryHaskellPkgs False >=> (print . length)) <$> distArg
     , Subcommand "depends" "cabal-depends" $
-      repoAction' False cabalDepends <$> distArg <*> pkgArgs
+      repoAction False (Output cabalDepends) <$> distArg <*> pkgArgs
     , Subcommand "diff" "git diff" $
       gitDiff <$> optional gitFormat
       <*> optional (strOptionWith 'w' "with-branch" "BRANCH" "Branch to compare")
@@ -90,11 +90,11 @@ main = do
     , Subcommand "diff-origin" "git diff origin" $
       gitDiffOrigin <$> distArg <*> pkgArgs
     , Subcommand "diff-branch" "compare branch with master" $
-      repoAction False True compareRawhide <$> distArg <*> pkgArgs
+      repoAction True (Header False compareRawhide) <$> distArg <*> pkgArgs
     , Subcommand "diff-stackage" "compare with stackage" $
       diffStackage <$> switchWith 'm' "missing" "only list missing packages" <*> distArg <*> pkgArgs
     , Subcommand "diffstat" "Show diffstat output" $
-      repoAction' False (const diffStat) <$> distArg <*> pkgArgs
+      repoAction False (Output (const diffStat)) <$> distArg <*> pkgArgs
     , Subcommand "hackage" "generate Hackage distro data" $
       repoqueryHackageCSV hackageRelease <$> switchRefresh
     , Subcommand "hackage-compare" "compare with Hackage distro data" $
@@ -128,7 +128,7 @@ main = do
     , Subcommand "remaining" "remaining packages to be built in TAG" $
       remaining <$> switchWith 'c' "count" "show many packages left" <*> strArg "TAG" <*> pkgArgs
     , Subcommand "subpkgs" "list subpackages" $
-      repoAction True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= putStrList) <$> distArg <*> pkgArgs
+      repoAction True (Header True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= putStrList)) <$> distArg <*> pkgArgs
     , Subcommand "tagged" "list koji DIST tagged builds" $
       listTagged_ <$> switchWith 's' "short" "list packages not builds" <*> strArg "TAG"
     , Subcommand "unpushed" "show unpushed commits" $
@@ -190,7 +190,7 @@ execCmd cs dist pkgs =
 
 gitDiff :: Maybe DiffFormat -> Maybe String -> Dist -> [Package] -> IO ()
 gitDiff fmt mbrnch =
-  repoAction' False doGitDiff
+  repoAction False (Output doGitDiff)
   where
     doGitDiff pkg = do
       let branch = maybeToList mbrnch
@@ -208,7 +208,7 @@ gitDiffOrigin dist =
 
 diffStackage :: Bool -> Dist -> [Package] -> IO ()
 diffStackage missingOnly dist =
-  repoAction False True compareStackage dist
+  repoAction True (Header False compareStackage) dist
   where
     compareStackage :: Package -> IO ()
     compareStackage p = do
@@ -268,7 +268,7 @@ hackageCompare refreshData =
 
 headOrigin :: Dist -> [Package] -> IO ()
 headOrigin dist =
-  repoAction False False gitHeadAtOrigin dist
+  repoAction False (Header False gitHeadAtOrigin) dist
   where
     gitHeadAtOrigin :: Package -> IO ()
     gitHeadAtOrigin pkg = do
@@ -278,7 +278,7 @@ headOrigin dist =
 
 leaves :: Bool -> Dist -> [Package] -> IO ()
 leaves verb =
-  repoAction verb True checkLeafPkg
+  repoAction True (Header verb checkLeafPkg)
   where
     -- FIXME: make a dependency cache
     checkLeafPkg :: Package -> IO ()
@@ -310,7 +310,7 @@ merge branch =
 
 missingDeps :: Dist -> [Package] -> IO ()
 missingDeps dist =
-  repoAction True True checkForMissingDeps dist
+  repoAction True (Header True checkForMissingDeps) dist
   where
     checkForMissingDeps :: Package -> IO ()
     checkForMissingDeps pkg = do
@@ -340,7 +340,7 @@ prep dist =
 
 commit :: String -> Dist -> [Package] -> IO ()
 commit logmsg dist =
-  repoAction' False (const commitChanges) dist
+  repoAction False (Output (const commitChanges)) dist
   where
     commitChanges :: IO String
     commitChanges = do
@@ -351,7 +351,7 @@ commit logmsg dist =
 
 unpushed :: Bool -> Dist -> [Package] -> IO ()
 unpushed nolog dist =
-  repoAction False True gitLogOneLine dist
+  repoAction True (Header False gitLogOneLine) dist
   where
     gitLogOneLine :: Package -> IO ()
     gitLogOneLine pkg = do
@@ -449,20 +449,26 @@ cloneAllBranches dist (pkg:rest) = do
       error "branch checkout already exists!"
   cloneAllBranches dist rest
 
-repoAction :: Bool -> Bool -> (Package -> IO ()) -> Dist -> [Package] -> IO ()
-repoAction _ _ _ _ [] = return ()
-repoAction header needsSpec action dist (pkg:rest) = do
+data Action = Output (Package -> IO String) | Header Bool (Package -> IO ())
+
+showHeader :: Action -> Bool
+showHeader (Header b _) = b
+showHeader (Output _) = False
+
+repoAction :: Bool -> Action -> Dist -> [Package] -> IO ()
+repoAction _ _ _ [] = return ()
+repoAction needsSpec action dist (pkg:rest) = do
   withCurrentDirectory "." $ do
     let branch = distBranch dist
-    when header $
+    when (showHeader action) $
       putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
     -- muser <- getEnv "USER"
     haveSSH <- haveSshKey
     fileExists <- doesFileExist pkg
-    dirExists <- doesDirectoryExist pkg
     if fileExists
       then error $ pkg +-+ "is a file"
       else do
+      dirExists <- doesDirectoryExist pkg
       unless dirExists $
         cmd_ (rpkg dist) $ ["clone"] ++ ["-a" | not haveSSH] ++ ["-b", branch, pkg]
       singleDir <- isGitDir pkg
@@ -489,64 +495,21 @@ repoAction header needsSpec action dist (pkg:rest) = do
         let spec = pkg <.> "spec"
         hasSpec <- doesFileExist spec
         -- FIXME: silence for cmds that only output package names (eg unpushed -s)
-        unless hasSpec $ putStrLn $ (if header then "" else pkg ++ ": ") ++ "No spec file!"
+        unless hasSpec $ putStrLn $ (if showHeader action then "" else pkg ++ ": ") ++ "No spec file!"
         unless (needsSpec && not hasSpec) $
-          action pkg
-  repoAction header needsSpec action dist rest
+          case action of
+            Header _ act -> act pkg
+            Output act -> do
+              out <- act pkg
+              unless (null out) $ do
+                putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
+                putStrLn out
+  repoAction needsSpec action dist rest
 
 -- io independent of package
 repoAction_ :: Bool -> Bool -> IO () -> Dist -> [Package] -> IO ()
 repoAction_ header needsSpec action =
-  repoAction header needsSpec (const action)
-
--- output header only if output
-repoAction' :: Bool -> (Package -> IO String) -> Dist -> [Package] -> IO ()
-repoAction' _ _ _ [] = return ()
-repoAction' needsSpec action dist (pkg:rest) = do
-  withCurrentDirectory "." $ do
-    let branch = distBranch dist
-    -- muser <- getEnv "USER"
-    haveSSH <- do
-      home <- getHomeDirectory
-      doesFileExist $ home </> ".ssh/id_rsa"
-    fileExists <- doesFileExist pkg
-    dirExists <- doesDirectoryExist pkg
-    if fileExists
-      then error $ pkg +-+ "is a file"
-      else do
-      unless dirExists $
-        cmd_ (rpkg dist) $ ["clone"] ++ ["-a" | not haveSSH] ++ ["-b", branch, pkg]
-      singleDir <- isGitDir pkg
-      unless singleDir $ do
-        branchDir <- doesDirectoryExist $ pkg </> branch
-        unless branchDir $
-          withCurrentDirectory pkg $
-          cmd_ (rpkg dist) ["clone", "-b", branch, pkg, branch]
-      wd <- pkgDir pkg branch ""
-      setCurrentDirectory wd
-      pkggit <- do
-        gd <- isGitDir "."
-        if gd
-          then checkPkgsGit
-          else return False
-      unless pkggit $
-        error $ "not a Fedora pkg git dir!:" +-+ wd
-      when dirExists $ do
-        actual <- gitBranch
-        when (branch /= actual) $
-          cmd_ (rpkg dist) ["switch-branch", branch]
-      isDead <- doesFileExist "dead.package"
-      unless isDead $ do
-        let spec = pkg <.> "spec"
-        hasSpec <- doesFileExist spec
-        -- FIXME: silence for cmds that only output package names (eg unpushed -s)
-        unless hasSpec $ putStrLn $ pkg ++ ": " ++ "No spec file!"
-        unless (needsSpec && not hasSpec) $ do
-          out <- action pkg
-          unless (null out) $ do
-            putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
-            putStrLn out
-  repoAction' needsSpec action dist rest
+  repoAction needsSpec (Header header (const action))
 
 compareRawhide :: Package -> IO ()
 compareRawhide p = do
@@ -572,7 +535,7 @@ isFromHackage pkg =
 
 update :: String -> Dist -> [Package] -> IO ()
 update stream =
-  repoAction True True doUpdate
+  repoAction True (Header True doUpdate)
   where
     doUpdate :: Package -> IO ()
     doUpdate pkg = do
@@ -583,7 +546,7 @@ update stream =
 
 refresh :: Bool -> Dist -> [Package] -> IO ()
 refresh dryrun =
-  repoAction True True refreshPkg
+  repoAction True (Header True refreshPkg)
   where
     refreshPkg :: Package -> IO ()
     refreshPkg pkg = do
@@ -627,7 +590,7 @@ cabalDepends p = do
 cblrpm :: String -> Dist -> [Package] -> IO ()
 cblrpm "" = error "CMD string must be given"
 cblrpm cs =
-  repoAction True True doCblRpm
+  repoAction True (Header True doCblRpm)
   where
     doCblRpm :: Package -> IO ()
     doCblRpm p = do
