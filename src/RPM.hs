@@ -136,7 +136,7 @@ haskellSrcPkgs topdir dist brs = do
   ghcLibs <- do
     let branch = distBranch dist
     ghcDir <- pkgDir "ghc" branch (topdir </> "..")
-    map removeLibSuffix <$> filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}") (ghcDir </> "ghc.spec")
+    map removeLibSuffix . filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}") (ghcDir </> "ghc.spec")
   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (map removeLibSuffix brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
   nub <$> mapM (derefSrcPkg topdir dist False) hdeps
 

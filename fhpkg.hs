@@ -124,7 +124,7 @@ main = do
     , Subcommand "push" "git push repos" $
       repoAction_ True False (git_ "push" []) <$> distArg <*> pkgArgs
     , Subcommand "refresh" "cabal-rpm refresh" $
-      refresh <$> (switchWith 'n' "dry-run" "Show patch but don't apply") <*> distArg <*> pkgArgs
+      refresh <$> switchWith 'n' "dry-run" "Show patch but don't apply" <*> distArg <*> pkgArgs
     , Subcommand "remaining" "remaining packages to be built in TAG" $
       remaining <$> switchWith 'c' "count" "show many packages left" <*> strArg "TAG" <*> pkgArgs
     , Subcommand "subpkgs" "list subpackages" $
@@ -429,15 +429,18 @@ kojiListHaskell verbose dist = do
   when (null libs) $ error "No library packages found"
   return $ sort $ nub libs
 
+haveSshKey :: IO Bool
+haveSshKey = do
+  home <- getHomeDirectory
+  doesFileExist $ home </> ".ssh/id_rsa"
+
 cloneAllBranches :: Dist -> [Package] -> IO ()
 cloneAllBranches _ [] = return ()
 cloneAllBranches dist (pkg:rest) = do
   withCurrentDirectory "." $ do
     putStrLn $ "\n==" +-+ pkg +-+ "=="
     -- muser <- getEnv "USER"
-    haveSSH <- do
-      home <- getHomeDirectory
-      doesFileExist $ home </> ".ssh/id_rsa"
+    haveSSH <- haveSshKey
     dirExists <- doesDirectoryExist pkg
     unless dirExists $
       cmd_ (rpkg dist) $ ["clone"] ++ ["-a" | not haveSSH] ++ ["-B", pkg]
@@ -454,9 +457,7 @@ repoAction header needsSpec action dist (pkg:rest) = do
     when header $
       putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
     -- muser <- getEnv "USER"
-    haveSSH <- do
-      home <- getHomeDirectory
-      doesFileExist $ home </> ".ssh/id_rsa"
+    haveSSH <- haveSshKey
     fileExists <- doesFileExist pkg
     dirExists <- doesDirectoryExist pkg
     if fileExists
@@ -588,7 +589,7 @@ refresh dryrun =
     refreshPkg pkg = do
       hckg <- isFromHackage pkg
       if hckg
-        then cmd_ "cabal-rpm" $ ["refresh"] ++ ["--dry-run" | dryrun]
+        then cmd_ "cabal-rpm" $ "refresh" : ["--dry-run" | dryrun]
         else putStrLn "skipping since not hackage"
 
 listTagged_ :: Bool -> String -> IO ()
