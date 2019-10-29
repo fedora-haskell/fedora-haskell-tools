@@ -32,16 +32,15 @@ import System.Directory (doesDirectoryExist, findExecutable)
 import System.FilePath ((</>))
 -- die is available in ghc-7.10 base-4.8
 import System.Exit (ExitCode (..), exitFailure, exitWith)
-import System.IO (hPutStrLn, stderr)
 
 import Dist (distTag)
-import FedoraDists (Dist, distBranch, dists, releaseVersion)
-import SimpleCmd (cmd, removeStrictPrefix, removeSuffix, sudo, (+-+))
+import FedoraDists (Dist, {-distBranch,-} dists, releaseVersion)
+import SimpleCmd (cmd, removeStrictPrefix, removeSuffix, sudo_, warning, (+-+))
 import qualified SimpleCmd.Rpm as S
 
 -- @since base 4.8.0.0
 die :: String -> IO a
-die err = hPutStrLn stderr err >> exitFailure
+die err = warning err >> exitFailure
 
 requireProgram :: String -> IO ()
 requireProgram c = do
@@ -62,7 +61,7 @@ rpmInstall :: [String] -> IO ()
 rpmInstall rpms = do
   pkginstaller <- packageManager
   let (inst, arg) = if pkginstaller == "dnf" then ("dnf", "install") else ("yum", "localinstall")
-  sudo inst $ ["-y", "--nogpgcheck", arg] ++ rpms
+  sudo_ inst $ ["-y", "--nogpgcheck", arg] ++ rpms
 
 repoquery :: Dist -> [String] -> IO String
 repoquery dist args = do
@@ -76,7 +75,7 @@ repoquerySrc dist key = do
   havednf <- optionalProgram "dnf"
   let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}"]
       repo = if dist `elem` dists
-             then ["--repo=koji-buildroot", "--repofrompath", "koji-buildroot,http://kojipkgs.fedoraproject.org/repos" </> distTag dist </> "latest/x86_64/"]
+             then ["--repo=koji-buildroot", "--repofrompath", "koji-buildroot,https://kojipkgs.fedoraproject.org/repos" </> distTag dist </> "latest/x86_64/"]
              else []
   res <- words <$> repoquery dist (srcflag ++ repo ++ ["--whatprovides", key])
   return $ case res of
@@ -97,45 +96,48 @@ buildRequires spec =
 type Package = String
 
 derefSrcPkg :: FilePath -> Dist -> Bool -> Package -> IO Package
-derefSrcPkg topdir dist verb pkg =
-  if isHaskellDevelPkg pkg
-  then
-    do let lib = removeSuffix "-devel" pkg
-       -- fixme: should check branch (dir)
-       libExists <- doesDirectoryExist $ topdir </> lib
-       if libExists
-         then return lib
-         else do
-         -- todo: check bin has lib
-         let bin = removeStrictPrefix "ghc-" lib
-         binExists <- doesDirectoryExist $ topdir </> bin
-         if binExists
-           then return bin
-           else derefSrcPkg topdir dist verb lib
-  else
-    do putStrLn $ "Repoquerying" +-+ pkg
-       res <- repoquerySrc dist pkg
-       case res of
-         Nothing ->
-           do putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
-              exitWith (ExitFailure 1)
-         Just s -> do
-           when (pkg /= s && verb) $ putStrLn $ pkg +-+ "->" +-+ s
-           return s
+derefSrcPkg topdir dist verb pkg = do
+  let lib = removeLibSuffix pkg
+  -- fixme: should check branch (dir)
+  libExists <- doesDirectoryExist $ topdir </> lib
+  if libExists
+    then return lib
+    else do
+    -- todo: check bin has lib
+    let bin = removeStrictPrefix "ghc-" lib
+    binExists <- doesDirectoryExist $ topdir </> bin
+    if binExists
+      then return bin
+      else do
+      putStrLn $ "Repoquerying" +-+ pkg
+      res <- repoquerySrc dist pkg
+      case res of
+        Nothing -> do
+          putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
+          exitWith (ExitFailure 1)
+        Just s -> do
+          when (pkg /= s && verb) $ putStrLn $ pkg +-+ "->" +-+ s
+          return s
 
 isHaskellDevelPkg :: Package -> Bool
-isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg) || pkg `elem`haskellTools
+isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg || "-prof" `isSuffixOf` pkg || "-static" `isSuffixOf` pkg) || pkg `elem`haskellTools
+
+removeLibSuffix :: String -> String
+removeLibSuffix p | "-devel" `isSuffixOf` p = removeSuffix "-devel" p
+                  | "-prof" `isSuffixOf` p = removeSuffix "-prof" p
+                  | "-static" `isSuffixOf` p = removeSuffix "-static" p
+                  | otherwise = p
 
 haskellTools :: [Package]
-haskellTools = ["alex", "cabal-install", "gtk2hs-buildtools", "happy"]
+haskellTools = ["alex", "cabal-install", "gtk2hs-buildtools", "happy", "hspec-discover"]
 
 haskellSrcPkgs ::  FilePath -> Dist -> [Package] -> IO [Package]
 haskellSrcPkgs topdir dist brs = do
   ghcLibs <- do
-    let branch = distBranch dist
-    ghcDir <- pkgDir "ghc" branch topdir
-    filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}") (ghcDir </> "ghc.spec")
-  let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
+    let --branch = distBranch dist
+        ghcDir = topdir </> ".." </> "ghc"
+    map removeLibSuffix <$> filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}") (ghcDir </> "ghc.spec")
+  let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (map removeLibSuffix brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
   nub <$> mapM (derefSrcPkg topdir dist False) hdeps
 
 pkgDir :: String -> String -> FilePath -> IO FilePath

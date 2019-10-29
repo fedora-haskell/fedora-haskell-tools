@@ -8,12 +8,12 @@ module Dist
 
 import Data.Maybe (fromMaybe)
 import FedoraDists (Dist(..), distBranch)
-import Options.Applicative
+import SimpleCmdArgs (Parser, argumentWith, auto)
 
 
 -- | Used for Koji sidetag when needed.
 sidetag :: Dist -> Maybe String
--- sidetag (Fedora n) | n == 31 = Just "ghc"
+--sidetag (Fedora n) | n == 31 = Just "ghc"
 sidetag _ = Nothing
 
 -- | Maps `Dist` to build tag
@@ -26,7 +26,7 @@ distTarget d = show d ++ maybe "" ("-" ++) (sidetag d)
 
 -- | optparse-application DIST arg
 distArg :: Parser Dist
-distArg = argument auto (metavar "DIST")
+distArg = argumentWith auto "DIST"
 
 -- | Maps `Dist` to remote branch: eg "origin/master"
 distRemote :: Dist -> String
@@ -34,4 +34,4 @@ distRemote d = "origin/" ++ distBranch d
 
 -- | Fedora release being tracked in Hackage Distro data
 hackageRelease :: Dist
-hackageRelease = Fedora 30
+hackageRelease = Fedora 31

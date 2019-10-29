@@ -11,6 +11,7 @@
 -- the Free Software Foundation, either version 3 of the License, or
 -- (at your option) any later version.
 
+import Control.Applicative (many, some)
 import Data.List (sort)
 import System.Environment (getArgs)
 
@@ -20,7 +21,6 @@ import Paths_fedora_haskell_tools (version)
 import FedoraDists (Dist, distRepo, releaseVersion)
 import SimpleCmd (cmd_)
 import SimpleCmdArgs
-import Options.Applicative
 #if (defined(MIN_VERSION_optparse_applicative) && MIN_VERSION_optparse_applicative(0,13,0))
 --import Data.Semigroup ((<>))
 #endif

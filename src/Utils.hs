@@ -14,17 +14,20 @@
 -- (at your option) any later version.
 
 module Utils (checkPkgsGit,
+              setTermTitle,
               withCurrentDirectory) where
 
+import Control.Monad (when)
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
 import System.Directory (withCurrentDirectory)
 #else
 import Control.Exception (bracket)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 #endif
+import System.Environment (getEnv)
+import System.IO (BufferMode(..), hGetBuffering, hSetBuffering, stdout)
 
 import SimpleCmd.Git (grepGitConfig)
-
 
 -- singleLine :: String -> String
 -- singleLine "" = ""
@@ -35,7 +38,7 @@ import SimpleCmd.Git (grepGitConfig)
 --   (ret, out, err) <- readProcessWithExitCode c as ""
 --   case ret of
 --     ExitSuccess -> return (True, out)
---     ExitFailure n -> hPutStrLn stderr ("\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n ++ "\n" ++ err) >> return (False, out)
+--     ExitFailure n -> warning ("\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n ++ "\n" ++ err) >> return (False, out)
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))
 #else
@@ -57,3 +60,12 @@ checkPkgsGit =
 -- git_ :: String -> [String] -> IO ()
 -- git_ c as =
 --   cmd_ "git" ("--no-pager":c:as)
+
+setTermTitle :: String -> IO ()
+setTermTitle ts = do
+  term <- getEnv "TERM"
+  when (term == "xterm-256color") $ do
+    buf <- hGetBuffering stdout
+    hSetBuffering stdout NoBuffering
+    putStr $ "\ESC]0;" ++ ts ++ "\a"
+    hSetBuffering stdout buf

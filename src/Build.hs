@@ -32,12 +32,13 @@ import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>), dropExtension)
 
 import FedoraDists (Dist, distBranch, distOverride, rpmDistTag)
+import Dist (distRemote)
 import Koji (kojiBuilding, kojiCheckFHBuilt, kojiLatestPkg, kojiWaitPkg,
              notInKoji, rpkg, rpkgBuild)
 import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package,
             packageManager, pkgDir, rpmInstall, rpmspec)
 import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdLog, cmdMaybe,
-                  cmdSilent, grep_, removeStrictPrefix, sudo)
+                  cmdSilent, grep_, removeStrictPrefix, sudo_)
 import SimpleCmd.Git (git_, gitBranch, isGitDir)
 import Utils (checkPkgsGit)
 
@@ -153,8 +154,8 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
                     then rpmInstall rpms
                     else do
                     pkgmgr <- packageManager
-                    sudo pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
-                    sudo pkgmgr ("install":"-y":rpms)
+                    sudo_ pkgmgr ("--setopt=clean_requirements_on_remove=no":"remove":"-y":instpkgs)
+                    sudo_ pkgmgr ("install":"-y":rpms)
               putStrLn ""
               putStrLn $ show (length rest) +-+ "packages left"
               build topdir Nothing Nothing False Install dist rest
@@ -215,9 +216,10 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
             Bump -> do
               latest <- kojiLatestPkg dist pkg
               when (eqNVR nvr latest) $ do
-                putStrLn pkg
-                cmd_ "rpmdev-bumpspec" ["-c", "rebuild", spec]
-                cmd_ (rpkg dist) ["commit", "-m", "bump release"]
+                git_ "log" [distRemote dist ++ "..HEAD", "--pretty=oneline"]
+                cmd_ "rpmdev-bumpspec" ["-c", "add doc and prof subpackages (cabal-rpm-1.0.0)", spec]
+--                cmd_ (rpkg dist) ["commit", "-m", "cabal-rpm-1.0.0: add doc and prof subpkgs"]
+                git_ "commit" ["-a", "--amend", "-m", "cabal-rpm-1.0.0: add doc and prof subpkgs"]
               build topdir Nothing Nothing False Bump dist rest
             NotInstalled -> do
               opkg <- head <$> rpmspec ["--builtrpms"] (Just "%{name}") spec
@@ -248,7 +250,6 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
                   showChange pkg latest nvr
                   putStrLn ""
                   srcs <- buildRequires spec >>= haskellSrcPkgs topdir dist
-                  --print srcs
                   hmissing <- nub <$> filterM (notInKoji branch topdir dist) srcs
                   putStrLn ""
                   unless (null hmissing) $ do
@@ -269,7 +270,7 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
 
 notInstalled :: String -> IO Bool
 notInstalled pkg =
-  not <$> cmdBool "rpm" ["--quiet", "-q", pkg]
+  not <$> cmdBool "rpm" ["--quiet", "-q", "--whatprovides", pkg]
 
 showChange :: Package -> Maybe String -> String -> IO ()
 showChange pkg mlatest nvr = do
@@ -290,7 +291,7 @@ bodhiOverride :: Dist -> String -> IO ()
 bodhiOverride dist nvr =
   when (distOverride dist) $
     -- FIXME: improve Notes with recursive info
-    cmd_ "bodhi" ["overrides", "save", "--notes", "Haskell stack", nvr]
+    cmdLog "bodhi" ["overrides", "save", "--notes", "Haskell stack", nvr]
 
 eqNVR :: String -> Maybe String -> Bool
 eqNVR p1 p2 =

@@ -35,15 +35,14 @@ import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.Directory (doesFileExist)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>), (<.>))
-import System.IO (hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode, rawSystem)
 
 import FedoraDists (Dist, kojicmd, rpkg)
 import SimpleCmd (cmd, cmd_, cmdBool, cmdLines, grep_, logMsg,
-                  removeStrictPrefix, (+-+))
+                  removePrefix, removeStrictPrefix, warning, (+-+))
 import Dist (distTag, distTarget)
 import RPM (pkgDir)
-
+import Utils (setTermTitle)
 
 kojisafe :: Dist -> String -> [String] -> IO String
 kojisafe dist c as =
@@ -60,7 +59,8 @@ kojiWaitPkg topdir dist nvr = do
       tag = distTag dist
   already <- kojiCheckFHBuilt topdir nvr
   unless already $ do
-    putStrLn $ "Waiting for" +-+ nvr +-+ "in" +-+ tag
+    logMsg $ "Waiting for" +-+ nvr +-+ "in" +-+ tag
+    setTermTitle $ '*' : removePrefix "ghc-" nvr
     cmdFragile_ (kojicmd dist) ["wait-repo", tag, "--build=" ++ nvr]
     appendFile fhbuilt $ nvr ++ "\n"
 
@@ -100,6 +100,7 @@ kojiListPkgs dist =
 rpkgBuild :: FilePath -> Dist -> String -> Bool -> IO ()
 rpkgBuild topdir dist nvr waitrepo = do
   giturl <- cmd (rpkg dist) ["giturl"]
+  setTermTitle $ removePrefix "ghc-" nvr
   out <- cmd (kojicmd dist) ["build", "--nowait", "--fail-fast", distTarget dist, giturl]
   putStrLn out
   let task = last . words . head $ lines out
@@ -149,8 +150,8 @@ cmdFragile c as = do
     ExitFailure n -> do
       unless (null out) $ putStrLn out
       when (null (out ++ err)) $
-        hPutStrLn stderr $ "\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n
-      unless (null err) $ hPutStrLn stderr err
+        warning $ "\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n
+      unless (null err) $ warning err
       threadDelay 2000000
       cmdFragile c as
 
@@ -160,7 +161,7 @@ cmdFragile_ c as = do
   case ret of
     ExitSuccess -> return ()
     ExitFailure _ -> do
-      hPutStrLn stderr $ "retrying \"" ++ c +-+ unwords as ++ "\""
+      warning $ "retrying \"" ++ c +-+ unwords as ++ "\""
       threadDelay 2000000
       cmdFragile_ c as
 

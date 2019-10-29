@@ -26,7 +26,6 @@ import Data.List (intercalate, isInfixOf, isPrefixOf, nub, sort, (\\))
 
 import Data.List.Split (splitOn)
 import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
-import Options.Applicative (Parser, auto, flag')
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, getHomeDirectory,
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
@@ -42,9 +41,9 @@ import Text.CSV (parseCSV)
 
 import FedoraDists (Dist(..), distBranch, distRepo, distUpdates, rawhide)
 
-import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdMaybe, cmdSilent,
-                  grep_, removePrefix, shell_)
-import SimpleCmd.Git (git, git_, gitBranch, isGitDir)
+import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdMaybe, cmdQuiet,
+                  cmdSilent, grep_, removePrefix, shell_, warning)
+import SimpleCmd.Git (git, git_, gitBranch, gitDiffQuiet, isGitDir)
 import SimpleCmdArgs
 
 import Build (build, readBuildCmd)
@@ -70,18 +69,20 @@ main = do
   simpleCmdArgs (Just version) "Fedora Haskell packages tool"
     "Fedora packages maintenance tool" $
     subcommands $
-    [ Subcommand "bump" "bump package release" $
-      bump <$> strOptionWith 'm' "message" "CHANGELOG" "changelog message" <*> distArg <*> pkgArgs
-    , Subcommand "checkout" "fedpkg switch-branch" $
+    [ Subcommand "checkout" "fedpkg switch-branch" $
       repoAction_ True False (return ()) <$> distArg <*> pkgArgs
     , Subcommand "clone"  "clone repos" $
       clone <$> branching <*> distArg <*> pkgArgs
     , Subcommand "clone-new" "clone new packages" $
       cloneNew <$> branching <*> distArg
+    , Subcommand "cblrpm" "Run cblrpm command" $
+      cblrpm <$> strOptionWith 'c' "cmd" "CMD" "command to execute" <*> distArg <*> pkgArgs
     , Subcommand "cmd" "arbitrary command (with args)" $
       execCmd <$> strOptionWith 'c' "cmd" "CMD" "command to execute" <*> distArg <*> pkgArgs
     , Subcommand "count" "count number of packages" $
       (repoqueryHaskellPkgs False >=> (print . length)) <$> distArg
+    , Subcommand "depends" "cabal-depends" $
+      repoAction' False cabalDepends <$> distArg <*> pkgArgs
     , Subcommand "diff" "git diff" $
       gitDiff <$> optional gitFormat
       <*> optional (strOptionWith 'w' "with-branch" "BRANCH" "Branch to compare")
@@ -92,6 +93,8 @@ main = do
       repoAction False True compareRawhide <$> distArg <*> pkgArgs
     , Subcommand "diff-stackage" "compare with stackage" $
       diffStackage <$> switchWith 'm' "missing" "only list missing packages" <*> distArg <*> pkgArgs
+    , Subcommand "diffstat" "Show diffstat output" $
+      repoAction' False (const diffStat) <$> distArg <*> pkgArgs
     , Subcommand "hackage" "generate Hackage distro data" $
       repoqueryHackageCSV hackageRelease <$> switchRefresh
     , Subcommand "hackage-compare" "compare with Hackage distro data" $
@@ -106,30 +109,32 @@ main = do
       merge <$> strOptionWith 'f' "from" "BRANCH" "specify branch to merge from" <*> distArg <*> pkgArgs
     , Subcommand "missing" "missing dependency source packages" $
       missingDeps <$> distArg <*> pkgArgs
-    , Subcommand "new" "new unbuilt packages" $
-      (newPackages >=> mapM_ putStrLn) <$> distArg
+    , Subcommand "new" "unbuilt packages" $
+      (newPackages >=> putStrList) <$> distArg
     , Subcommand "old-packages" "packages not in repoquery" $
       oldPackages <$> distArg <*> pkgArgs
     , Subcommand "prep" "fedpkg prep" $
       prep <$> distArg <*> pkgArgs
     , Subcommand "commit" "fedpkg commit" $
       commit <$> strOptionWith 'm' "message" "COMMITMSG" "commit message" <*> distArg <*> pkgArgs
+    , Subcommand "fetch" "git fetch repos" $
+      repoAction_ True False (git_ "fetch" []) <$> distArg <*> pkgArgs
     , Subcommand "pull" "git pull repos" $
       repoAction_ True False (git_ "pull" ["--rebase"]) <$> distArg <*> pkgArgs
     , Subcommand "push" "git push repos" $
       repoAction_ True False (git_ "push" []) <$> distArg <*> pkgArgs
     , Subcommand "refresh" "cabal-rpm refresh" $
-      repoAction True True refreshPkg <$> distArg <*> pkgArgs
+      refresh <$> (switchWith 'n' "dry-run" "Show patch but don't apply") <*> distArg <*> pkgArgs
     , Subcommand "remaining" "remaining packages to be built in TAG" $
       remaining <$> switchWith 'c' "count" "show many packages left" <*> strArg "TAG" <*> pkgArgs
-    , Subcommand "unpushed" "show unpushed commits" $
-      unpushed <$> switchWith 's' "short" "no log" <*> distArg <*> pkgArgs
-    , Subcommand "update" "cabal-rpm update" $
-      update <$> strOptionWith 's' "stream" "STACKAGESTREAM" "Stackage stream (lts-X)" <*> distArg <*> pkgArgs
     , Subcommand "subpkgs" "list subpackages" $
       repoAction True True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= putStrList) <$> distArg <*> pkgArgs
     , Subcommand "tagged" "list koji DIST tagged builds" $
       listTagged_ <$> switchWith 's' "short" "list packages not builds" <*> strArg "TAG"
+    , Subcommand "unpushed" "show unpushed commits" $
+      unpushed <$> switchWith 's' "short" "no log" <*> distArg <*> pkgArgs
+    , Subcommand "update" "cabal-rpm update" $
+      update <$> strOptionWith 's' "stream" "STACKAGESTREAM" "Stackage stream (lts-X)" <*> distArg <*> pkgArgs
     , Subcommand "verrel" "show nvr of packages" $
       verrel <$> distArg <*> pkgArgs] ++
     map (buildCmd cwd) [ ("install", "build locally and install")
@@ -149,7 +154,7 @@ main = do
 
     gitFormat :: Parser DiffFormat
     gitFormat =
-      flag' DiffShort (switchMods 's' "short" "Just output package name") <|>
+      flagWith' DiffShort 's' "short" "Just output package name" <|>
       DiffContext <$> optionWith auto 'u' "unified" "CONTEXT" "Lines of context"
 
     buildCmd cwd (c, desc) =
@@ -166,13 +171,7 @@ putStrList :: [String] -> IO ()
 putStrList =
   putStr . unlines
 
-bump :: String -> Dist -> [Package] -> IO ()
-bump msg =
-  repoAction True False bumpspec
-  where
-    bumpspec pkg =
-      cmd_ "rpmdev-bumpspec" ["-c", msg, pkg <.> "spec"]
-
+-- should make separate rhel client so -B does not need dist
 clone :: Bool -> Dist -> [Package] -> IO ()
 clone True dist pkgs = cloneAllBranches dist pkgs
 clone False dist pkgs =
@@ -191,7 +190,7 @@ execCmd cs dist pkgs =
 
 gitDiff :: Maybe DiffFormat -> Maybe String -> Dist -> [Package] -> IO ()
 gitDiff fmt mbrnch =
-  repoAction False False doGitDiff
+  repoAction' False doGitDiff
   where
     doGitDiff pkg = do
       let branch = maybeToList mbrnch
@@ -200,9 +199,8 @@ gitDiff fmt mbrnch =
                      _ -> []
           short = fmt == Just DiffShort
       out <- git "diff" $ branch ++ contxt
-      unless (null out) $ do
-        putStrLn $ if short then pkg else "==" +-+ pkg +-+ "=="
-        unless short $ putStrLn out
+      return $ if null out then ""
+               else if short then pkg else out
 
 gitDiffOrigin :: Dist -> [Package] -> IO ()
 gitDiffOrigin dist =
@@ -215,7 +213,7 @@ diffStackage missingOnly dist =
     compareStackage :: Package -> IO ()
     compareStackage p = do
       nvr <- cmd (rpkg dist) ["verrel"]
-      let stream = "lts-12"
+      let stream = "lts-13"
       stkg <- cmdMaybe "stackage" ["package", stream, removePrefix "ghc-" p]
       let same = isJust stkg && fromJust stkg `isInfixOf` nvr
       unless missingOnly $
@@ -224,8 +222,11 @@ diffStackage missingOnly dist =
         else
         putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(" ++ stream ++ ")"
 
+diffStat :: IO String
+diffStat = git "diff" ["--stat"]
+
 hackageCompare :: Bool -> IO ()
-hackageCompare refresh =
+hackageCompare refreshData =
   repoqueryHackages hackageRelease >>=
   compareHackage hackageRelease
   where
@@ -233,7 +234,7 @@ hackageCompare refresh =
     compareHackage dist pkgs' = do
       hck <- simpleHTTP (getRequest "http://hackage.haskell.org/distro/Fedora/packages.csv") >>= getResponseBody
       let hackage = sort . either (error "Malformed Hackage csv") (map mungeHackage) $ parseCSV "packages.csv" hck
-      sort . map mungeRepo . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ ["--refresh" | refresh] ++ pkgs') >>= 
+      sort . map mungeRepo . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ ["--refresh" | refreshData] ++ pkgs') >>=
         compareSets True hackage
 
     mungeHackage :: [String] -> PkgVer
@@ -339,15 +340,14 @@ prep dist =
 
 commit :: String -> Dist -> [Package] -> IO ()
 commit logmsg dist =
-  repoAction_ True True commitChanges dist
+  repoAction' False (const commitChanges) dist
   where
-    commitChanges :: IO ()
+    commitChanges :: IO String
     commitChanges = do
-      -- use gitDiffQuiet
-      nochgs <- cmdBool "git" ["diff", "--quiet"]
+      nochgs <- gitDiffQuiet []
       if nochgs
-        then putStrLn "no changes"
-        else cmd_ (rpkg dist) ["commit", "-m", logmsg]
+        then return ""
+        else cmd (rpkg dist) ["commit", "-m", logmsg]
 
 unpushed :: Bool -> Dist -> [Package] -> IO ()
 unpushed nolog dist =
@@ -366,10 +366,10 @@ verrel dist =
   repoAction_ False True (cmd_ (rpkg dist) ["verrel"]) dist
 
 repoqueryHackageCSV :: Dist -> Bool -> IO ()
-repoqueryHackageCSV dist refresh = do
+repoqueryHackageCSV dist refreshData = do
   pkgs <- repoqueryHackages dist
   -- Hackage csv chokes on final newline so remove it
-  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{source_name}\""] ++ ["--refresh" | refresh] ++ pkgs) >>= putStr
+  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{source_name}\""] ++ ["--refresh" | refreshData] ++ pkgs) >>= putStr
 
 data PkgVer = PV { pvPkg :: String, pvVer :: String}
   deriving (Eq)
@@ -391,7 +391,8 @@ replace _ _ [] = []
 
 repoqueryHaskellPkgs :: Bool -> Dist -> IO [Package]
 repoqueryHaskellPkgs verbose dist = do
-  when verbose $ putStrLn "Getting packages from repoquery"
+  -- use `hIsTerminalDevice stdout` ?
+  when verbose $ warning "Getting packages from repoquery"
   let repo = distRepo dist
       updates = maybeToList $ distUpdates dist
   bin <- words <$> repoquery dist (["--repo=" ++ repo ++ "-source"] ++ ["--repo=" ++ u  ++ "-source" | u <- updates] ++ ["--qf=%{name}", "--whatrequires", "ghc-Cabal-devel"])
@@ -418,13 +419,13 @@ repoqueryHackages dist = do
 newPackages :: Dist -> IO [Package]
 newPackages dist = do
   ps <- repoqueryHaskellPkgs True dist
-  kps <- kojiListHaskell True dist
-  return $ kps \\ ps
+  pps <- cmdLines "pagure" ["list", "ghc*"]
+  return $ pps \\ ps
 
 kojiListHaskell :: Bool -> Dist -> IO [Package]
 kojiListHaskell verbose dist = do
   when verbose $ putStrLn "Getting package list from Koji"
-  libs <- filter (\ p -> "ghc-" `isPrefixOf` p && p `notElem` ["ghc-rpm-macros", "ghc-srpm-macros"]) <$> kojiListPkgs dist
+  libs <- filter (\ p -> "ghc" `isPrefixOf` p && p `notElem` ["ghc-rpm-macros", "ghc-srpm-macros"]) <$> kojiListPkgs dist
   when (null libs) $ error "No library packages found"
   return $ sort $ nub libs
 
@@ -492,10 +493,59 @@ repoAction header needsSpec action dist (pkg:rest) = do
           action pkg
   repoAction header needsSpec action dist rest
 
+-- io independent of package
 repoAction_ :: Bool -> Bool -> IO () -> Dist -> [Package] -> IO ()
 repoAction_ header needsSpec action =
   repoAction header needsSpec (const action)
 
+-- output header only if output
+repoAction' :: Bool -> (Package -> IO String) -> Dist -> [Package] -> IO ()
+repoAction' _ _ _ [] = return ()
+repoAction' needsSpec action dist (pkg:rest) = do
+  withCurrentDirectory "." $ do
+    let branch = distBranch dist
+    -- muser <- getEnv "USER"
+    haveSSH <- do
+      home <- getHomeDirectory
+      doesFileExist $ home </> ".ssh/id_rsa"
+    fileExists <- doesFileExist pkg
+    dirExists <- doesDirectoryExist pkg
+    if fileExists
+      then error $ pkg +-+ "is a file"
+      else do
+      unless dirExists $
+        cmd_ (rpkg dist) $ ["clone"] ++ ["-a" | not haveSSH] ++ ["-b", branch, pkg]
+      singleDir <- isGitDir pkg
+      unless singleDir $ do
+        branchDir <- doesDirectoryExist $ pkg </> branch
+        unless branchDir $
+          withCurrentDirectory pkg $
+          cmd_ (rpkg dist) ["clone", "-b", branch, pkg, branch]
+      wd <- pkgDir pkg branch ""
+      setCurrentDirectory wd
+      pkggit <- do
+        gd <- isGitDir "."
+        if gd
+          then checkPkgsGit
+          else return False
+      unless pkggit $
+        error $ "not a Fedora pkg git dir!:" +-+ wd
+      when dirExists $ do
+        actual <- gitBranch
+        when (branch /= actual) $
+          cmd_ (rpkg dist) ["switch-branch", branch]
+      isDead <- doesFileExist "dead.package"
+      unless isDead $ do
+        let spec = pkg <.> "spec"
+        hasSpec <- doesFileExist spec
+        -- FIXME: silence for cmds that only output package names (eg unpushed -s)
+        unless hasSpec $ putStrLn $ pkg ++ ": " ++ "No spec file!"
+        unless (needsSpec && not hasSpec) $ do
+          out <- action pkg
+          unless (null out) $ do
+            putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
+            putStrLn out
+  repoAction' needsSpec action dist rest
 
 compareRawhide :: Package -> IO ()
 compareRawhide p = do
@@ -530,12 +580,16 @@ update stream =
         then cmd_ "cabal-rpm" ["update", "-s", stream]
         else putStrLn "skipping since not hackage"
 
-refreshPkg :: Package -> IO ()
-refreshPkg pkg = do
-  hckg <- isFromHackage pkg
-  if hckg
-    then cmd_ "cabal-rpm" ["refresh"]
-    else putStrLn "skipping since not hackage"
+refresh :: Bool -> Dist -> [Package] -> IO ()
+refresh dryrun =
+  repoAction True True refreshPkg
+  where
+    refreshPkg :: Package -> IO ()
+    refreshPkg pkg = do
+      hckg <- isFromHackage pkg
+      if hckg
+        then cmd_ "cabal-rpm" $ ["refresh"] ++ ["--dry-run" | dryrun]
+        else putStrLn "skipping since not hackage"
 
 listTagged_ :: Bool -> String -> IO ()
 listTagged_ short tag =
@@ -558,3 +612,24 @@ remaining count tag pkgs = do
   if count
     then print $ length left
     else cmd_ "rpmbuild-order" $ ["sort", "-p"] ++ left
+
+cabalDepends :: Package -> IO String
+cabalDepends p = do
+  hckg <- isFromHackage p
+  if hckg then do
+    vr <- removePrefix "ghc-" . head <$>
+      rpmspec ["--srpm"] (Just "%{name}-%{version}") (p <.> "spec")
+    setCurrentDirectory vr
+    cmdQuiet "cabal-depends" ["--not-build", "--unique"]
+    else return ""
+
+cblrpm :: String -> Dist -> [Package] -> IO ()
+cblrpm "" = error "CMD string must be given"
+cblrpm cs =
+  repoAction True True doCblRpm
+  where
+    doCblRpm :: Package -> IO ()
+    doCblRpm p = do
+    hckg <- isFromHackage p
+    when hckg $
+      cmd_ "cblrpm" [cs]

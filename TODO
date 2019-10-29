@@ -1,14 +1,17 @@
-split into separate packages or merge??
+- warn about unpushed commit(s) without any bump
+- move bump etc to fhpkg.hs
+- filter out ghc-prof & ghc-doc deps, ghc-rpm-macros removal?, ghc-srpm-macros
+- filter xmonad and pandoc-pdf from install
 
 # fhpkg
-- use optparse-applicative
 - only print header if output
 - license-check command
-* use pagure-cli to get new ghc-* packages
+- -B dist is kind of nonsense
+- library
+- allow pkg/ or filter out '/'
 
 (from fhpkg.hs):
 - cache dist package lists?
-- push subpackages to Hackage
 - compare branch versions
 - compare with LTS
 - query-format string
@@ -20,8 +23,6 @@ Parallelize builds
 --from (--continue) eg when conflict stops fhpkg
 
 allow master instead of rawhide
-
-(`fhpkg clone -B branch pkg` doesn't really make sense)
 
 check commands has all commands
 

@@ -1,5 +1,5 @@
 Name:                fedora-haskell-tools
-Version:             0.8
+Version:             0.9
 Synopsis:            Building and maintenance tools for Fedora Haskell
 Description:
     Tools for building and managing Fedora Haskell packages.
@@ -29,9 +29,10 @@ Executable fhpkg
                    fedora-dists,
                    filepath,
                    HTTP,
+                   optparse-applicative,
                    process,
-                   simple-cmd >= 0.1.4,
-                   simple-cmd-args >= 0.1.1,
+                   simple-cmd >= 0.2.0,
+                   simple-cmd-args >= 0.1.2,
                    split,
                    time < 1.9,
                    unix
@@ -47,7 +48,7 @@ Executable fhbz
                    fedora-dists,
                    time
     Hs-Source-Dirs: src, .
-    Other-modules: Dist, Koji, RPM
+    Other-modules: Dist, Koji, RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Extensions:    CPP
 
@@ -55,9 +56,8 @@ Executable fhmock
     Main-is:       fhmock.hs
     Build-depends: base < 5,
                    fedora-dists,
-                   optparse-applicative,
-                   simple-cmd >= 0.1.1,
-                   simple-cmd-args
+                   simple-cmd >= 0.2.0,
+                   simple-cmd-args >= 0.1.2
     if impl(ghc<8.0)
         Build-depends: semigroups
     Hs-Source-Dirs: src, .
