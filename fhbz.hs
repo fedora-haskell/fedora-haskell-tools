@@ -162,7 +162,7 @@ updateBug bid _bcomp hkgver missing state nocomment = do
                 then "No missing dependencies for" +-+ hkgver +-+ "\naccording to cblrpm missingdeps" {-++ (if null rebuilds then "\nwithout any other package rebuilds." else ".\n\nIt would require also rebuilding:\n" +-+  unwords rebuilds)-}
                 else  "cblrpm missingdeps output for" +-+ hkgver ++ ":\n\n" ++ missing
   bugzillaModify $ ["--whiteboard==" ++ hkgver ++ ":" ++ state] ++
-    (if nocomment then [] else ["--comment=" ++ comment]) ++ [bid]
+    ["--comment=" ++ comment | not nocomment] ++ [bid]
 
 cabalUpdate :: IO ()
 cabalUpdate = do
