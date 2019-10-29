@@ -34,7 +34,7 @@ Executable fhpkg
                    simple-cmd >= 0.2.0,
                    simple-cmd-args >= 0.1.2,
                    split,
-                   time < 1.9,
+                   time,
                    unix
     Hs-Source-Dirs: src, .
     Other-modules: Build, Dist, Koji, Paths_fedora_haskell_tools, Utils
