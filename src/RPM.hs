@@ -34,7 +34,7 @@ import System.FilePath ((</>))
 import System.Exit (ExitCode (..), exitFailure, exitWith)
 
 import Dist (distTag)
-import FedoraDists (Dist, {-distBranch,-} dists, releaseVersion)
+import FedoraDists (Dist, distBranch, dists, releaseVersion)
 import SimpleCmd (cmd, removeStrictPrefix, removeSuffix, sudo_, warning, (+-+))
 import qualified SimpleCmd.Rpm as S
 
@@ -134,8 +134,8 @@ haskellTools = ["alex", "cabal-install", "gtk2hs-buildtools", "happy", "hspec-di
 haskellSrcPkgs ::  FilePath -> Dist -> [Package] -> IO [Package]
 haskellSrcPkgs topdir dist brs = do
   ghcLibs <- do
-    let --branch = distBranch dist
-        ghcDir = topdir </> ".." </> "ghc"
+    let branch = distBranch dist
+    ghcDir <- pkgDir "ghc" branch (topdir </> "..")
     map removeLibSuffix <$> filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}") (ghcDir </> "ghc.spec")
   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (map removeLibSuffix brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
   nub <$> mapM (derefSrcPkg topdir dist False) hdeps
