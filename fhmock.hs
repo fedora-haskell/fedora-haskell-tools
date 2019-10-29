@@ -11,7 +11,7 @@
 -- the Free Software Foundation, either version 3 of the License, or
 -- (at your option) any later version.
 
-import Control.Applicative (many, some)
+import Control.Applicative (many, pure, some)
 import Data.List (sort)
 import System.Environment (getArgs)
 
