@@ -35,7 +35,7 @@ import System.Directory (doesDirectoryExist, doesFileExist,
 #endif
                          setCurrentDirectory)
 import System.FilePath ((</>), (<.>), takeFileName)
-import System.IO (BufferMode(..), hSetBuffering, stdout)
+import System.IO (BufferMode(..), hIsTerminalDevice, hSetBuffering, stdout)
 --import System.Posix.Env (getEnv)
 import Text.CSV (parseCSV)
 
@@ -391,8 +391,9 @@ replace _ _ [] = []
 
 repoqueryHaskellPkgs :: Bool -> Dist -> IO [Package]
 repoqueryHaskellPkgs verbose dist = do
-  -- use `hIsTerminalDevice stdout` ?
-  when verbose $ warning "Getting packages from repoquery"
+  when verbose $ do
+    tty <- hIsTerminalDevice stdout
+    when tty $ warning "Getting packages from repoquery"
   let repo = distRepo dist
       updates = maybeToList $ distUpdates dist
   bin <- words <$> repoquery dist (["--repo=" ++ repo ++ "-source"] ++ ["--repo=" ++ u  ++ "-source" | u <- updates] ++ ["--qf=%{name}", "--whatrequires", "ghc-Cabal-devel"])
