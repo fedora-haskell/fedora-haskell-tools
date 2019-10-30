@@ -97,27 +97,38 @@ type Package = String
 
 derefSrcPkg :: FilePath -> Dist -> Bool -> Package -> IO Package
 derefSrcPkg topdir dist verb pkg = do
+  res <- maybeDerefSrcPkg topdir dist verb pkg
+  case res of
+    Nothing -> do
+      putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
+      exitWith (ExitFailure 1)
+    Just s -> do
+      when (pkg /= s && verb) $ putStrLn $ pkg +-+ "->" +-+ s
+      return s
+
+derefSrcPkgRelax :: FilePath -> Dist -> Package -> IO Package
+derefSrcPkgRelax topdir dist pkg = do
+  res <- maybeDerefSrcPkg topdir dist False pkg
+  case res of
+    Nothing -> return pkg
+    Just s -> return s
+
+maybeDerefSrcPkg :: FilePath -> Dist -> Bool -> Package -> IO (Maybe Package)
+maybeDerefSrcPkg topdir dist verb pkg = do
   let lib = removeLibSuffix pkg
   -- fixme: should check branch (dir)
   libExists <- doesDirectoryExist $ topdir </> lib
   if libExists
-    then return lib
+    then return $ Just lib
     else do
     -- todo: check bin has lib
     let bin = removeStrictPrefix "ghc-" lib
     binExists <- doesDirectoryExist $ topdir </> bin
     if binExists
-      then return bin
+      then return $ Just bin
       else do
-      putStrLn $ "Repoquerying" +-+ pkg
-      res <- repoquerySrc dist pkg
-      case res of
-        Nothing -> do
-          putStrLn $ "Unknown package" +-+ removeSuffix "-devel" pkg
-          exitWith (ExitFailure 1)
-        Just s -> do
-          when (pkg /= s && verb) $ putStrLn $ pkg +-+ "->" +-+ s
-          return s
+      when verb $ putStrLn $ "Repoquerying" +-+ pkg
+      repoquerySrc dist pkg
 
 isHaskellDevelPkg :: Package -> Bool
 isHaskellDevelPkg pkg = "ghc-" `isPrefixOf` pkg && ("-devel" `isSuffixOf` pkg || "-prof" `isSuffixOf` pkg || "-static" `isSuffixOf` pkg) || pkg `elem`haskellTools
@@ -138,7 +149,7 @@ haskellSrcPkgs topdir dist brs = do
     ghcDir <- pkgDir "ghc" branch (topdir </> "..")
     map removeLibSuffix . filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}") (ghcDir </> "ghc.spec")
   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (map removeLibSuffix brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
-  nub <$> mapM (derefSrcPkg topdir dist False) hdeps
+  nub <$> mapM (derefSrcPkgRelax topdir dist) hdeps
 
 pkgDir :: String -> String -> FilePath -> IO FilePath
 pkgDir dir branch top = do

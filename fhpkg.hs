@@ -315,9 +315,9 @@ merge branch =
 
 missingDeps :: Dist -> [Package] -> IO ()
 missingDeps dist =
-  repoAction True (Header True checkForMissingDeps) dist
+  repoAction True (Output checkForMissingDeps) dist
   where
-    checkForMissingDeps :: Package -> IO ()
+    checkForMissingDeps :: Package -> IO String
     checkForMissingDeps pkg = do
       dir <- takeFileName <$> getCurrentDirectory
       let top = if dir == pkg then ".." else "../.."
@@ -326,13 +326,12 @@ missingDeps dist =
       if hasSpec
         then do
         deps <- buildRequires (pkg <.> "spec") >>= haskellSrcPkgs top dist
-        mapM_ (checkMissing top) deps
-        else putStrLn "no spec file found!"
+        unlines <$> filterM (noPkgDir top) deps
+        else putStrLn ("no " ++ pkg ++ ".spec file found!") >> return ""
         where
-          checkMissing :: FilePath -> Package -> IO ()
-          checkMissing top dep = do
-            exists <- doesDirectoryExist $ top </> dep
-            unless exists $ putStrLn $ "Missing" +-+ dep
+          noPkgDir :: FilePath -> Package -> IO Bool
+          noPkgDir top dep =
+            not <$> doesDirectoryExist (top </> dep)
 
 oldPackages :: Dist -> [Package] -> IO ()
 oldPackages dist pkgs = do
