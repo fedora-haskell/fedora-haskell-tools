@@ -55,7 +55,7 @@ readBuildCmd "pending" = Pending
 readBuildCmd "changed" = Changed
 readBuildCmd "built" = Built
 readBuildCmd "bump" = Bump
-readBuildCmd "notinstalled" = NotInstalled
+readBuildCmd "not-installed" = NotInstalled
 readBuildCmd _ = error "Unknown command"
 
 -- commands :: [String]
