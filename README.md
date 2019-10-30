@@ -6,13 +6,15 @@
 
 # Fedora Haskell Tools
 
+Tools for Fedora Haskell package maintainence.
+
 ## fhpkg
 Git clones and pull, etc Fedora Haskell package repos.
 Can also generate Hackage distro meta data.
 Builds set of packages locally or in Koji or Mock.
 (fhbuild has been merged into fhpkg.)
 
-For local builds unbuilt dependent packages are also built recursive.
+For local builds unbuilt dependent packages are also built recursively.
 
 For updates built in Koji, buildroot overrides are created and waited for.
 Chain builds packages with wait-repo.
