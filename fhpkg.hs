@@ -206,7 +206,7 @@ gitDiff fmt mbrnch =
 
 gitDiffOrigin :: Dist -> [Package] -> IO ()
 gitDiffOrigin dist =
-  repoAction_ True False (git_ "diff" [distRemote dist]) dist
+  repoAction False (Output (const (git "diff" [distRemote dist]))) dist
 
 diffStackage :: String -> Bool -> Dist -> [Package] -> IO ()
 diffStackage stream missingOnly dist =
