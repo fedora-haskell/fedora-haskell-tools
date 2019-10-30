@@ -3,7 +3,8 @@ module Dist
    distRemote,
    distTag,
    distTarget,
-   hackageRelease)
+   hackageRelease,
+   ltsStream)
   where
 
 import Data.Maybe (fromMaybe)
@@ -35,3 +36,7 @@ distRemote d = "origin/" ++ distBranch d
 -- | Fedora release being tracked in Hackage Distro data
 hackageRelease :: Dist
 hackageRelease = Fedora 31
+
+-- | Stackage LTS stream major version
+ltsStream :: String
+ltsStream = "lts-13"

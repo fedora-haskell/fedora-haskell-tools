@@ -47,7 +47,7 @@ import SimpleCmd.Git (git, git_, gitBranch, gitDiffQuiet, isGitDir)
 import SimpleCmdArgs
 
 import Build (build, readBuildCmd)
-import Dist (distArg, distRemote, hackageRelease)
+import Dist (distArg, distRemote, hackageRelease, ltsStream)
 import Koji (kojiListPkgs, rpkg)
 import Paths_fedora_haskell_tools (version)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
@@ -92,7 +92,7 @@ main = do
     , Subcommand "diff-branch" "compare branch with master" $
       repoAction True (Header False compareRawhide) <$> distArg <*> pkgArgs
     , Subcommand "diff-stackage" "compare with stackage" $
-      diffStackage <$> switchWith 'm' "missing" "only list missing packages" <*> distArg <*> pkgArgs
+      diffStackage <$> streamOpt <*> switchWith 'm' "missing" "only list missing packages" <*> distArg <*> pkgArgs
     , Subcommand "diffstat" "Show diffstat output" $
       repoAction False (Output (const diffStat)) <$> distArg <*> pkgArgs
     , Subcommand "hackage" "generate Hackage distro data" $
@@ -134,7 +134,7 @@ main = do
     , Subcommand "unpushed" "show unpushed commits" $
       unpushed <$> switchWith 's' "short" "no log" <*> distArg <*> pkgArgs
     , Subcommand "update" "cabal-rpm update" $
-      update <$> strOptionWith 's' "stream" "STACKAGESTREAM" "Stackage stream (lts-X)" <*> distArg <*> pkgArgs
+      update <$> streamOpt <*> distArg <*> pkgArgs
     , Subcommand "verrel" "show nvr of packages" $
       verrel <$> distArg <*> pkgArgs] ++
     map (buildCmd cwd) [ ("install", "build locally and install")
@@ -162,6 +162,8 @@ main = do
       build cwd Nothing Nothing False (readBuildCmd c) <$> distArg <*> pkgArgs
 
     switchRefresh = switchWith 'r' "refresh" "repoquery --refresh"
+
+    streamOpt = strOptionalWith 's' "stream" "STACKAGESTREAM" ("Stackage stream [" ++ ltsStream ++ "]") ltsStream
 
 data DiffFormat =
   DiffShort | DiffContext Int
@@ -206,14 +208,13 @@ gitDiffOrigin :: Dist -> [Package] -> IO ()
 gitDiffOrigin dist =
   repoAction_ True False (git_ "diff" [distRemote dist]) dist
 
-diffStackage :: Bool -> Dist -> [Package] -> IO ()
-diffStackage missingOnly dist =
+diffStackage :: String -> Bool -> Dist -> [Package] -> IO ()
+diffStackage stream missingOnly dist =
   repoAction True (Header False compareStackage) dist
   where
     compareStackage :: Package -> IO ()
     compareStackage p = do
       nvr <- cmd (rpkg dist) ["verrel"]
-      let stream = "lts-13"
       stkg <- cmdMaybe "stackage" ["package", stream, removePrefix "ghc-" p]
       let same = isJust stkg && fromJust stkg `isInfixOf` nvr
       unless missingOnly $
@@ -532,7 +533,6 @@ compareRawhide p = do
 isFromHackage :: Package -> IO Bool
 isFromHackage pkg =
   grep_ "hackage.haskell.org/package/" $ pkg <.> "spec"
-
 
 update :: String -> Dist -> [Package] -> IO ()
 update stream =
