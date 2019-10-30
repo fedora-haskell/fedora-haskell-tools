@@ -62,7 +62,10 @@ kojiWaitPkg topdir dist nvr = do
     logMsg $ "Waiting for" +-+ nvr +-+ "in" +-+ tag
     setTermTitle $ '*' : removePrefix "ghc-" nvr
     cmdFragile_ (kojicmd dist) ["wait-repo", tag, "--build=" ++ nvr]
-    appendFile fhbuilt $ nvr ++ "\n"
+    tags <- cmdLines (kojicmd dist) ["list-tags", "--build=" ++ nvr]
+    -- do not cache overrides
+    when (tag `elem` tags) $
+      appendFile fhbuilt $ nvr ++ "\n"
 
 kojiCheckFHBuilt :: FilePath -> String -> IO Bool
 kojiCheckFHBuilt topdir nvr = do
