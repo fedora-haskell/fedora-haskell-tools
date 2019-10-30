@@ -97,9 +97,9 @@ main = do
       repoqueryHackageCSV hackageRelease <$> switchRefresh
     , Subcommand "hackage-compare" "compare with Hackage distro data" $
       hackageCompare <$> switchRefresh
-    , Subcommand "head-origin" "head in sync with origin" $
+    , Subcommand "head-origin" "packages with head in sync with origin" $
       headOrigin  <$> distArg <*> pkgArgs
-    , Subcommand "leaf" "list leaf packages" $
+    , Subcommand "leaf" "list leaf packages (slow!)" $
       leaves <$> switchWith 'v' "deps" "show also deps" <*> distArg <*> pkgArgs
     , Subcommand "list" "list packages that BR ghc-Cabal-devel" $
       (repoqueryHaskellPkgs False >=> putStrList) <$> distArg
