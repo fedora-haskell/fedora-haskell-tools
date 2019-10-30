@@ -1,13 +1,11 @@
 - warn about unpushed commit(s) without any bump
-- move bump etc to fhpkg.hs
 - filter out ghc-prof & ghc-doc deps, ghc-rpm-macros removal?, ghc-srpm-macros
 - filter xmonad and pandoc-pdf from install
 
-- bodhi overrides not happened for chain deps
+- bodhi overrides not happening for chain deps
 - check update deps in candidate tag
 
 # fhpkg
-- only print header if output
 - license-check command
 - -B dist is kind of nonsense
 - library
@@ -16,7 +14,6 @@
 (from fhpkg.hs):
 - cache dist package lists?
 - compare branch versions
-- compare with LTS
 - query-format string
 
 deps query tool
@@ -36,7 +33,6 @@ bodhi testing query?
 # support chain-build
 
 # git
-- branch merging
 * merge a/next koji build
 - build new packages across branches
 
