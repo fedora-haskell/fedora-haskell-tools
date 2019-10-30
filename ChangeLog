@@ -4,6 +4,7 @@
 - 'list' now repoqueries for Haskell packages
 - new commands: 'cblrpm', 'depends', 'diffstat', 'fetch'
 - 'refresh' gained -n
+- rename 'diff-stackage' to 'stackage-compare' and improve output
 - setTermTitle for Koji builds
 - some commands now only print header if there's output
 - fhbz: no longer assumes haskell-devel CC, and sets Fixed In: nvr

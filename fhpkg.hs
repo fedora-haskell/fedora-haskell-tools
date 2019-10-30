@@ -91,8 +91,6 @@ main = do
       gitDiffOrigin <$> distArg <*> pkgArgs
     , Subcommand "diff-branch" "compare branch with master" $
       repoAction True (Header False compareRawhide) <$> distArg <*> pkgArgs
-    , Subcommand "diff-stackage" "compare with stackage" $
-      diffStackage <$> streamOpt <*> switchWith 'm' "missing" "only list missing packages" <*> distArg <*> pkgArgs
     , Subcommand "diffstat" "Show diffstat output" $
       repoAction False (Output (const diffStat)) <$> distArg <*> pkgArgs
     , Subcommand "hackage" "generate Hackage distro data" $
@@ -115,6 +113,8 @@ main = do
       oldPackages <$> distArg <*> pkgArgs
     , Subcommand "prep" "fedpkg prep" $
       prep <$> distArg <*> pkgArgs
+    , Subcommand "stackage-compare" "compare with stackage" $
+      stackageCompare <$> streamOpt <*> switchWith 'm' "missing" "only list missing packages" <*> distArg <*> pkgArgs
     , Subcommand "commit" "fedpkg commit" $
       commit <$> strOptionWith 'm' "message" "COMMITMSG" "commit message" <*> distArg <*> pkgArgs
     , Subcommand "fetch" "git fetch repos" $
@@ -208,20 +208,24 @@ gitDiffOrigin :: Dist -> [Package] -> IO ()
 gitDiffOrigin dist =
   repoAction False (Output (const (git "diff" [distRemote dist]))) dist
 
-diffStackage :: String -> Bool -> Dist -> [Package] -> IO ()
-diffStackage stream missingOnly dist =
+stackageCompare :: String -> Bool -> Dist -> [Package] -> IO ()
+stackageCompare stream missingOnly dist =
   repoAction True (Header False compareStackage) dist
   where
     compareStackage :: Package -> IO ()
     compareStackage p = do
       nvr <- cmd (rpkg dist) ["verrel"]
       stkg <- cmdMaybe "stackage" ["package", stream, removePrefix "ghc-" p]
-      let same = isJust stkg && fromJust stkg `isInfixOf` nvr
-      unless missingOnly $
-        putStrLn $ nvr +-+ "(fedora)"
-      if missingOnly then when (isNothing stkg) $ putStrLn p
+      let same = isJust stkg && (fromJust stkg ++ "-") `isInfixOf` nvr
+      unless same $
+        if missingOnly
+        then when (isNothing stkg) $ putStrLn p
         else
-        putStrLn $ (if same then "same" else fromMaybe "none" stkg) +-+ "(" ++ stream ++ ")"
+          if isNothing stkg
+          then putStrLn $ stream ++ " missing: " ++ removePrefix "ghc-" p
+          else do
+            putStrLn nvr
+            putStrLn $ replicate (length (dropVerrel nvr) + 1) ' ' ++ fromJust stkg +-+ "(" ++ stream ++ ")"
 
 diffStat :: IO String
 diffStat = git "diff" ["--stat"]
@@ -564,11 +568,11 @@ listTagged :: Bool -> String -> IO [String]
 listTagged short tag = do
   builds <- map (head . words) <$> cmdLines "koji" ["list-tagged", "--quiet", tag]
   return $ nub $ map (if short then dropVerrel else id) builds
-  where
-    dropVerrel :: String -> String
-    dropVerrel nvr =
-      let parts = splitOn "-" nvr in
-        intercalate "-" $ take (length parts - 2) parts
+
+dropVerrel :: String -> String
+dropVerrel nvr =
+  let parts = splitOn "-" nvr in
+    intercalate "-" $ take (length parts - 2) parts
 
 remaining :: Bool -> String -> [Package] -> IO ()
 remaining count tag pkgs = do
