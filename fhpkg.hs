@@ -425,7 +425,7 @@ newPackages :: Dist -> IO [Package]
 newPackages dist = do
   ps <- repoqueryHaskellPkgs True dist
   pps <- cmdLines "pagure" ["list", "ghc*"]
-  return $ pps \\ ps
+  filterM (\ d -> not <$> doesFileExist (d </> "dead.package")) $ pps \\ ps
 
 kojiListHaskell :: Bool -> Dist -> IO [Package]
 kojiListHaskell verbose dist = do
