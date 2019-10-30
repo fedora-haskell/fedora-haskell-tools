@@ -396,7 +396,7 @@ repoqueryHaskellPkgs verbose dist = do
     when tty $ warning "Getting packages from repoquery"
   let repo = distRepo dist
       updates = maybeToList $ distUpdates dist
-  bin <- words <$> repoquery dist (["--repo=" ++ repo ++ "-source"] ++ ["--repo=" ++ u  ++ "-source" | u <- updates] ++ ["--qf=%{name}", "--whatrequires", "ghc-Cabal-devel"])
+  bin <- words <$> repoquery dist (["--repo=" ++ repo ++ "-source"] ++ ["--repo=" ++ u  ++ "-source" | u <- updates] ++ ["--qf=%{name}", "--whatrequires", "ghc-Cabal-*"])
   when (null bin) $ error "No packages using ghc-Cabal-devel found!"
   return $ sort $ nub bin
 
