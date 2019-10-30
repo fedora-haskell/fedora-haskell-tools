@@ -1,4 +1,16 @@
-* 0.8 (2019-04-26)
+# 0.9 (2019-10-30)
+- changes for Fedora 31
+- ghc now lives in ../
+- 'list' now repoqueries for Haskell packages
+- new commands: 'cblrpm', 'depends', 'diffstat', 'fetch'
+- 'refresh' gained -n
+- setTermTitle for Koji builds
+- some commands now only print header if there's output
+- fhbz: no longer assumes haskell-devel CC, and sets Fixed In: nvr
+- hackageRelease moved from fedora-dists
+- no longer cache overrides in .fhbuilt
+
+# 0.8 (2019-04-26)
 - remaining --counting option
 - make kojiWatchTask safe by checking taskinfo status
 - move distTag and distTarget from fedora-dists to Dist
@@ -9,7 +21,7 @@
 - use simple-cmd-opts-0.1.1 option wrappers
 - fix Hackage data generation repoqueries
 
-* 0.7 (2019-02-28)
+# 0.7 (2019-02-28)
 - merge fhbuild into fhpkg (please delete fhbuild)
 - use simple-cmd and fedora-dists
 - fhpkg:
@@ -23,7 +35,7 @@
 - new fhmock program
 - use Dist type
 
-* 0.6 (2018-08-07)
+# 0.6 (2018-08-07)
 - fhpkg
   - new commands: hackage-compare, merge, missing, count, leaf, unpushed, head-origin
   - command options including arguments and global options
@@ -43,7 +55,7 @@
 - ghc-8.4
 - lot refactoring for utils etc
 
-* 0.5 (2018-02-16)
+# 0.5 (2018-02-16)
 - fhpkg
   - add commands for prep, refresh, diff-origin, push, and commit
   - only update hackages
@@ -62,14 +74,14 @@
   - repoquery koji build repo
   - add bump command
 
-* 0.4 (2017-12-05)
+# 0.4 (2017-12-05)
 - new commands: clone-new, diff-stackage, diff-branch
 - fix hackage distro data output
 - check spec file exists
 - fix cloning of missing branch dirs
 - allow no dist arg before pkg arg
 
-* 0.3 (2017-10-24)
+# 0.3 (2017-10-24)
 - initial release with fhbuild, fhbz, and fhpkg
 
 # Local Variables:

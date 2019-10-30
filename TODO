@@ -3,6 +3,9 @@
 - filter out ghc-prof & ghc-doc deps, ghc-rpm-macros removal?, ghc-srpm-macros
 - filter xmonad and pandoc-pdf from install
 
+- bodhi overrides not happened for chain deps
+- check update deps in candidate tag
+
 # fhpkg
 - only print header if output
 - license-check command
