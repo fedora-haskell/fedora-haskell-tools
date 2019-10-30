@@ -14,12 +14,15 @@
 
 module Main where
 
+#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,13,0))
+#else
 import Control.Applicative (optional, some, (<|>)
 #if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,0))
 #else
                            , pure, (<$>), (<*>)
 #endif
                            )
+#endif
 import Control.Monad (filterM, unless, when, (>=>))
 import Data.Maybe
 import Data.List (intercalate, isInfixOf, isPrefixOf, nub, sort, (\\))

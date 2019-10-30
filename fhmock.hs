@@ -11,7 +11,10 @@
 -- the Free Software Foundation, either version 3 of the License, or
 -- (at your option) any later version.
 
+#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,13,0))
+#else
 import Control.Applicative (many, pure, some)
+#endif
 import Data.List (sort)
 import System.Environment (getArgs)
 
