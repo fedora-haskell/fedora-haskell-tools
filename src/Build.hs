@@ -234,8 +234,7 @@ build topdir msubpkg mlast waitrepo mode dist (pkg:rest) = do
               if eqNVR nvr latest
                 then do
                 putStrLn $ fromJust latest +-+ "already built!"
-                unless (null rest) $ --do
-                  --kojiWaitPkg topdir dist nvr
+                unless (null rest) $
                   build topdir Nothing Nothing False Chain dist rest
                 else do
                 git_ "diff" []
