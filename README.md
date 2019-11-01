@@ -20,10 +20,6 @@ For updates built in Koji, buildroot overrides are created and waited for.
 Chain builds packages with wait-repo.
 Also checks that updated dependencies have been built first.
 
-Please be careful when using the build commands:
-eg for Rawhide this can easily cause package builds to take place in Koji
-when packages haven't been built yet for the latest disttag.
-
 See TODO for more planned features.
 
 
