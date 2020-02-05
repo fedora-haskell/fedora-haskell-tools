@@ -29,7 +29,7 @@ import Control.Monad (when)
 import Data.List (isPrefixOf, isSuffixOf, nub, (\\))
 import Data.Maybe (isJust, isNothing)
 import System.Directory (doesDirectoryExist, findExecutable)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
 -- die is available in ghc-7.10 base-4.8
 import System.Exit (ExitCode (..), exitFailure, exitWith)
 
@@ -146,7 +146,7 @@ haskellSrcPkgs ::  FilePath -> Dist -> [Package] -> IO [Package]
 haskellSrcPkgs topdir dist brs = do
   ghcLibs <- do
     let branch = distBranch dist
-    ghcDir <- pkgDir "ghc" branch (topdir </> "..")
+    ghcDir <- pkgDir "ghc" branch (takeDirectory topdir)
     map removeLibSuffix . filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}") (ghcDir </> "ghc.spec")
   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (map removeLibSuffix brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
   nub <$> mapM (derefSrcPkgRelax topdir dist) hdeps
