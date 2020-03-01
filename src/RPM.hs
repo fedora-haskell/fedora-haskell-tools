@@ -34,7 +34,7 @@ import System.FilePath ((</>), takeDirectory)
 import System.Exit (ExitCode (..), exitFailure, exitWith)
 
 import Dist (distTag)
-import FedoraDists (Dist, distBranch, dists, releaseVersion)
+import Distribution.Fedora (Dist, distBranch, distVersion, getFedoraDists, getLatestFedoraDist)
 import SimpleCmd (cmd, removeStrictPrefix, removeSuffix, sudo_, warning, (+-+))
 import qualified SimpleCmd.Rpm as S
 
@@ -67,14 +67,16 @@ repoquery :: Dist -> [String] -> IO String
 repoquery dist args = do
   havednf <- optionalProgram "dnf"
   let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet"]) else ("repoquery", [])
-      releasever = ["--releasever=" ++ releaseVersion dist]
+  branched <- getLatestFedoraDist
+  let releasever = ["--releasever=" ++ distVersion branched dist]
   cmd prog (subcmd ++ releasever ++ args)
 
 repoquerySrc :: Dist -> String -> IO (Maybe String)
 repoquerySrc dist key = do
   havednf <- optionalProgram "dnf"
   let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}"]
-      repo = if dist `elem` dists
+  dists <- getFedoraDists
+  let repo = if dist `elem` dists
              then ["--repo=koji-buildroot", "--repofrompath", "koji-buildroot,https://kojipkgs.fedoraproject.org/repos" </> distTag dist </> "latest/x86_64/"]
              else []
   res <- words <$> repoquery dist (srcflag ++ repo ++ ["--whatprovides", key])
@@ -145,7 +147,8 @@ haskellTools = ["alex", "cabal-install", "gtk2hs-buildtools", "happy", "hspec-di
 haskellSrcPkgs ::  FilePath -> Dist -> [Package] -> IO [Package]
 haskellSrcPkgs topdir dist brs = do
   ghcLibs <- do
-    let branch = distBranch dist
+    branched <- getLatestFedoraDist
+    let branch = distBranch branched dist
     ghcDir <- pkgDir "ghc" branch (takeDirectory topdir)
     map removeLibSuffix . filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}") (ghcDir </> "ghc.spec")
   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (map removeLibSuffix brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))

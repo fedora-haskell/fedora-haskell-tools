@@ -18,6 +18,7 @@ module Koji (kojiBuilding,
              kojicmd,
              kojiLatestPkg,
              kojiListPkgs,
+             kojiListTags,
              kojiWaitPkg,
              notInKoji,
              rpkg,
@@ -37,8 +38,8 @@ import System.Exit (ExitCode (..))
 import System.FilePath ((</>), (<.>))
 import System.Process (readProcessWithExitCode, rawSystem)
 
-import FedoraDists (Dist, kojicmd, rpkg)
-import SimpleCmd (cmd, cmd_, cmdBool, cmdLines, grep_, logMsg,
+import Distribution.Fedora (Dist, kojicmd, rpkg)
+import SimpleCmd (cmd, cmd_, cmdBool, cmdLines, cmdMaybe, cmdN, grep_, logMsg,
                   removePrefix, removeStrictPrefix, warning, (+-+))
 import Dist (distTag, distTarget)
 import RPM (pkgDir)
@@ -100,10 +101,18 @@ kojiListPkgs :: Dist -> IO [String]
 kojiListPkgs dist =
   words <$> cmd (kojicmd dist) ["list-pkgs", "--tag=" ++ distTag dist]
 
-rpkgBuild :: FilePath -> Dist -> String -> Bool -> IO ()
-rpkgBuild topdir dist nvr waitrepo = do
+kojiListTags :: Dist -> String -> IO [String]
+kojiListTags dist nvr = do
+  res <- cmdMaybe (kojicmd dist) ["list-tags", "--build=" ++ nvr]
+  return $ maybe [] words res
+
+rpkgBuild :: Dist -> String -> IO ()
+rpkgBuild dist nvr = do
   giturl <- cmd (rpkg dist) ["giturl"]
   setTermTitle $ removePrefix "ghc-" nvr
+  -- FIXME switch to cmdLog later
+  cmd_ "date" []
+  cmdN (kojicmd dist) ["build", "--nowait", "--fail-fast", distTarget dist, giturl]
   out <- cmd (kojicmd dist) ["build", "--nowait", "--fail-fast", distTarget dist, giturl]
   putStrLn out
   let task = last . words . head $ lines out
@@ -112,7 +121,6 @@ rpkgBuild topdir dist nvr waitrepo = do
   if success
     then do
     logMsg $ nvr ++ " built"
-    when waitrepo $ kojiWaitPkg topdir dist nvr
     else do
     now <- getCurrentTime
     -- koji srpms typically take 2 minutes
@@ -167,4 +175,3 @@ cmdFragile_ c as = do
       warning $ "retrying \"" ++ c +-+ unwords as ++ "\""
       threadDelay 2000000
       cmdFragile_ c as
-

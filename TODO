@@ -1,3 +1,17 @@
+- counts package list too (otherwise all)
+- don't "== ==" deps until confirming unbuilt
+- prevent building nvr downgrades
+- detect started koji (srpm) tasks which are not builds yet
+- chain --no-check (to replace koji)
+- hledger think ghc-yesod-static-prof -> ghc-yesod-static -> ghc-yesod??
+  - maybe rpmbuild-order too?
+  - can cabal repl load libHS*.a? (if no .so)
+- if unbumped subpackages check that release is bumped
+- ghc.spec needs ghc-rpm-macros-extra to list libs
+
+- fix fhmock shell dist
+
+- better unbranched command: pkg branches
 - warn about unpushed commit(s) without any bump
 - filter out ghc-prof & ghc-doc deps, ghc-rpm-macros removal?, ghc-srpm-macros
 - filter xmonad and pandoc-pdf from install
@@ -57,7 +71,7 @@ bodhi testing query?
 - git out of sync with koji, updates
 
 # Data generation and updating
-- packages and Hackage 
+- packages and Hackage
 - dependencies and consumers
 
 # Bugs

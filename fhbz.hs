@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
--- Module      :  Bugzilla
 -- Copyright   :  (C) 2014-2018  Jens Petersen
 --
 -- Maintainer  :  Jens Petersen <petersen@fedoraproject.org>
@@ -30,7 +29,7 @@ import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
 import System.Environment (getArgs, getEnv, getProgName)
 import System.FilePath ((</>))
 
-import FedoraDists (rawhide)
+import Distribution.Fedora (Dist, getRawhideDist)
 import Koji (kojicmd)
 import SimpleCmd ((+-+), cmd, cmd_, cmdStdErr, removeStrictPrefix, removeSuffix)
 
@@ -74,7 +73,8 @@ main = do
   when (null args) $ error "must give one or more packages"
   let state = fromMaybe "NEW" $ listToMaybe $ map (\ (State s) -> s) $ filter isState opts
   bugs <- parseLines . lines <$> bugzillaQuery (["--bug_status=" ++ state, "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ ["--component=" ++ intercalate "," args])
-  mapM_ (checkBug opts) bugs
+  rawhide <- getRawhideDist
+  mapM_ (checkBug rawhide opts) bugs
 
 bugzillaQuery :: [String] -> IO String
 bugzillaQuery args = cmd "bugzilla" ("query":args)
@@ -90,8 +90,8 @@ parseLines (bid:bcomp:bst:bsum:bwh:rest) =
   BugState bid bcomp bst bsum bwh : parseLines rest
 parseLines _ = error "Bad bugzilla query output!"
 
-checkBug :: [Flag] -> BugState -> IO ()
-checkBug opts (BugState bid bcomp _bst bsum bwh) =
+checkBug :: Dist -> [Flag] -> BugState -> IO ()
+checkBug rawhide opts (BugState bid bcomp _bst bsum bwh) =
   unless (bcomp `elem` excludedPkgs) $ do
     let hkg = removeGhcPrefix bcomp
         (hkgver, state) = colon bwh
@@ -102,7 +102,7 @@ checkBug opts (BugState bid bcomp _bst bsum bwh) =
     -- should not happen!
     unless (hkg `isPrefixOf` hkgver') $
       putStrLn $ "Component and Summary inconsistent!" +-+ hkg +-+ hkgver' +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
-    if Check `notElem` opts then closeBug opts bid bcomp pkgver else do
+    if Check `notElem` opts then closeBug rawhide opts bid bcomp pkgver else do
       let force = Force `elem` opts
           refresh = Refresh `elem` opts
       when (hkgver /= hkgver' || force || refresh) $ do
@@ -140,8 +140,8 @@ colon ps = (nv, if null s then "" else removeStrictPrefix ":" s)
   where
     (nv, s) = break (== ':') ps
 
-closeBug :: [Flag] -> String -> String -> String -> IO ()
-closeBug opts bid bcomp pkgver = do
+closeBug :: Dist -> [Flag] -> String -> String -> String -> IO ()
+closeBug rawhide opts bid bcomp pkgver = do
   latest <- cmd (kojicmd rawhide) ["latest-pkg", "rawhide", bcomp, "--quiet"]
   unless (null latest) $ do
     let nvr = (head . words) latest

@@ -21,7 +21,7 @@ import System.Environment (getArgs)
 import Dist (distArg)
 import Paths_fedora_haskell_tools (version)
 
-import FedoraDists (Dist, distRepo, releaseVersion)
+import Distribution.Fedora (Dist, getLatestFedoraDist, mockConfig)
 import SimpleCmd (cmd_)
 import SimpleCmdArgs
 #if (defined(MIN_VERSION_optparse_applicative) && MIN_VERSION_optparse_applicative(0,13,0))
@@ -36,7 +36,6 @@ main = do
   args <- getArgs
   simpleCmdArgs (Just version) "Fedora Haskell mock chroot tool"
     "Mock chroot setup for doing Fedora Haskell building and checking.\nYou can also use any mock command without '--'." $ subcommands $
-    map mockCmd commonMockCmds ++
     [ Subcommand "check" "Check all Haskell libs installable" $
       check <$> distArg
     , Subcommand "repoquery" "Repoquery" $
@@ -46,6 +45,7 @@ main = do
       pure $ putStrLn $ unwords $ sort allMockCmds
     ] ++
     [ Subcommand c ("Run mock " ++ c ++ " command") (runMock <$> distArg <*> optCmdArg <*> some (strArg "OPT")) | length args >= 2, let c = head args, c `elem` allMockCmds]
+    ++ map mockCmd commonMockCmds
   where
     mockCmd :: (String, Bool, String, Bool, String) -> Subcommand
     mockCmd (com,needarg,var,externopt,desc) =
@@ -71,7 +71,7 @@ main = do
                      , ("install", True, "PKG", False, "Install packages")
                      , ("rebuild", True, "SRPM", False, "Build package(s)")
                      , ("remove", True, "PKG", False, "Remove package")
-                     , ("shell", False, "CMD", True, "Interactive shell command")
+                     , ("shell", False, "CMD", False, "Interactive shell command")
                      , ("update", False, "PKG", False, "Update chroot packages")
                      ]
 
@@ -92,11 +92,11 @@ repoquery dist ps = runMock dist "--dnf-cmd" $ "repoquery" : ps
 
 runMock :: Dist -> String -> [String] -> IO ()
 runMock dist c cs = do
-  let conf = distRepo dist ++ "-" ++ releaseVersion dist ++ "-x86_64"
+  branched <- getLatestFedoraDist
+  let conf = mockConfig branched dist "x86_64"
       root = conf ++ "-haskell"
   let opts = ["-r", conf, "--config-opts=root=" ++ root]
   mock_ $ opts ++ (c:cs)
 
 mock_ :: [String] -> IO ()
 mock_ = cmd_ "mock"
-

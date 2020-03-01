@@ -42,10 +42,12 @@ import System.IO (BufferMode(..), hIsTerminalDevice, hSetBuffering, stdout)
 --import System.Posix.Env (getEnv)
 import Text.CSV (parseCSV)
 
-import FedoraDists (Dist(..), distBranch, distRepo, distUpdates, rawhide)
+import Distribution.Fedora (Dist(..), distBranch, distRepo, distUpdates,
+                            getLatestFedoraDist, getRawhideDist)
+--import Distribution.Fedora.Branch (Branch(..))
 
-import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdMaybe, cmdQuiet,
-                  cmdSilent, grep_, removePrefix, shell_, warning)
+import SimpleCmd ((+-+), cmd, cmd_, cmdLines, cmdMaybe, cmdQuiet, {-cmdSilent,-}
+                  grep_, removePrefix, removeSuffix, shell_, warning)
 import SimpleCmd.Git (git, git_, gitBranch, gitDiffQuiet, isGitDir)
 import SimpleCmdArgs
 
@@ -67,83 +69,89 @@ listDirectory path =
 
 main :: IO ()
 main = do
-  hSetBuffering stdout LineBuffering
+  hSetBuffering stdout NoBuffering
   cwd <- getCurrentDirectory
+  branched <- getLatestFedoraDist
   simpleCmdArgs (Just version) "Fedora Haskell packages tool"
     "Fedora packages maintenance tool" $
-    subcommands $
+    subcommands . sort $
     [ Subcommand "checkout" "fedpkg switch-branch" $
-      repoAction_ True False (return ()) <$> distArg <*> pkgArgs
+      repoAction_ branched True False (return ()) <$> distArg <*> pkgArgs
     , Subcommand "clone"  "clone repos" $
-      clone <$> branching <*> distArg <*> pkgArgs
+      clone branched <$> branching <*> distArg <*> pkgArgs
     , Subcommand "clone-new" "clone new packages" $
-      cloneNew <$> branching <*> distArg
+      cloneNew branched <$> branching <*> distArg
     , Subcommand "cblrpm" "Run cblrpm command" $
-      cblrpm <$> strOptionWith 'c' "cmd" "CMD" "command to execute" <*> distArg <*> pkgArgs
+      cblrpm branched <$> strOptionWith 'c' "cmd" "CMD" "command to execute" <*> distArg <*> pkgArgs
     , Subcommand "cmd" "arbitrary command (with args)" $
-      execCmd <$> strOptionWith 'c' "cmd" "CMD" "command to execute" <*> distArg <*> pkgArgs
+      execCmd branched <$> strOptionWith 'c' "cmd" "CMD" "command to execute" <*> distArg <*> pkgArgs
     , Subcommand "count" "count number of packages" $
-      (repoqueryHaskellPkgs False >=> (print . length)) <$> distArg
+      (repoqueryHaskellPkgs branched False >=> (print . length)) <$> distArg
     , Subcommand "depends" "cabal-depends" $
-      repoAction False (Output cabalDepends) <$> distArg <*> pkgArgs
+      repoAction branched False (Output cabalDepends) <$> distArg <*> pkgArgs
     , Subcommand "diff" "git diff" $
-      gitDiff <$> optional gitFormat
+      gitDiff branched <$> optional gitFormat
       <*> optional (strOptionWith 'w' "with-branch" "BRANCH" "Branch to compare")
       <*> distArg <*> pkgArgs
     , Subcommand "diff-origin" "git diff origin" $
-      gitDiffOrigin <$> distArg <*> pkgArgs
-    , Subcommand "diff-branch" "compare branch with master" $
-      repoAction True (Header False compareRawhide) <$> distArg <*> pkgArgs
+      gitDiffOrigin branched <$> distArg <*> pkgArgs
+--    , Subcommand "diff-branch" "compare branch with master" $
+--      repoAction branched True (Header False compareRawhide) <$> distArg <*> pkgArgs
     , Subcommand "diffstat" "Show diffstat output" $
-      repoAction False (Output (const diffStat)) <$> distArg <*> pkgArgs
+      repoAction branched False (Output (const diffStat)) <$> distArg <*> pkgArgs
     , Subcommand "hackage" "generate Hackage distro data" $
-      repoqueryHackageCSV hackageRelease <$> switchRefresh
+      repoqueryHackageCSV branched hackageRelease <$> switchRefresh
     , Subcommand "hackage-compare" "compare with Hackage distro data" $
-      hackageCompare <$> switchRefresh
+      hackageCompare branched <$> switchRefresh
+    -- more or less the same as 'pushed'
     , Subcommand "head-origin" "packages with head in sync with origin" $
-      headOrigin  <$> distArg <*> pkgArgs
+      headOrigin branched <$> distArg <*> pkgArgs
     , Subcommand "leaf" "list leaf packages (slow!)" $
-      leaves <$> switchWith 'v' "deps" "show also deps" <*> distArg <*> pkgArgs
+      leaves branched <$> switchWith 'v' "deps" "show also deps" <*> distArg <*> pkgArgs
     , Subcommand "list" "list packages that BR ghc-Cabal-devel" $
-      (repoqueryHaskellPkgs False >=> putStrList) <$> distArg
+      (repoqueryHaskellPkgs branched False >=> putStrList) <$> distArg
     , Subcommand "merge" "git merge" $
-      merge <$> strOptionWith 'f' "from" "BRANCH" "specify branch to merge from" <*> distArg <*> pkgArgs
+      merge branched <$> strOptionWith 'f' "from" "BRANCH" "specify branch to merge from" <*> distArg <*> pkgArgs
     , Subcommand "missing" "missing dependency source packages" $
-      missingDeps <$> distArg <*> pkgArgs
+      missingDeps branched <$> distArg <*> pkgArgs
     , Subcommand "new" "unbuilt packages" $
-      (newPackages >=> putStrList) <$> distArg
+      (newPackages branched >=> putStrList) <$> distArg
     , Subcommand "old-packages" "packages not in repoquery" $
-      oldPackages <$> distArg <*> pkgArgs
+      oldPackages branched <$> distArg <*> pkgArgs
     , Subcommand "prep" "fedpkg prep" $
-      prep <$> distArg <*> pkgArgs
+      prep branched <$> distArg <*> pkgArgs
     , Subcommand "stackage-compare" "compare with stackage" $
-      stackageCompare <$> streamOpt <*> switchWith 'm' "missing" "only list missing packages" <*> distArg <*> pkgArgs
+      stackageCompare branched <$> streamOpt <*> switchWith 'm' "missing" "only list missing packages" <*> distArg <*> pkgArgs
     , Subcommand "commit" "fedpkg commit" $
-      commit <$> strOptionWith 'm' "message" "COMMITMSG" "commit message" <*> distArg <*> pkgArgs
+      commit branched <$> strOptionWith 'm' "message" "COMMITMSG" "commit message" <*> distArg <*> pkgArgs
     , Subcommand "fetch" "git fetch repos" $
-      repoAction_ True False (git_ "fetch" []) <$> distArg <*> pkgArgs
+      repoAction_ branched True False (git_ "fetch" []) <$> distArg <*> pkgArgs
     , Subcommand "pull" "git pull repos" $
-      repoAction_ True False (git_ "pull" ["--rebase"]) <$> distArg <*> pkgArgs
+      repoAction_ branched True False (git_ "pull" ["--rebase"]) <$> distArg <*> pkgArgs
     , Subcommand "push" "git push repos" $
-      repoAction_ True False (git_ "push" []) <$> distArg <*> pkgArgs
+      repoAction_ branched True False (git_ "push" []) <$> distArg <*> pkgArgs
+    , Subcommand "pushed" "show git pushed packages" $
+      pushed branched <$> distArg <*> pkgArgs
     , Subcommand "refresh" "cabal-rpm refresh" $
-      refresh <$> switchWith 'n' "dry-run" "Show patch but don't apply" <*> distArg <*> pkgArgs
+      refresh branched <$> switchWith 'n' "dry-run" "Show patch but don't apply" <*> distArg <*> pkgArgs
     , Subcommand "remaining" "remaining packages to be built in TAG" $
       remaining <$> switchWith 'c' "count" "show many packages left" <*> strArg "TAG" <*> pkgArgs
     , Subcommand "subpkgs" "list subpackages" $
-      repoAction True (Header True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= putStrList)) <$> distArg <*> pkgArgs
+      repoAction branched True (Header True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= putStrList)) <$> distArg <*> pkgArgs
     , Subcommand "tagged" "list koji DIST tagged builds" $
       listTagged_ <$> switchWith 's' "short" "list packages not builds" <*> strArg "TAG"
+    , Subcommand "unbranched" "packages without this branch" $
+      unbranched branched <$> distArg <*> pkgArgs
     , Subcommand "unpushed" "show unpushed commits" $
-      unpushed <$> switchWith 's' "short" "no log" <*> distArg <*> pkgArgs
+      unpushed branched <$> switchWith 's' "short" "no log" <*> distArg <*> pkgArgs
     , Subcommand "update" "cabal-rpm update" $
-      update <$> streamOpt <*> distArg <*> pkgArgs
+      update branched <$> streamOpt <*> distArg <*> pkgArgs
     , Subcommand "verrel" "show nvr of packages" $
-      verrel <$> distArg <*> pkgArgs] ++
+      verrel branched <$> distArg <*> pkgArgs] ++
     map (buildCmd cwd) [ ("install", "build locally and install")
                        , ("mock", "build in mock")
                        , ("chain", "build deps recursively in Koji")
-                       , ("koji", "build in Koji (deprecated)")
+                       , ("koji", "build in Koji (deprecated) without checking dependencies")
                        , ("pending", "show planned changes")
                        , ("changed", "show changed pkgs")
                        , ("built", "show pkgs whose NVR already built")
@@ -151,7 +159,7 @@ main = do
                        , ("not-installed", "list packages not locally installed")
                        ]
   where
-    pkgArgs = some (strArg "PKG...")
+    pkgArgs = some (removeSuffix "/" <$> strArg "PKG...")
 
     branching = switchWith 'B' "branches" "clone branch dirs (fedpkg clone -B)"
 
@@ -177,43 +185,49 @@ putStrList =
   putStr . unlines
 
 -- should make separate rhel client so -B does not need dist
-clone :: Bool -> Dist -> [Package] -> IO ()
-clone True dist pkgs = cloneAllBranches dist pkgs
-clone False dist pkgs =
-  repoAction_ True False (return ()) dist pkgs
+clone :: Dist -> Bool -> Dist -> [Package] -> IO ()
+clone _ True dist pkgs = cloneAllBranches dist pkgs
+clone branched False dist pkgs =
+  repoAction_ branched True False (return ()) dist pkgs
 
-cloneNew :: Bool -> Dist -> IO ()
-cloneNew True dist =
-  newPackages rawhide >>= cloneAllBranches dist
-cloneNew False dist =
-  newPackages dist >>= repoAction_ True False (return ()) dist
+cloneNew :: Dist -> Bool -> Dist -> IO ()
+cloneNew branched True dist = do
+  rawhide <- getRawhideDist
+  newPackages branched rawhide >>= cloneAllBranches dist
+cloneNew branched False dist =
+  newPackages branched dist >>= repoAction_ branched True False (return ()) dist
 
-execCmd :: String -> Dist -> [Package] -> IO ()
-execCmd "" _ _ = error "CMD string must be given"
-execCmd cs dist pkgs =
-  repoAction_ True True (shell_ cs) dist pkgs
+execCmd :: Dist -> String -> Dist -> [Package] -> IO ()
+execCmd _ "" _ _ = error "CMD string must be given"
+execCmd branched cs dist pkgs =
+  repoAction_ branched True True (shell_ cs) dist pkgs
 
-gitDiff :: Maybe DiffFormat -> Maybe String -> Dist -> [Package] -> IO ()
-gitDiff fmt mbrnch =
-  repoAction False (Output doGitDiff)
+gitDiff :: Dist -> Maybe DiffFormat -> Maybe String -> Dist -> [Package] -> IO ()
+gitDiff branched (Just DiffShort) mbrnch =
+  repoAction branched False (Header False doGitDiff)
   where
     doGitDiff pkg = do
       let branch = maybeToList mbrnch
+      out <- git "diff" branch
+      unless (null out) $ putStrLn pkg
+gitDiff branched fmt mbrnch =
+  repoAction branched False (Output (const doGitDiff))
+  where
+    doGitDiff = do
+      let branch = maybeToList mbrnch
           contxt = case fmt of
-                     (Just (DiffContext n)) -> ["-u", show n]
+                     (Just (DiffContext n)) -> ["--unified=" ++ show n]
                      _ -> []
-          short = fmt == Just DiffShort
       out <- git "diff" $ branch ++ contxt
-      return $ if null out then ""
-               else if short then pkg else out
+      return $ if null out then "" else out
 
-gitDiffOrigin :: Dist -> [Package] -> IO ()
-gitDiffOrigin dist =
-  repoAction False (Output (const (git "diff" [distRemote dist]))) dist
+gitDiffOrigin :: Dist -> Dist -> [Package] -> IO ()
+gitDiffOrigin branched dist =
+  repoAction branched False (Output (const (git "diff" [distRemote branched dist]))) dist
 
-stackageCompare :: String -> Bool -> Dist -> [Package] -> IO ()
-stackageCompare stream missingOnly dist =
-  repoAction True (Header False compareStackage) dist
+stackageCompare :: Dist -> String -> Bool -> Dist -> [Package] -> IO ()
+stackageCompare branched stream missingOnly dist =
+  repoAction branched True (Header False compareStackage) dist
   where
     compareStackage :: Package -> IO ()
     compareStackage p = do
@@ -233,9 +247,9 @@ stackageCompare stream missingOnly dist =
 diffStat :: IO String
 diffStat = git "diff" ["--stat"]
 
-hackageCompare :: Bool -> IO ()
-hackageCompare refreshData =
-  repoqueryHackages hackageRelease >>=
+hackageCompare :: Dist -> Bool -> IO ()
+hackageCompare branched refreshData =
+  repoqueryHackages branched hackageRelease >>=
   compareHackage hackageRelease
   where
     compareHackage :: Dist -> [Package] -> IO ()
@@ -274,19 +288,19 @@ hackageCompare refreshData =
                                        putStrLn $ pvPkg h ++ ":" +-+ pvVer h +-+ "->" +-+ pvVer f
                                        compareSets all' hs fs
 
-headOrigin :: Dist -> [Package] -> IO ()
-headOrigin dist =
-  repoAction False (Header False gitHeadAtOrigin) dist
+headOrigin :: Dist -> Dist -> [Package] -> IO ()
+headOrigin branched dist =
+  repoAction branched False (Header False gitHeadAtOrigin) dist
   where
     gitHeadAtOrigin :: Package -> IO ()
     gitHeadAtOrigin pkg = do
       -- use gitDiffQuiet
-      same <- cmdBool "git" ["diff", "--quiet", distRemote dist ++ "..HEAD"]
+      same <- gitBool "diff" ["--quiet", distRemote branched dist ++ "..HEAD"]
       when same $ putStrLn pkg
 
-leaves :: Bool -> Dist -> [Package] -> IO ()
-leaves verb =
-  repoAction True (Header verb checkLeafPkg)
+leaves :: Dist -> Bool -> Dist -> [Package] -> IO ()
+leaves branched verb =
+  repoAction branched True (Header verb checkLeafPkg)
   where
     -- FIXME: make a dependency cache
     checkLeafPkg :: Package -> IO ()
@@ -312,13 +326,13 @@ leaves verb =
               return $ any (`elem` deps) subpkgs
               else return False
 
-merge :: String -> Dist -> [Package] -> IO ()
-merge branch =
-  repoAction_ True False (git_ "merge" [branch])
+merge :: Dist -> String -> Dist -> [Package] -> IO ()
+merge branched branch =
+  repoAction_ branched True False (git_ "merge" [branch])
 
-missingDeps :: Dist -> [Package] -> IO ()
-missingDeps dist =
-  repoAction True (Output checkForMissingDeps) dist
+missingDeps :: Dist -> Dist -> [Package] -> IO ()
+missingDeps branched dist =
+  repoAction branched True (Output checkForMissingDeps) dist
   where
     checkForMissingDeps :: Package -> IO String
     checkForMissingDeps pkg = do
@@ -336,18 +350,18 @@ missingDeps dist =
           noPkgDir top dep =
             not <$> doesDirectoryExist (top </> dep)
 
-oldPackages :: Dist -> [Package] -> IO ()
-oldPackages dist pkgs = do
-  repopkgs <- repoqueryHaskellPkgs True dist
+oldPackages :: Dist -> Dist -> [Package] -> IO ()
+oldPackages branched dist pkgs = do
+  repopkgs <- repoqueryHaskellPkgs branched True dist
   putStrList (pkgs \\ repopkgs)
 
-prep :: Dist -> [Package] -> IO ()
-prep dist =
-  repoAction_ True True (cmd_ (rpkg dist) ["prep"]) dist
+prep :: Dist -> Dist -> [Package] -> IO ()
+prep branched dist =
+  repoAction_ branched True True (cmd_ (rpkg dist) ["prep"]) dist
 
-commit :: String -> Dist -> [Package] -> IO ()
-commit logmsg dist =
-  repoAction False (Output (const commitChanges)) dist
+commit :: Dist -> String -> Dist -> [Package] -> IO ()
+commit branched logmsg dist =
+  repoAction branched False (Output (const commitChanges)) dist
   where
     commitChanges :: IO String
     commitChanges = do
@@ -356,25 +370,34 @@ commit logmsg dist =
         then return ""
         else cmd (rpkg dist) ["commit", "-m", logmsg]
 
-unpushed :: Bool -> Dist -> [Package] -> IO ()
-unpushed nolog dist =
-  repoAction True (Header False gitLogOneLine) dist
+unpushed :: Dist -> Bool -> Dist -> [Package] -> IO ()
+unpushed branched nolog dist =
+  repoAction branched True (Header False gitLogOneLine) dist
   where
     gitLogOneLine :: Package -> IO ()
     gitLogOneLine pkg = do
-      out <- git "log" [distRemote dist ++ "..HEAD", "--pretty=oneline"]
+      out <- git "log" [distRemote branched dist ++ "..HEAD", "--pretty=oneline"]
       unless (null out) $
         putStrLn $ pkg ++ if nolog then "" else (unwords . map replaceHash . words) out
         where
           replaceHash h = if length h /= 40 then h else ":"
 
-verrel :: Dist -> [Package] -> IO ()
-verrel dist =
-  repoAction_ False True (cmd_ (rpkg dist) ["verrel"]) dist
+pushed :: Dist -> Dist -> [Package] -> IO ()
+pushed branched dist =
+  repoAction branched True (Header False checkPushed) dist
+  where
+    checkPushed :: Package -> IO ()
+    checkPushed pkg = do
+      out <- git "log" [distRemote branched dist ++ "..HEAD", "--pretty=oneline"]
+      when (null out) $ putStrLn pkg
 
-repoqueryHackageCSV :: Dist -> Bool -> IO ()
-repoqueryHackageCSV dist refreshData = do
-  pkgs <- repoqueryHackages dist
+verrel :: Dist -> Dist -> [Package] -> IO ()
+verrel branched dist =
+  repoAction_ branched False True (cmd_ (rpkg dist) ["verrel"]) dist
+
+repoqueryHackageCSV :: Dist -> Dist -> Bool -> IO ()
+repoqueryHackageCSV branched dist refreshData = do
+  pkgs <- repoqueryHackages branched dist
   -- Hackage csv chokes on final newline so remove it
   init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://apps.fedoraproject.org/packages/%{source_name}\""] ++ ["--refresh" | refreshData] ++ pkgs) >>= putStr
 
@@ -396,20 +419,20 @@ replace a b s@(x:xs) =
   else x:replace a b xs
 replace _ _ [] = []
 
-repoqueryHaskellPkgs :: Bool -> Dist -> IO [Package]
-repoqueryHaskellPkgs verbose dist = do
+repoqueryHaskellPkgs :: Dist -> Bool -> Dist -> IO [Package]
+repoqueryHaskellPkgs branched verbose dist = do
   when verbose $ do
     tty <- hIsTerminalDevice stdout
     when tty $ warning "Getting packages from repoquery"
-  let repo = distRepo dist
-      updates = maybeToList $ distUpdates dist
+  let repo = distRepo branched dist
+      updates = maybeToList $ distUpdates branched dist
   bin <- words <$> repoquery dist (["--repo=" ++ repo ++ "-source"] ++ ["--repo=" ++ u  ++ "-source" | u <- updates] ++ ["--qf=%{name}", "--whatrequires", "ghc-Cabal-*"])
   when (null bin) $ error "No packages using ghc-Cabal-devel found!"
   return $ sort $ nub bin
 
-repoqueryHackages :: Dist -> IO [Package]
-repoqueryHackages dist = do
-  srcs <- repoqueryHaskellPkgs False dist
+repoqueryHackages :: Dist -> Dist -> IO [Package]
+repoqueryHackages branched dist = do
+  srcs <- repoqueryHaskellPkgs branched False dist
   libs <- repoqueryHaskellLibs False
   let binsrcs = filter (not . ("ghc-" `isPrefixOf`)) srcs
       sublibs = libs \\ map ("ghc-" ++) binsrcs
@@ -418,15 +441,15 @@ repoqueryHackages dist = do
     repoqueryHaskellLibs :: Bool -> IO [Package]
     repoqueryHaskellLibs verbose = do
       when verbose $ putStrLn "Getting libraries from repoquery"
-      let repo = distRepo dist
-          updates = maybeToList $ distUpdates dist
+      let repo = distRepo branched dist
+          updates = maybeToList $ distUpdates branched dist
       bin <- words <$> repoquery dist (["--repo=" ++ repo] ++ ["--repo=" ++ u | u <- updates] ++ ["--qf=%{name}", "--whatprovides", "libHS*-ghc*.so()(64bit)"])
       when (null bin) $ error "No libHS*.so providers found!"
       return $ sort $ nub bin
 
-newPackages :: Dist -> IO [Package]
-newPackages dist = do
-  ps <- repoqueryHaskellPkgs True dist
+newPackages :: Dist -> Dist -> IO [Package]
+newPackages branched dist = do
+  ps <- repoqueryHaskellPkgs branched True dist
   pps <- cmdLines "pagure" ["list", "ghc*"]
   filterM (\ d -> not <$> doesFileExist (d </> "dead.package")) $ pps \\ (ps ++ ["ghc", "ghc-rpm-macros", "ghc-srpm-macros"])
 
@@ -463,11 +486,11 @@ showHeader :: Action -> Bool
 showHeader (Header b _) = b
 showHeader (Output _) = False
 
-repoAction :: Bool -> Action -> Dist -> [Package] -> IO ()
-repoAction _ _ _ [] = return ()
-repoAction needsSpec action dist (pkg:rest) = do
+repoAction :: Dist -> Bool -> Action -> Dist -> [Package] -> IO ()
+repoAction _ _ _ _ [] = return ()
+repoAction branched needsSpec action dist (pkg:rest) = do
   withCurrentDirectory "." $ do
-    let branch = distBranch dist
+    let branch = distBranch branched dist
     when (showHeader action) $
       putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
     -- muser <- getEnv "USER"
@@ -512,37 +535,37 @@ repoAction needsSpec action dist (pkg:rest) = do
               unless (null out) $ do
                 putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
                 putStrLn out
-  repoAction needsSpec action dist rest
+  repoAction branched needsSpec action dist rest
 
 -- io independent of package
-repoAction_ :: Bool -> Bool -> IO () -> Dist -> [Package] -> IO ()
-repoAction_ header needsSpec action =
-  repoAction needsSpec (Header header (const action))
+repoAction_ :: Dist -> Bool -> Bool -> IO () -> Dist -> [Package] -> IO ()
+repoAction_ branched header needsSpec action =
+  repoAction branched needsSpec (Header header (const action))
 
-compareRawhide :: Package -> IO ()
-compareRawhide p = do
-  let spec = p <.> "spec"
-  nvr <- removeDisttag . unwords <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
-  nvr' <- withCurrentDirectory "../master" $ do
-    haveSpec <- doesFileExist spec
-    unless haveSpec $ cmdSilent "git" ["pull"]
-    removeDisttag . unwords <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
-  if nvr == nvr'
-    then putStrLn nvr
-    else do
-    putStrLn nvr
-    putStrLn nvr'
-  putStrLn ""
-  where
-    removeDisttag = reverse . tail . dropWhile (/= '.') . reverse
+-- compareRawhide :: Package -> IO ()
+-- compareRawhide p = do
+--   let spec = p <.> "spec"
+--   nvr <- removeDisttag . unwords <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
+--   nvr' <- withBranch "master" $ do
+--     haveSpec <- doesFileExist spec
+--     unless haveSpec $ cmdSilent "git" ["pull"]
+--     removeDisttag . unwords <$> rpmspec ["--srpm"] (Just "%{name}-%{version}-%{release}") spec
+--   if nvr == nvr'
+--     then putStrLn nvr
+--     else do
+--     putStrLn nvr
+--     putStrLn nvr'
+--   putStrLn ""
+--   where
+--     removeDisttag = reverse . tail . dropWhile (/= '.') . reverse
 
 isFromHackage :: Package -> IO Bool
 isFromHackage pkg =
   grep_ "hackage.haskell.org/package/" $ pkg <.> "spec"
 
-update :: String -> Dist -> [Package] -> IO ()
-update stream =
-  repoAction True (Header True doUpdate)
+update :: Dist -> String -> Dist -> [Package] -> IO ()
+update branched stream =
+  repoAction branched True (Header True doUpdate)
   where
     doUpdate :: Package -> IO ()
     doUpdate pkg = do
@@ -551,9 +574,9 @@ update stream =
         then cmd_ "cabal-rpm" ["update", "-s", stream]
         else putStrLn "skipping since not hackage"
 
-refresh :: Bool -> Dist -> [Package] -> IO ()
-refresh dryrun =
-  repoAction True (Header True refreshPkg)
+refresh :: Dist -> Bool -> Dist -> [Package] -> IO ()
+refresh branched dryrun =
+  repoAction branched True (Header True refreshPkg)
   where
     refreshPkg :: Package -> IO ()
     refreshPkg pkg = do
@@ -594,13 +617,40 @@ cabalDepends p = do
     cmdQuiet "cabal-depends" ["--not-build", "--unique"]
     else return ""
 
-cblrpm :: String -> Dist -> [Package] -> IO ()
-cblrpm "" = error "CMD string must be given"
-cblrpm cs =
-  repoAction True (Header True doCblRpm)
+cblrpm :: Dist -> String -> Dist -> [Package] -> IO ()
+cblrpm _ "" = error "CMD string must be given"
+cblrpm branched cs =
+  repoAction branched True (Header True doCblRpm)
   where
     doCblRpm :: Package -> IO ()
     doCblRpm p = do
     hckg <- isFromHackage p
     when hckg $
       cmd_ "cblrpm" [cs]
+
+unbranched :: Dist -> Dist -> [Package] -> IO ()
+unbranched branched dist =
+  mapM_ checkBranch
+  where
+    checkBranch :: Package -> IO ()
+    checkBranch pkg =
+      withCurrentDirectory pkg $ do
+      dead <- doesFileExist "dead.package"
+      unless dead $ do
+        let distbranch = distBranch branched dist
+        branch <- gitBool "show-ref" ["--verify", "--quiet", "refs/heads/" ++ distbranch]
+        unless branch $ do
+          remotebranch <- gitBool "ls-remote" ["--exit-code", "--refs", "origin", distbranch]
+          unless remotebranch $
+            putStrLn pkg
+
+#if (defined(MIN_VERSION_simple_cmd) && MIN_VERSION_simple_cmd(0,2,2))
+#else
+-- | 'gitBool c args' runs git command and return result
+gitBool :: String -- ^ git command
+        -> [String] -- ^ arguments
+        -> IO Bool -- ^ result
+gitBool c args = do
+  mout <- cmdMaybe "git" (c:args)
+  return $ isJust mout
+#endif
