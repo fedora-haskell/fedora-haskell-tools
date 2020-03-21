@@ -23,7 +23,7 @@ import Control.Applicative (optional, some, (<|>)
 #endif
                            )
 #endif
-import Control.Monad (filterM, unless, void, when, (>=>))
+import Control.Monad (filterM, unless, when, (>=>))
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Maybe
@@ -259,9 +259,10 @@ hackageUpload branched refreshData = do
   req <- setRequestBasicAuth username password .
          setRequestBodyLBS (BL.pack csv) .
          addRequestHeader hContentType (B.pack "text/csv") .
-         setRequestCheckStatus <$>
-         parseRequest "PUT https://hackage.haskell.org/distro/Fedora/packages.csv"
-  void $ httpLbs (req)
+         setRequestMethod methodPut <$>
+         parseRequestThrow "https://hackage.haskell.org/distro/Fedora/packages.csv"
+  resp <- httpLbs req
+  BL.putStrLn $ getResponseBody resp
   where
     repoqueryHackageCSV :: Dist -> IO String
     repoqueryHackageCSV dist = do
