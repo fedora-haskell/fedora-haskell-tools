@@ -267,8 +267,8 @@ hackageUpload branched refreshData = do
     repoqueryHackageCSV :: Dist -> IO String
     repoqueryHackageCSV dist = do
       pkgs <- repoqueryHackages branched hackageRelease
-      -- Hackage csv chokes on final newline so remove it
-      init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{source_name}\""] ++ ["--refresh" | refreshData] ++ pkgs)
+      -- Hackage csv chokes on a final newline
+      intercalate "\n" . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{source_name}\""] ++ ["--refresh" | refreshData] ++ pkgs)
 
 hackageCompare :: Dist -> Bool -> IO ()
 hackageCompare branched refreshData =
