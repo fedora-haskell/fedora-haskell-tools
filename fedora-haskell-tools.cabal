@@ -30,7 +30,7 @@ Executable fhpkg
                    fedora-dists >= 2.0,
                    filepath,
                    HTTP,
-                   http-conduit,
+                   http-conduit >= 2.3.2,
                    http-types,
                    optparse-applicative,
                    process,
