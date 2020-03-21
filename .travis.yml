@@ -15,4 +15,5 @@ ghc:
 install:
 - cabal new-update
 script:
+- cabal new-configure
 - cabal new-build
