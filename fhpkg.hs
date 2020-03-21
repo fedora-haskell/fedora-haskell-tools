@@ -23,12 +23,16 @@ import Control.Applicative (optional, some, (<|>)
 #endif
                            )
 #endif
-import Control.Monad (filterM, unless, when, (>=>))
+import Control.Monad (filterM, unless, void, when, (>=>))
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Maybe
 import Data.List (intercalate, isInfixOf, isPrefixOf, nub, sort, (\\))
 
 import Data.List.Split (splitOn)
-import Network.HTTP (getRequest, getResponseBody, simpleHTTP)
+import qualified Network.HTTP as H
+import Network.HTTP.Simple
+import Network.HTTP.Types
 import System.Directory (doesDirectoryExist, doesFileExist,
                          getCurrentDirectory, getHomeDirectory,
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
@@ -99,8 +103,8 @@ main = do
 --      repoAction branched True (Header False compareRawhide) <$> distArg <*> pkgArgs
     , Subcommand "diffstat" "Show diffstat output" $
       repoAction branched False (Output (const diffStat)) <$> distArg <*> pkgArgs
-    , Subcommand "hackage" "generate Hackage distro data" $
-      repoqueryHackageCSV branched hackageRelease <$> switchRefresh
+    , Subcommand "hackage-upload" "upload Hackage distro data" $
+      hackageUpload branched <$> switchRefresh
     , Subcommand "hackage-compare" "compare with Hackage distro data" $
       hackageCompare branched <$> switchRefresh
     -- more or less the same as 'pushed'
@@ -247,6 +251,24 @@ stackageCompare branched stream missingOnly dist =
 diffStat :: IO String
 diffStat = git "diff" ["--stat"]
 
+hackageUpload :: Dist -> Bool -> IO ()
+hackageUpload branched refreshData = do
+  csv <- repoqueryHackageCSV hackageRelease
+  home <- getHomeDirectory
+  [username, password] <- map B.pack . words <$> readFile (home </> ".fedora/hackage.auth")
+  req <- setRequestBasicAuth username password .
+         setRequestBodyLBS (BL.pack csv) .
+         addRequestHeader hContentType (B.pack "text/csv") .
+         setRequestCheckStatus <$>
+         parseRequest "PUT https://hackage.haskell.org/distro/Fedora/packages.csv"
+  void $ httpLbs (req)
+  where
+    repoqueryHackageCSV :: Dist -> IO String
+    repoqueryHackageCSV dist = do
+      pkgs <- repoqueryHackages branched hackageRelease
+      -- Hackage csv chokes on final newline so remove it
+      init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{source_name}\""] ++ ["--refresh" | refreshData] ++ pkgs)
+
 hackageCompare :: Dist -> Bool -> IO ()
 hackageCompare branched refreshData =
   repoqueryHackages branched hackageRelease >>=
@@ -254,7 +276,7 @@ hackageCompare branched refreshData =
   where
     compareHackage :: Dist -> [Package] -> IO ()
     compareHackage dist pkgs' = do
-      hck <- simpleHTTP (getRequest "http://hackage.haskell.org/distro/Fedora/packages.csv") >>= getResponseBody
+      hck <- H.simpleHTTP (H.getRequest "http://hackage.haskell.org/distro/Fedora/packages.csv") >>= H.getResponseBody
       let hackage = sort . either (error "Malformed Hackage csv") (map mungeHackage) $ parseCSV "packages.csv" hck
       sort . map mungeRepo . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ ["--refresh" | refreshData] ++ pkgs') >>=
         compareSets True hackage
@@ -394,12 +416,6 @@ pushed branched dist =
 verrel :: Dist -> Dist -> [Package] -> IO ()
 verrel branched dist =
   repoAction_ branched False True (cmd_ (rpkg dist) ["verrel"]) dist
-
-repoqueryHackageCSV :: Dist -> Dist -> Bool -> IO ()
-repoqueryHackageCSV branched dist refreshData = do
-  pkgs <- repoqueryHackages branched dist
-  -- Hackage csv chokes on final newline so remove it
-  init . unlines . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{source_name}\""] ++ ["--refresh" | refreshData] ++ pkgs) >>= putStr
 
 data PkgVer = PV { pvPkg :: String, pvVer :: String}
   deriving (Eq)

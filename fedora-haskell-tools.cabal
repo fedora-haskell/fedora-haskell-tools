@@ -24,11 +24,14 @@ source-repository head
 Executable fhpkg
     Main-is:       fhpkg.hs
     Build-depends: base >= 4.6 && < 5,
+                   bytestring,
                    csv,
                    directory,
                    fedora-dists >= 2.0,
                    filepath,
                    HTTP,
+                   http-conduit,
+                   http-types,
                    optparse-applicative,
                    process,
                    simple-cmd >= 0.2.0,
