@@ -1,0 +1,5 @@
+resolver: lts-14.27
+
+extra-deps:
+  - git: https://github.com/juhp/fedora-dists.git
+    commit: 5e4d8af6ed33332cdf378e7c10b0d53b1307d4dc
