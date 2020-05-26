@@ -51,7 +51,7 @@ withCurrentDirectory dir action =
 
 checkPkgsGit :: IO Bool
 checkPkgsGit =
-  grepGitConfig "\\(pkgs\\|src\\)."
+  grepGitConfig "@\\(pkgs\\|src\\)\\."
 
 -- git :: String -> [String] -> IO String
 -- git c as =
