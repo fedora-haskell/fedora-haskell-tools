@@ -8,6 +8,9 @@
   - can cabal repl load libHS*.a? (if no .so)
 - if unbumped subpackages check that release is bumped
 - ghc.spec needs ghc-rpm-macros-extra to list libs
+- map lts to minor version
+- "stackage" tool is broken (stackage-compare)
+- drop HTTP lib
 
 - fix fhmock shell dist
 
