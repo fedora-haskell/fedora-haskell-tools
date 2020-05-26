@@ -27,7 +27,7 @@ import Control.Monad (filterM, unless, when, (>=>))
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Maybe
-import Data.List (intercalate, isInfixOf, isPrefixOf, nub, sort, (\\))
+import Data.List (delete, intercalate, isInfixOf, isPrefixOf, nub, sort, (\\))
 
 import Data.List.Split (splitOn)
 import qualified Network.HTTP as H
@@ -462,7 +462,7 @@ repoqueryHackages branched dist = do
   libs <- repoqueryHaskellLibs False
   let binsrcs = filter (not . ("ghc-" `isPrefixOf`)) srcs
       sublibs = libs \\ map ("ghc-" ++) binsrcs
-  return $ sort $ nub (srcs ++ sublibs)
+  return $ sort $ nub (delete "haskell-platform" srcs ++ sublibs)
   where
     repoqueryHaskellLibs :: Bool -> IO [Package]
     repoqueryHaskellLibs verbose = do
