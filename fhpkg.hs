@@ -24,7 +24,7 @@ import Control.Applicative (optional, some, (<|>)
                            )
 #endif
 import Control.Monad (filterM, unless, when, (>=>))
-import Control.Monad.Extra (mapMaybeM)
+import Control.Monad.Extra (mapMaybeM, unlessM, whenJustM)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Maybe
@@ -546,24 +546,25 @@ repoAction branched needsSpec action dist (pkg:rest) = do
           else return False
       unless pkggit $
         error $ "not a Fedora pkg git dir!:" +-+ wd
-      when dirExists $ do
-        actual <- gitBranch
-        when (branch /= actual) $
-          cmd_ (rpkg dist) ["switch-branch", branch]
-      isDead <- doesFileExist "dead.package"
-      unless isDead $ do
-        let spec = pkg <.> "spec"
-        hasSpec <- doesFileExist spec
-        -- FIXME: silence for cmds that only output package names (eg unpushed -s)
-        unless hasSpec $ putStrLn $ (if showHeader action then "" else pkg ++ ": ") ++ "No spec file!"
-        unless (needsSpec && not hasSpec) $
-          case action of
-            Header _ act -> act pkg
-            Output act -> do
-              out <- act pkg
-              unless (null out) $ do
-                putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
-                putStrLn out
+      actual <- gitBranch
+      when (branch /= actual) $
+        whenJustM (cmdMaybe (rpkg dist) ["switch-branch", branch]) $ \ out ->
+        when (showHeader action) $ putStrLn out
+      currentBranch <- gitBranch
+      when (branch == currentBranch) $
+        unlessM (doesFileExist "dead.package") $ do
+          let spec = pkg <.> "spec"
+          hasSpec <- doesFileExist spec
+          -- FIXME: silence for cmds that only output package names (eg unpushed -s)
+          unless hasSpec $ putStrLn $ (if showHeader action then "" else pkg ++ ": ") ++ "No spec file!"
+          unless (needsSpec && not hasSpec) $
+            case action of
+              Header _ act -> act pkg
+              Output act -> do
+                out <- act pkg
+                unless (null out) $ do
+                  putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
+                  putStrLn out
   repoAction branched needsSpec action dist rest
 
 -- io independent of package
