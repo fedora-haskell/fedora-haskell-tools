@@ -27,6 +27,7 @@ Executable fhpkg
                    bytestring,
                    csv,
                    directory,
+                   extra,
                    fedora-dists >= 2.0,
                    filepath,
                    HTTP,

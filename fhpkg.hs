@@ -24,6 +24,7 @@ import Control.Applicative (optional, some, (<|>)
                            )
 #endif
 import Control.Monad (filterM, unless, when, (>=>))
+import Control.Monad.Extra (mapMaybeM)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Maybe
@@ -142,6 +143,8 @@ main = do
       remaining <$> switchWith 'c' "count" "show many packages left" <*> strArg "TAG" <*> pkgArgs
     , Subcommand "subpkgs" "list subpackages" $
       repoAction branched True (Header True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= putStrList)) <$> distArg <*> pkgArgs
+    , Subcommand "subpackaged" "list subpackaged libraries" $
+      subpackaged branched <$> distArg <*> pkgArgs
     , Subcommand "tagged" "list koji DIST tagged builds" $
       listTagged_ <$> switchWith 's' "short" "list packages not builds" <*> strArg "TAG"
     , Subcommand "unbranched" "packages without this branch" $
@@ -669,6 +672,21 @@ unbranched branched dist =
           remotebranch <- gitBool "ls-remote" ["--exit-code", "--refs", "origin", distbranch]
           unless remotebranch $
             putStrLn pkg
+
+subpackaged :: Dist -> Dist -> [Package] -> IO ()
+subpackaged branched dist pkgs = do
+  repoAction branched True (Output listSubpkgs) dist pkgs
+  where
+    listSubpkgs pkg = do
+      msubpkgs <- fmap (drop 2 . words) <$> cmdMaybe "grep" ["%global subpkgs", pkg <.> "spec"]
+      case msubpkgs of
+        Nothing -> return ""
+        Just subpkgs ->
+          intercalate "\n" <$> mapMaybeM expand subpkgs
+      where
+        expand subpkg =
+          let macro = (init . drop 2) subpkg in
+            fmap (last . words) <$> cmdMaybe "grep" ["%global " ++ macro, pkg <.> "spec"]
 
 #if (defined(MIN_VERSION_simple_cmd) && MIN_VERSION_simple_cmd(0,2,2))
 #else
