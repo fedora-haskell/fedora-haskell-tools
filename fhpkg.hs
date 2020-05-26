@@ -125,7 +125,7 @@ main = do
     , Subcommand "prep" "fedpkg prep" $
       prep branched <$> distArg <*> pkgArgs
     , Subcommand "stackage-compare" "compare with stackage" $
-      stackageCompare branched <$> streamOpt <*> switchWith 'm' "missing" "only list missing packages" <*> distArg <*> pkgArgs
+      stackageCompare branched <$> streamOpt <*> stackageOpts <*> distArg <*> pkgArgs
     , Subcommand "commit" "fedpkg commit" $
       commit branched <$> strOptionWith 'm' "message" "COMMITMSG" "commit message" <*> distArg <*> pkgArgs
     , Subcommand "fetch" "git fetch repos" $
@@ -180,9 +180,17 @@ main = do
 
     streamOpt = strOptionalWith 's' "stream" "STACKAGESTREAM" ("Stackage stream [" ++ ltsStream ++ "]") ltsStream
 
+    stackageOpts :: Parser StkgOpt
+    stackageOpts =
+      flagWith' StkgMissing 'm' "missing" "only list missing packages" <|>
+      flagWith StkgAll StkgOnly 'o' "only" "only Stackage packages"
+
 data DiffFormat =
   DiffShort | DiffContext Int
   deriving (Eq)
+
+data StkgOpt = StkgAll | StkgOnly | StkgMissing
+  deriving Eq
 
 putStrList :: [String] -> IO ()
 putStrList =
@@ -229,8 +237,8 @@ gitDiffOrigin :: Dist -> Dist -> [Package] -> IO ()
 gitDiffOrigin branched dist =
   repoAction branched False (Output (const (git "diff" [distRemote branched dist]))) dist
 
-stackageCompare :: Dist -> String -> Bool -> Dist -> [Package] -> IO ()
-stackageCompare branched stream missingOnly dist =
+stackageCompare :: Dist -> String -> StkgOpt -> Dist -> [Package] -> IO ()
+stackageCompare branched stream opt dist =
   repoAction branched True (Header False compareStackage) dist
   where
     compareStackage :: Package -> IO ()
@@ -239,11 +247,12 @@ stackageCompare branched stream missingOnly dist =
       stkg <- cmdMaybe "stackage" ["package", stream, removePrefix "ghc-" p]
       let same = isJust stkg && (fromJust stkg ++ "-") `isInfixOf` nvr
       unless same $
-        if missingOnly
+        if opt == StkgMissing
         then when (isNothing stkg) $ putStrLn p
         else
           if isNothing stkg
-          then putStrLn $ stream ++ " missing: " ++ removePrefix "ghc-" p
+          then unless (opt == StkgOnly) $
+               putStrLn $ stream ++ " missing: " ++ removePrefix "ghc-" p
           else do
             putStrLn nvr
             putStrLn $ replicate (length (dropVerrel nvr) + 1) ' ' ++ fromJust stkg +-+ "(" ++ stream ++ ")"
