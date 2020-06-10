@@ -28,7 +28,7 @@ import Control.Monad.Extra (mapMaybeM, unlessM, whenJustM)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Maybe
-import Data.List (delete, intercalate, isInfixOf, isPrefixOf, nub, sort, (\\))
+import Data.List
 
 import Data.List.Split (splitOn)
 import qualified Network.HTTP as H
@@ -144,7 +144,7 @@ main = do
     , Subcommand "subpkgs" "list subpackages" $
       repoAction branched True (Header True (\ p -> rpmspec [] (Just "%{name}-%{version}") (p <.> "spec") >>= putStrList)) <$> distArg <*> pkgArgs
     , Subcommand "subpackaged" "list subpackaged libraries" $
-      subpackaged branched <$> distArg <*> pkgArgs
+      subpackaged branched <$> switchWith 'V' "show-versions" "Show versions" <*> distArg <*> pkgArgs
     , Subcommand "tagged" "list koji DIST tagged builds" $
       listTagged_ <$> switchWith 's' "short" "list packages not builds" <*> strArg "TAG"
     , Subcommand "unbranched" "packages without this branch" $
@@ -674,8 +674,8 @@ unbranched branched dist =
           unless remotebranch $
             putStrLn pkg
 
-subpackaged :: Dist -> Dist -> [Package] -> IO ()
-subpackaged branched dist pkgs = do
+subpackaged :: Dist -> Bool -> Dist -> [Package] -> IO ()
+subpackaged branched versions dist pkgs = do
   repoAction branched True (Output listSubpkgs) dist pkgs
   where
     listSubpkgs pkg = do
@@ -687,7 +687,10 @@ subpackaged branched dist pkgs = do
       where
         expand subpkg =
           let macro = (init . drop 2) subpkg in
-            fmap (last . words) <$> cmdMaybe "grep" ["%global " ++ macro, pkg <.> "spec"]
+            fmap (removeVersion . last . words) <$> cmdMaybe "grep" ["%global " ++ macro, pkg <.> "spec"]
+
+        removeVersion nv =
+          if versions then nv else init (dropWhileEnd (/= '-') nv)
 
 #if (defined(MIN_VERSION_simple_cmd) && MIN_VERSION_simple_cmd(0,2,2))
 #else
