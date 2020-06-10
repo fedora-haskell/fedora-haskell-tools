@@ -556,7 +556,8 @@ repoAction branched needsSpec action dist (pkg:rest) = do
           let spec = pkg <.> "spec"
           hasSpec <- doesFileExist spec
           -- FIXME: silence for cmds that only output package names (eg unpushed -s)
-          unless hasSpec $ putStrLn $ (if showHeader action then "" else pkg ++ ": ") ++ "No spec file!"
+          when (not hasSpec && showHeader action) $
+            putStrLn "No spec file!"
           unless (needsSpec && not hasSpec) $
             case action of
               Header _ act -> act pkg
