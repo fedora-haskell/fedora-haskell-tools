@@ -479,7 +479,7 @@ repoqueryHackages branched dist = do
 newPackages :: Dist -> Dist -> IO [Package]
 newPackages branched dist = do
   ps <- repoqueryHaskellPkgs branched True dist
-  pps <- cmdLines "pagure" ["list", "ghc*"]
+  pps <- cmdLines "pagure" ["list", "--namespace", "rpms", "ghc*"]
   filterM (\ d -> not <$> doesFileExist (d </> "dead.package")) $ pps \\ (ps ++ ["ghc", "ghc-rpm-macros", "ghc-srpm-macros"])
 
 kojiListHaskell :: Bool -> Dist -> IO [Package]
