@@ -521,7 +521,7 @@ repoAction branched needsSpec action dist (pkg:rest) = do
   withCurrentDirectory "." $ do
     let branch = distBranch branched dist
     when (showHeader action) $
-      putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
+      putStrLn $ "\n==" +-+ pkg +-+ branch +-+ "=="
     -- muser <- getEnv "USER"
     haveSSH <- haveSshKey
     fileExists <- doesFileExist pkg
@@ -564,7 +564,7 @@ repoAction branched needsSpec action dist (pkg:rest) = do
               Output act -> do
                 out <- act pkg
                 unless (null out) $ do
-                  putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
+                  putStrLn $ "\n==" +-+ pkg +-+ branch +-+ "=="
                   putStrLn out
   repoAction branched needsSpec action dist rest
 
