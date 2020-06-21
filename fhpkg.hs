@@ -177,7 +177,7 @@ main = do
 
     buildCmd cwd (c, desc) =
       Subcommand c desc  $
-      build cwd Nothing Nothing False (readBuildCmd c) <$> distArg <*> pkgArgs
+      build cwd Nothing False (readBuildCmd c) <$> distArg <*> pkgArgs
 
     switchRefresh = switchWith 'r' "refresh" "repoquery --refresh"
 
