@@ -2,15 +2,16 @@ language: haskell
 cache:
   directories:
   - "$HOME/.cabal"
-cabal: 2.4
+cabal: 3.0
 ghc:
-- 8.8.3
+- 8.10.2
+- 8.8.4
 - 8.6.5
 - 8.4.4
 - 8.2.2
 - 8.0.2
 - 7.10.3
 install:
-- cabal new-update
+- cabal update
 script:
-- cabal new-build
+- cabal build
