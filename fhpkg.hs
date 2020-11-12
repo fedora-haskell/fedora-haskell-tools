@@ -331,6 +331,7 @@ headOrigin branched dist =
       same <- gitBool "diff" ["--quiet", distRemote branched dist ++ "..HEAD"]
       when same $ putStrLn pkg
 
+-- FIXME does not take static requires into account
 leaves :: Dist -> Bool -> Dist -> [Package] -> IO ()
 leaves branched verb =
   repoAction branched True (Header verb checkLeafPkg)
