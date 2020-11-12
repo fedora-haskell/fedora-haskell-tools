@@ -478,7 +478,8 @@ newPackages :: Dist -> Dist -> IO [Package]
 newPackages branched dist = do
   ps <- repoqueryHaskellPkgs branched True dist
   pps <- cmdLines "pagure" ["list", "--namespace", "rpms", "ghc*"]
-  filterM (\ d -> not <$> doesFileExist (d </> "dead.package")) $ pps \\ (ps ++ ["ghc", "ghc-rpm-macros", "ghc-srpm-macros"])
+  local <- listDirectory "."
+  filterM (\ d -> not <$> doesFileExist (d </> "dead.package")) $ nub (pps ++ ps) \\ (local ++ ["Agda-stdlib", "ghc", "ghc-rpm-macros", "ghc-srpm-macros", "haskell-platform"])
 
 haveSshKey :: IO Bool
 haveSshKey = do
