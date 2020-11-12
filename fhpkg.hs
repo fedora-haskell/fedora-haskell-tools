@@ -305,7 +305,7 @@ hackageCompare branched refreshData =
     compareSets :: Bool -> [PkgVer] -> [PkgVer] -> IO ()
     compareSets _ [] [] = return ()
     compareSets _ [] (f:fs) = do
-      putStrLn ("New:" +-+ show f)
+      putStrLn (show f +-+ "(new)")
       compareSets False [] fs
     compareSets all' (h:hs) [] = do
       when all' $ putStrLn ("Removed:" +-+ show h)
@@ -315,7 +315,7 @@ hackageCompare branched refreshData =
                                        when all' $ putStrLn $ "Removed:" +-+ show h
                                        compareSets all' hs (f:fs)
                                    | h > f = do
-                                       putStrLn $ "New:" +-+ show f
+                                       putStrLn $ show f +-+ "(new)"
                                        compareSets all' (h:hs) fs
                                    | otherwise = do
                                        putStrLn $ pvPkg h ++ ":" +-+ pvVer h +-+ "->" +-+ pvVer f
