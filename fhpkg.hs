@@ -56,7 +56,7 @@ import SimpleCmdArgs
 
 import Build (build, readBuildCmd)
 import Dist (distArg, distRemote, hackageRelease, ltsStream)
-import Koji (kojiListPkgs, rpkg)
+import Koji (rpkg)
 import Paths_fedora_haskell_tools (version)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
             repoquery, rpmspec)
@@ -479,13 +479,6 @@ newPackages branched dist = do
   ps <- repoqueryHaskellPkgs branched True dist
   pps <- cmdLines "pagure" ["list", "--namespace", "rpms", "ghc*"]
   filterM (\ d -> not <$> doesFileExist (d </> "dead.package")) $ pps \\ (ps ++ ["ghc", "ghc-rpm-macros", "ghc-srpm-macros"])
-
-kojiListHaskell :: Bool -> Dist -> IO [Package]
-kojiListHaskell verbose dist = do
-  when verbose $ putStrLn "Getting package list from Koji"
-  libs <- filter (\ p -> "ghc" `isPrefixOf` p && p `notElem` ["ghc-rpm-macros", "ghc-srpm-macros"]) <$> kojiListPkgs dist
-  when (null libs) $ error "No library packages found"
-  return $ sort $ nub libs
 
 haveSshKey :: IO Bool
 haveSshKey = do
