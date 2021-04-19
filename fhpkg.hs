@@ -29,7 +29,6 @@ import Data.Maybe
 import Data.List
 
 import Data.List.Split (splitOn)
-import qualified Network.HTTP as H
 import Network.HTTP.Simple
 import Network.HTTP.Types
 import System.Directory (doesDirectoryExist, doesFileExist,
@@ -287,8 +286,10 @@ hackageCompare branched refreshData =
   where
     compareHackage :: Dist -> [Package] -> IO ()
     compareHackage dist pkgs' = do
-      hck <- H.simpleHTTP (H.getRequest "http://hackage.haskell.org/distro/Fedora/packages.csv") >>= H.getResponseBody
-      let hackage = sort . either (error "Malformed Hackage csv") (map mungeHackage) $ parseCSV "packages.csv" hck
+      req <- addRequestHeader hContentType (B.pack "text/csv") <$>
+             parseRequestThrow "https://hackage.haskell.org/distro/Fedora/packages.csv"
+      hck <- getResponseBody <$> httpLbs req
+      let hackage = sort . either (error "Malformed Hackage csv") (map mungeHackage) $ parseCSV "packages.csv" (BL.unpack hck)
       sort . map mungeRepo . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ ["--refresh" | refreshData] ++ pkgs') >>=
         compareSets True hackage
 
