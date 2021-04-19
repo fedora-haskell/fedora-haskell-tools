@@ -51,7 +51,7 @@ import Distribution.Fedora (Dist(..), distBranch, distRepo, distUpdates,
 
 import SimpleCmd ((+-+), cmd, cmd_, cmdLines, cmdMaybe, cmdQuiet, {-cmdSilent,-}
                   grep_, removePrefix, removeSuffix, shell_, warning)
-import SimpleCmd.Git (git, git_, gitBranch, gitDiffQuiet, isGitDir)
+import SimpleCmd.Git
 import SimpleCmdArgs
 
 import Build (build, readBuildCmd)
@@ -686,8 +686,7 @@ subpackaged branched versions dist pkgs = do
         removeVersion nv =
           if versions then nv else init (dropWhileEnd (/= '-') nv)
 
-#if (defined(MIN_VERSION_simple_cmd) && MIN_VERSION_simple_cmd(0,2,2))
-#else
+#if !MIN_VERSION_simple_cmd(0,2,2)
 -- | 'gitBool c args' runs git command and return result
 gitBool :: String -- ^ git command
         -> [String] -- ^ arguments
