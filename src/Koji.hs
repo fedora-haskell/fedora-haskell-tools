@@ -31,6 +31,7 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Concurrent (threadDelay)
 import Control.Monad (unless, when)
+import Data.Fixed (Micro)
 import Data.List (isInfixOf, isPrefixOf)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.Directory (doesFileExist)
@@ -163,7 +164,7 @@ cmdFragile c as = do
       when (null (out ++ err)) $
         warning $ "\"" ++ c +-+ unwords as ++ "\"" +-+ "failed with status" +-+ show n
       unless (null err) $ warning err
-      threadDelay 2000000
+      threadDelay (fromEnum (2 :: Micro))
       cmdFragile c as
 
 cmdFragile_ :: String -> [String] -> IO ()
@@ -173,5 +174,5 @@ cmdFragile_ c as = do
     ExitSuccess -> return ()
     ExitFailure _ -> do
       warning $ "retrying \"" ++ c +-+ unwords as ++ "\""
-      threadDelay 2000000
+      threadDelay (fromEnum (2 :: Micro))
       cmdFragile_ c as
