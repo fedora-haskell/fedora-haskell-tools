@@ -129,10 +129,10 @@ removeGhcPrefix p@('g':'h':'c':'-':rest) | isLetter $ head rest = rest
                                         | otherwise = p
 removeGhcPrefix pkg = pkg
 
-comma :: String -> String
-comma nv = reverse eman ++ "," ++ reverse rev
-  where
-    (rev, '-':eman) = break (== '-') $ reverse nv
+-- comma :: String -> String
+-- comma nv = reverse eman ++ "," ++ reverse rev
+--   where
+--     (rev, '-':eman) = break (== '-') $ reverse nv
 
 colon :: String -> (String, String)
 colon "" = ("","")
