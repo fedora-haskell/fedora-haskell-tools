@@ -21,6 +21,8 @@ Also checks that updated dependencies have been built first.
 
 See TODO for more planned features.
 
+Note that many of the generic commands provided are now available in
+the [fbrnch](https://github.com/juhp/fbrnch) tool, which should be preferred.
 
 ## fhbz
 Update version update bugs in Bugzilla for Haskell packages.
