@@ -1,7 +1,6 @@
-resolver: lts-17.15
+resolver: lts-18.21
 
 extra-deps:
   - git: https://github.com/juhp/fedora-dists.git
-    commit: 9396456093fcffe453a3746e92ab901626cfd26f
-  - git: https://github.com/juhp/pdc-hs.git
-    commit: 5ca5a8d377d38183cf7cf78b3af21f7580ef3856
+    commit: f96444d867c6e73908a935e6737222b8d525d66e
+  - pdc-0.1.1
