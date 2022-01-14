@@ -1,0 +1,3 @@
+[versions]
+# http-conduit too old
+oldest = lts-11
