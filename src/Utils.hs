@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 -- |
 -- Module      :  Cmd
 -- Copyright   :  (C) 2014, 2016-2018  Jens Petersen
@@ -15,7 +17,8 @@
 
 module Utils (checkPkgsGit,
               setTermTitle,
-              withCurrentDirectory) where
+              withCurrentDirectory)
+where
 
 import Control.Monad (when)
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,3))

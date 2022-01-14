@@ -13,7 +13,7 @@ Copyright:           2014-2019 Jens Petersen <petersen@fedoraproject.org>
 Category:            Distribution
 Build-type:          Simple
 Extra-source-files:  README.md TODO ChangeLog
-Cabal-version:       >=1.6
+Cabal-version:       >=1.8
 Tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.2,
                      GHC == 8.2.2, GHC == 8.4.4, GHC == 8.6.5, GHC == 8.8.4
 
@@ -43,17 +43,20 @@ Executable fhpkg
     Other-modules: Build, Dist, Koji, Paths_fedora_haskell_tools, Utils
                    RPM
     GHC-options:   -fwarn-missing-signatures -Wall
-    Extensions:    CPP
 
 Executable fhbz
     Main-is:       fhbz.hs
     Build-depends: base < 5,
+                   directory,
                    fedora-dists >= 2.0,
+                   filepath,
+                   process,
+                   simple-cmd,
+                   simple-cmd-args,
                    time
     Hs-Source-Dirs: src, .
     Other-modules: Dist, Koji, RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
-    Extensions:    CPP
 
 Executable fhmock
     Main-is:       fhmock.hs
@@ -66,4 +69,3 @@ Executable fhmock
     Hs-Source-Dirs: src, .
     Other-modules: Dist, Paths_fedora_haskell_tools
     GHC-options:   -fwarn-missing-signatures -Wall
-    Extensions:    CPP

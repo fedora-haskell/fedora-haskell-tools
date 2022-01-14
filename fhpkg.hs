@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 -- |
 -- Module      :  Packages
 -- Copyright   :  (C) 2017-2019  Jens Petersen

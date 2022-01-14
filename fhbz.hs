@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP, OverloadedStrings #-}
 
 -- |
 -- Copyright   :  (C) 2014-2018  Jens Petersen

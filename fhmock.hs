@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 -- |
 -- Module      :  Mock
 -- Copyright   :  (C) 2018-2019  Jens Petersen
@@ -24,9 +26,6 @@ import Paths_fedora_haskell_tools (version)
 import Distribution.Fedora (Dist, getLatestFedoraDist, mockConfig)
 import SimpleCmd (cmd_)
 import SimpleCmdArgs
-#if (defined(MIN_VERSION_optparse_applicative) && MIN_VERSION_optparse_applicative(0,13,0))
---import Data.Semigroup ((<>))
-#endif
 
 -- mock :: [String] -> IO String
 -- mock os = cmd "mock" os

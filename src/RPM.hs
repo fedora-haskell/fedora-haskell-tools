@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 -- |
 -- Module      :  RPM
 -- Copyright   :  (C) 2015-2019  Jens Petersen
