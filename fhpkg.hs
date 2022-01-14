@@ -25,6 +25,7 @@ import Control.Monad (filterM, unless, when, (>=>))
 import Control.Monad.Extra (mapMaybeM, unlessM, whenJustM)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
+import Data.Char (isDigit)
 import Data.Maybe
 import Data.List
 
@@ -457,7 +458,11 @@ repoqueryHaskellPkgs branched verbose dist = do
       updates = maybeToList $ distUpdates branched dist
   bin <- words <$> repoquery dist (["--repo=" ++ repo ++ "-source"] ++ ["--repo=" ++ u  ++ "-source" | u <- updates] ++ ["--qf=%{name}", "--whatrequires", "ghc-Cabal-*"])
   when (null bin) $ error "No packages using ghc-Cabal-devel found!"
-  return $ sort $ nub bin
+  return $ sort $ filter (not . isGhcXY) $ nub bin
+  where
+    isGhcXY :: String -> Bool
+    isGhcXY p = let prefix = head (splitOn "-" p)
+                 in all (\c -> isDigit c || c == '.') (removePrefix "ghc" prefix)
 
 repoqueryHackages :: Dist -> Dist -> IO [Package]
 repoqueryHackages branched dist = do
@@ -474,7 +479,7 @@ repoqueryHackages branched dist = do
           updates = maybeToList $ distUpdates branched dist
       bin <- words <$> repoquery dist (["--repo=" ++ repo] ++ ["--repo=" ++ u | u <- updates] ++ ["--qf=%{name}", "--whatprovides", "libHS*-ghc*.so()(64bit)"])
       when (null bin) $ error "No libHS*.so providers found!"
-      return $ sort $ nub bin
+      return $ sort $ filter ("ghc-" `isPrefixOf`) $ nub bin
 
 newPackages :: Dist -> Dist -> IO [Package]
 newPackages branched dist = do
