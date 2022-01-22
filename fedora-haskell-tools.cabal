@@ -13,7 +13,7 @@ Copyright:           2014-2022 Jens Petersen <petersen@fedoraproject.org>
 Category:            Distribution
 Build-type:          Simple
 Extra-source-files:  README.md TODO ChangeLog
-Cabal-version:       >=1.8
+Cabal-version:       >=1.10
 Tested-with:         GHC == 8.0.2, GHC == 8.2.2, GHC == 8.4.4, GHC == 8.6.5,
                      GHC == 8.8.4, GHC == 8.10.7, GHC == 9.0.2
 
@@ -43,6 +43,7 @@ Executable fhpkg
     Other-modules: Build, Dist, Koji, Paths_fedora_haskell_tools, Utils
                    RPM
     GHC-options:   -fwarn-missing-signatures -Wall
+    Default-Language: Haskell98
 
 Executable fhbz
     Main-is:       fhbz.hs
@@ -57,6 +58,7 @@ Executable fhbz
     Hs-Source-Dirs: src, .
     Other-modules: Dist, Koji, RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
+    Default-Language: Haskell98
 
 Executable fhmock
     Main-is:       fhmock.hs
@@ -69,3 +71,4 @@ Executable fhmock
     Hs-Source-Dirs: src, .
     Other-modules: Dist, Paths_fedora_haskell_tools
     GHC-options:   -fwarn-missing-signatures -Wall
+    Default-Language: Haskell98
