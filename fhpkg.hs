@@ -293,8 +293,8 @@ hackageCompare branched refreshData =
              parseRequestThrow "https://hackage.haskell.org/distro/Fedora/packages.csv"
       hck <- getResponseBody <$> httpLbs req
       let hackage = sort . either (error "Malformed Hackage csv") (map mungeHackage) $ parseCSV "packages.csv" (BL.unpack hck)
-      sort . map mungeRepo . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ ["--refresh" | refreshData] ++ pkgs') >>=
-        compareSets True hackage
+      repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ ["--refresh" | refreshData] ++ pkgs') >>=
+        compareSets True hackage . sort . map mungeRepo . lines
 
     mungeHackage :: [String] -> PkgVer
     mungeHackage [n,v,_] = PV n v
