@@ -1,11 +1,6 @@
 packages: .
 
-source-repository-package
-    type: git
-    location: https://github.com/juhp/fedora-dists.git
-    tag: a4f6f690e50c6c2e69cc81afb13b7e4581079907
-
-source-repository-package
-    type: git
-    location: https://github.com/juhp/pdc-hs.git
-    tag: d7e59cedf72f4253b10b1c723dd0b9e27fa11688
+-- source-repository-package
+--     type: git
+--     location: https://github.com/juhp/fedora-dists.git
+--     tag: a4f6f690e50c6c2e69cc81afb13b7e4581079907
