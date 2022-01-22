@@ -11,7 +11,7 @@ Tools for Fedora Haskell package maintainence.
 Git clones and pull, etc Fedora Haskell package repos.
 Can also generate Hackage distro meta data.
 Builds set of packages locally or in Koji or Mock.
-(fhbuild has been merged into fhpkg.)
+(fhbuild has been merged into fhpkg, but now superceded by fbrnch.)
 
 For local builds unbuilt dependent packages are also built recursively.
 
@@ -21,8 +21,9 @@ Also checks that updated dependencies have been built first.
 
 See TODO for more planned features.
 
-Note that many of the generic commands provided are now available in
-the [fbrnch](https://github.com/juhp/fbrnch) tool, which should be preferred.
+Note that many of the generic commands provided are now available and
+maintained in the [fbrnch](https://github.com/juhp/fbrnch) tool,
+which should be preferred.
 
 ## fhbz
 Update version update bugs in Bugzilla for Haskell packages.

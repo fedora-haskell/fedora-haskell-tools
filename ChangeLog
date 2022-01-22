@@ -1,3 +1,12 @@
+# 1.0 (2022-01-22)
+- use fedora-dists-2.0
+- Hackage distro urls now point to pagure dist-git
+- Hackage distro upload now uses http-conduit
+- new 'subpackaged' command lists subpackaged libs
+- can build with ghc9 and aeson-2.0
+- Hackage commands ignore new ghcX.Y packages
+- bunch of smaller tweaks and other improvements
+
 # 0.9 (2019-10-30)
 - changes for Fedora 31
 - ghc now lives in ../
