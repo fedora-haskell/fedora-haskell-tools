@@ -42,4 +42,4 @@ hackageRelease = Fedora 35
 
 -- | Stackage LTS stream major version
 ltsStream :: String
-ltsStream = "lts-16"
+ltsStream = "lts-18"
