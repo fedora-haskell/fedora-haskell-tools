@@ -51,8 +51,11 @@ import Distribution.Fedora (Dist(..), distBranch, distRepo, distUpdates,
                             getLatestFedoraDist, getRawhideDist)
 --import Distribution.Fedora.Branch (Branch(..))
 
-import SimpleCmd ((+-+), cmd, cmd_, cmdLines, cmdMaybe, cmdQuiet, {-cmdSilent,-}
-                  grep_, removePrefix, removeSuffix, shell_, warning)
+import SimpleCmd
+#if !MIN_VERSION_simple_cmd(0,2,3)
+import System.Exit
+import qualified System.Process as P
+#endif
 import SimpleCmd.Git
 import SimpleCmdArgs
 
@@ -247,7 +250,15 @@ stackageCompare branched stream opt dist =
     compareStackage :: Package -> IO ()
     compareStackage p = do
       nvr <- cmd (rpkg dist) ["verrel"]
-      stkg <- cmdMaybe "stackage" ["package", stream, removePrefix "ghc-" p]
+      let hkg = removePrefix "ghc-" p
+      (ok,_out,err) <- cmdFull "stack" ["--resolver" , stream, "list", hkg] ""
+      -- FIXME rename to mstkgver?
+      let stkg =
+            if ok then
+              case filter (not . ("Selected resolver:" `isPrefixOf`)) (lines err) of
+                [nv] -> Just (removePrefix (hkg ++ "-") nv)
+                _ -> Nothing
+            else Nothing
       let same = isJust stkg && (fromJust stkg ++ "-") `isInfixOf` nvr
       unless same $
         if opt == StkgMissing
@@ -702,4 +713,18 @@ gitBool :: String -- ^ git command
 gitBool c args = do
   mout <- cmdMaybe "git" (c:args)
   return $ isJust mout
+#endif
+
+#if !MIN_VERSION_simple_cmd(0,2,3)
+cmdFull :: String -> [String] -> String -> IO (Bool, String, String)
+cmdFull c args input = do
+  (ret, out, err) <- P.readProcessWithExitCode c args input
+  return (ret == ExitSuccess, removeTrailingNewline out, removeTrailingNewline err)
+  where
+    removeTrailingNewline :: String -> String
+    removeTrailingNewline "" = ""
+    removeTrailingNewline str' =
+      if last str' == '\n'
+      then init str'
+      else str'
 #endif
