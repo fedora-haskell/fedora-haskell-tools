@@ -155,7 +155,7 @@ main = do
     , Subcommand "unpushed" "show unpushed commits" $
       unpushed branched <$> switchWith 's' "short" "no log" <*> distArg <*> pkgArgs
     , Subcommand "update" "cabal-rpm update" $
-      update branched <$> streamOpt <*> distArg <*> pkgArgs
+      update branched <$> keepOpt <*> streamOpt <*> distArg <*> pkgArgs
     , Subcommand "verrel" "show nvr of packages" $
       verrel branched <$> distArg <*> pkgArgs] ++
     map (buildCmd cwd) [ ("install", "build locally and install")
@@ -190,6 +190,8 @@ main = do
     stackageOpts =
       flagWith' StkgMissing 'm' "missing" "only list missing packages" <|>
       flagWith StkgAll StkgOnly 'o' "only" "only Stackage packages"
+
+    keepOpt = switchWith 'k' "keep-going" "Keep going after an error"
 
 data DiffFormat =
   DiffShort | DiffContext Int
@@ -606,15 +608,18 @@ isFromHackage :: Package -> IO Bool
 isFromHackage pkg =
   grep_ "hackage.haskell.org/package/" $ pkg <.> "spec"
 
-update :: Dist -> String -> Dist -> [Package] -> IO ()
-update branched stream =
+update :: Dist -> Bool -> String -> Dist -> [Package] -> IO ()
+update branched keep stream =
   repoAction branched True (Header True doUpdate)
   where
     doUpdate :: Package -> IO ()
     doUpdate pkg = do
       hckg <- isFromHackage pkg
       if hckg
-        then cmd_ "cabal-rpm" ["update", "-s", stream]
+        then do
+        ok <- cmdBool "cabal-rpm" ["update", "-s", stream]
+        unless (ok || keep) $
+          error' $ "cabal-rpm update failed for: " ++ pkg
         else putStrLn "skipping since not hackage"
 
 refresh :: Dist -> Bool -> Dist -> [Package] -> IO ()
