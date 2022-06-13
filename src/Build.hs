@@ -41,7 +41,7 @@ import RPM (buildRequires, derefSrcPkg, haskellSrcPkgs, Package,
             packageManager, pkgDir, rpmInstall, rpmspec)
 import SimpleCmd ((+-+), cmd, cmd_, cmdBool, cmdLines, cmdLog, cmdMaybe,
                   cmdSilent, grep_, removeStrictPrefix, sudo_)
-import SimpleCmd.Git (git_, gitBranch, isGitDir)
+import SimpleCmd.Git (git_, gitBool, gitBranch, isGitDir)
 import Utils (checkPkgsGit)
 
 data Command = Install | Mock | Koji | Chain | Pending | Changed | Built | Bump
@@ -98,7 +98,8 @@ build topdir mlast waitrepo mode dist (pkg:rest) = do
              else build topdir Nothing False mode dist rest
         else do
         when dirExists $ do
-          git_ "pull" ["-q", "--rebase"]
+          pulled <- gitBool "pull" ["-q", "--rebase"]
+          unless pulled $ error $ "git pull failed for " ++ pkg
           actual <- gitBranch
           when (branch /= actual) $
             cmd_ (rpkg dist) ["switch-branch", branch]
