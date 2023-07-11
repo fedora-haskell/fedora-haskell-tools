@@ -102,7 +102,9 @@ checkBug rawhide opts (BugState bid bcomp _bst bsum bwh) =
     -- should not happen!
     unless (hkg `isPrefixOf` hkgver') $
       putStrLn $ "Component and Summary inconsistent!" +-+ hkg +-+ hkgver' +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
-    if Check `notElem` opts then closeBug rawhide opts bid bcomp pkgver else do
+    if Check `notElem` opts
+      then closeBug rawhide opts bid bcomp pkgver
+      else do
       let force = Force `elem` opts
           refresh = Refresh `elem` opts
       when (hkgver /= hkgver' || force || refresh) $ do
