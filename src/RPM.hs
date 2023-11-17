@@ -20,6 +20,7 @@ module RPM (buildRequires,
             packageManager,
             pkgDir,
             repoquery,
+            rqfnewline,
             rpmInstall,
             rpmspec) where
 
@@ -64,6 +65,11 @@ rpmInstall rpms = do
   pkginstaller <- packageManager
   let (inst, arg) = if pkginstaller == "dnf" then ("dnf", "install") else ("yum", "localinstall")
   sudo_ inst $ ["-y", "--nogpgcheck", arg] ++ rpms
+
+-- should be \n for dnf5 repoquery workaround
+-- FIXME integrate into repoquery or add to SimpleCmd.Rpm?
+rqfnewline :: String
+rqfnewline = ""
 
 repoquery :: Dist -> [String] -> IO String
 repoquery dist args = do
@@ -152,7 +158,7 @@ haskellSrcPkgs topdir dist brs = do
     branched <- getLatestFedoraDist
     let branch = distBranch branched dist
     ghcDir <- pkgDir "ghc" branch (takeDirectory topdir)
-    map removeLibSuffix . filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}") (ghcDir </> "ghc.spec")
+    map removeLibSuffix . filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (map removeLibSuffix brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
   nub <$> mapM (derefSrcPkgRelax topdir dist) hdeps
 

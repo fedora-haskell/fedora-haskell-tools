@@ -64,7 +64,7 @@ import Dist (distArg, distRemote, hackageRelease, ltsStream)
 import Koji (rpkg)
 import Paths_fedora_haskell_tools (version)
 import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
-            repoquery, rpmspec)
+            repoquery, rpmspec, rqfnewline)
 import Utils (checkPkgsGit, withCurrentDirectory)
 
 #if (defined(MIN_VERSION_directory) && MIN_VERSION_directory(1,2,5))
@@ -293,7 +293,8 @@ hackageUpload branched refreshData = do
     repoqueryHackageCSV dist = do
       pkgs <- repoqueryHackages branched hackageRelease
       -- Hackage csv chokes on a final newline
-      intercalate "\n" . sort . map (replace "\"ghc-" "\"")  . lines <$> repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{source_name}\""] ++ ["--refresh" | refreshData] ++ pkgs)
+      intercalate "\n" . sort . map (replace "\"ghc-" "\"")  . lines <$>
+        repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=\"%{name}\",\"%{version}\",\"https://src.fedoraproject.org/rpms/%{source_name}\"" ++ rqfnewline] ++ ["--refresh" | refreshData] ++ pkgs)
 
 hackageCompare :: Dist -> Bool -> IO ()
 hackageCompare branched refreshData =
@@ -306,7 +307,7 @@ hackageCompare branched refreshData =
              parseRequestThrow "https://hackage.haskell.org/distro/Fedora/packages.csv"
       hck <- getResponseBody <$> httpLbs req
       let hackage = sort . either (error "Malformed Hackage csv") (map mungeHackage) $ parseCSV "packages.csv" (BL.unpack hck)
-      repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}"] ++ ["--refresh" | refreshData] ++ pkgs') >>=
+      repoquery dist (["--repo=fedora", "--repo=updates", "--latest-limit=1", "--qf=%{name},%{version}" ++ rqfnewline] ++ ["--refresh" | refreshData] ++ pkgs') >>=
         compareSets True hackage . sort . map mungeRepo . lines
 
     mungeHackage :: [String] -> PkgVer
@@ -471,7 +472,7 @@ repoqueryHaskellPkgs branched verbose dist = do
     when tty $ warning "Getting packages from repoquery"
   let repo = distRepo branched dist
       updates = maybeToList $ distUpdates branched dist
-  bin <- words <$> repoquery dist (["--repo=" ++ repo ++ "-source"] ++ ["--repo=" ++ u  ++ "-source" | u <- updates] ++ ["--qf=%{name}", "--whatrequires", "ghc-Cabal-*"])
+  bin <- words <$> repoquery dist (["--repo=" ++ repo ++ "-source"] ++ ["--repo=" ++ u  ++ "-source" | u <- updates] ++ ["--qf=%{name}" ++ rqfnewline, "--whatrequires", "ghc-Cabal-*"])
   when (null bin) $ error "No packages using ghc-Cabal-devel found!"
   return $ sort $ filter (not . isGhcXY) $ nub bin
   where
@@ -492,7 +493,7 @@ repoqueryHackages branched dist = do
       when verbose $ putStrLn "Getting libraries from repoquery"
       let repo = distRepo branched dist
           updates = maybeToList $ distUpdates branched dist
-      bin <- words <$> repoquery dist (["--repo=" ++ repo] ++ ["--repo=" ++ u | u <- updates] ++ ["--qf=%{name}", "--whatprovides", "libHS*-ghc*.so()(64bit)"])
+      bin <- words <$> repoquery dist (["--repo=" ++ repo] ++ ["--repo=" ++ u | u <- updates] ++ ["--qf=%{name}" ++ rqfnewline, "--whatprovides", "libHS*-ghc*.so()(64bit)"])
       when (null bin) $ error "No libHS*.so providers found!"
       return $ sort $ filter ("ghc-" `isPrefixOf`) $ nub bin
 
