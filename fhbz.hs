@@ -21,17 +21,15 @@ import Control.Applicative ((<$>))
 import Control.Monad (unless, when)
 import Data.Char (isLetter)
 import Data.List (dropWhileEnd, intercalate, isPrefixOf)
-import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import System.Directory ({-doesFileExist, getCurrentDirectory,-} getModificationTime)
-import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
-                              getOpt, usageInfo)
-import System.Environment (getArgs, getEnv, getProgName)
+import System.Environment (getEnv, getProgName)
 import System.FilePath ((</>))
 
 import Distribution.Fedora (Dist, getRawhideDist)
 import Koji (kojicmd)
 import SimpleCmd ((+-+), cmd, cmd_, cmdStdErr, removeStrictPrefix, removeSuffix)
+import SimpleCmdArgs
 
 data BugState = BugState {
   bugNo :: String,
@@ -41,40 +39,24 @@ data BugState = BugState {
   whiteboard :: String
   }
 
-data Flag = Check | Force | DryRun | NoComment | Refresh | State String
-   deriving (Eq, Show)
-
-isState :: Flag -> Bool
-isState (State _) = True
-isState _ = False
-
-options :: [OptDescr Flag]
-options =
- [ Option "f" ["force"]  (NoArg Force)  "update even if no version change (implies --refresh)"
- , Option "n" ["dryrun"] (NoArg DryRun) "do not update bugzilla"
- , Option "r" ["refresh"] (NoArg Refresh) "update if status changed"
- , Option "s" ["state"]  (ReqArg State "BUGSTATE") "bug state (default NEW)"
- , Option "N" ["no-comment"]  (NoArg NoComment) "update the whiteboard only"
- , Option "c" ["check"]  (NoArg Check) "check update for missing deps"
- ]
-
-parseOpts :: [String] -> IO ([Flag], [String])
-parseOpts argv =
-   case getOpt Permute options argv of
-      (os,ps,[]) -> return (os,ps)
-      (_,_,errs) -> do
-        prog <- getProgName
-        error $ concat errs ++ usageInfo (header prog) options
-  where header prog = "Usage:" +-+ prog +-+ "[OPTION...] [PACKAGE...]"
-
 main :: IO ()
-main = do
-  (opts, args) <- getArgs >>= parseOpts
-  when (null args) $ error "must give one or more packages"
-  let state = fromMaybe "NEW" $ listToMaybe $ map (\ (State s) -> s) $ filter isState opts
-  bugs <- parseLines . lines <$> bugzillaQuery (["--bug_status=" ++ state, "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ ["--component=" ++ intercalate "," args])
+main =
+  simpleCmdArgs Nothing "Fedora Haskell Bugzilla tool"
+  "Updates Fedora Haskell release monitoring bugs" $
+  run
+  <$> switchWith 'f' "force" "update even if no version change (implies --refresh)"
+  <*> switchWith 'n' "dryrun" "do not update bugzilla"
+  <*> switchWith 'r' "refresh" "update if status changed"
+  <*> strOptionalWith 's' "state" "STATE" "bug state (default NEW)" "NEW"
+  <*> switchWith 'N' "no-comment" "update the whiteboard only"
+  <*> switchWith 'c' "check" "check update for missing deps"
+  <*> some (strArg "[Package...]")
+
+run :: Bool -> Bool -> Bool -> String -> Bool -> Bool -> [String] -> IO ()
+run force dryrun refresh state nocomment check pkgs = do
+  bugs <- parseLines . lines <$> bugzillaQuery (["--bug_status=" ++ state, "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ ["--component=" ++ intercalate "," pkgs])
   rawhide <- getRawhideDist
-  mapM_ (checkBug rawhide opts) bugs
+  mapM_ (checkBug rawhide force dryrun refresh nocomment check) bugs
 
 bugzillaQuery :: [String] -> IO String
 bugzillaQuery args = cmd "bugzilla" ("query":args)
@@ -90,8 +72,8 @@ parseLines (bid:bcomp:bst:bsum:bwh:rest) =
   BugState bid bcomp bst bsum bwh : parseLines rest
 parseLines _ = error "Bad bugzilla query output!"
 
-checkBug :: Dist -> [Flag] -> BugState -> IO ()
-checkBug rawhide opts (BugState bid bcomp _bst bsum bwh) =
+checkBug :: Dist -> Bool -> Bool -> Bool -> Bool -> Bool -> BugState -> IO ()
+checkBug rawhide force dryrun refresh nocomment check (BugState bid bcomp _bst bsum bwh) =
   unless (bcomp `elem` excludedPkgs) $ do
     let hkg = removeGhcPrefix bcomp
         (hkgver, state) = colon bwh
@@ -102,26 +84,23 @@ checkBug rawhide opts (BugState bid bcomp _bst bsum bwh) =
     -- should not happen!
     unless (hkg `isPrefixOf` hkgver') $
       putStrLn $ "Component and Summary inconsistent!" +-+ hkg +-+ hkgver' +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
-    if Check `notElem` opts
-      then closeBug rawhide opts bid bcomp pkgver
-      else do
-      let force = Force `elem` opts
-          refresh = Refresh `elem` opts
+    if not check
+      then closeBug rawhide dryrun bid bcomp pkgver
+      else
       when (hkgver /= hkgver' || force || refresh) $ do
-        cabalUpdate
-        (missing, err) <- cmdStdErr "cblrpm" ["missingdeps", hkgver']
-        let state' = if null missing && null err then "ok" else "deps"
-        when ((hkgver, state) /= (hkgver', state') || force) $ do
-          let statemsg = if null state || state == state' then state' else state +-+ "->" +-+ state'
-          putStrLn $ if hkgver == hkgver'
-                     then hkgver ++ ":" +-+ statemsg
-                     else (if null bwh then "New" else hkgver +-+ "->") +-+ hkgver' ++ ":" +-+ statemsg
-          unless (null missing) $
-            putStrLn missing
-          putStrLn ""
-          unless (DryRun `elem` opts) $ do
-            let nocomment = NoComment `elem` opts
-            updateBug bid bcomp hkgver' missing state' nocomment
+      cabalUpdate
+      (missing, err) <- cmdStdErr "cblrpm" ["missingdeps", hkgver']
+      let state' = if null missing && null err then "ok" else "deps"
+      when ((hkgver, state) /= (hkgver', state') || force) $ do
+        let statemsg = if null state || state == state' then state' else state +-+ "->" +-+ state'
+        putStrLn $ if hkgver == hkgver'
+                   then hkgver ++ ":" +-+ statemsg
+                   else (if null bwh then "New" else hkgver +-+ "->") +-+ hkgver' ++ ":" +-+ statemsg
+        unless (null missing) $
+          putStrLn missing
+        putStrLn ""
+        unless dryrun $
+          updateBug bid bcomp hkgver' missing state' nocomment
 
 excludedPkgs :: [String]
 excludedPkgs = ["ghc", "emacs-haskell-mode"]
@@ -142,15 +121,15 @@ colon ps = (nv, if null s then "" else removeStrictPrefix ":" s)
   where
     (nv, s) = break (== ':') ps
 
-closeBug :: Dist -> [Flag] -> String -> String -> String -> IO ()
-closeBug rawhide opts bid bcomp pkgver = do
+closeBug :: Dist -> Bool -> String -> String -> String -> IO ()
+closeBug rawhide dryrun bid bcomp pkgver = do
   latest <- cmd (kojicmd rawhide) ["latest-pkg", "rawhide", bcomp, "--quiet"]
   unless (null latest) $ do
     let nvr = (head . words) latest
     let nv = removeRelease nvr
     when (nv == pkgver) $ do
       putStrLn $ "closing" +-+ bid ++ ":" +-+ nv +-+ "in rawhide"
-      unless (DryRun `elem` opts) $
+      unless dryrun $
         bugzillaModify ["--close=RAWHIDE", "--fixed_in=" ++ nvr, "--comment=Closed with fhbz from fedora-haskell-tools", bid]
   where
     removeRelease = init . dropWhileEnd (/= '-')
