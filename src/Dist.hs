@@ -38,8 +38,8 @@ distRemote branch d = "origin/" ++ distBranch branch d
 
 -- | Fedora release being tracked in Hackage Distro data
 hackageRelease :: Dist
-hackageRelease = Fedora 38
+hackageRelease = Fedora 39
 
 -- | Stackage LTS stream major version
 ltsStream :: String
-ltsStream = "lts-20"
+ltsStream = "lts-21"
