@@ -4,7 +4,7 @@ extra-deps:
   - git: https://github.com/juhp/fedora-dists.git
     commit: a4f6f690e50c6c2e69cc81afb13b7e4581079907
   - simple-cmd-args-0.1.6
-  - simple-cmd-0.2.1
+  - simple-cmd-0.2.2
   - http-query-0.1.0
   - git: https://github.com/juhp/pdc-hs.git
     commit: d7e59cedf72f4253b10b1c723dd0b9e27fa11688
