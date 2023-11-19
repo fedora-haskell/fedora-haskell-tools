@@ -67,7 +67,7 @@ build topdir mlast waitrepo mode dist (pkg:rest) = do
   setCurrentDirectory topdir
   branched <- getLatestFedoraDist
   let branch = distBranch branched dist
-  when (mode `notElem` [Pending, Changed, Built, NotInstalled]) $
+  unless (mode `elem` [Pending, Changed, Built, NotInstalled]) $
     putStrLn $ "\n==" +-+ pkg ++ ":" ++ branch +-+ "=="
   dirExists <- doesDirectoryExist pkg
   unless dirExists $ do
