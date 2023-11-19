@@ -245,6 +245,7 @@ gitDiffOrigin :: Dist -> Dist -> [Package] -> IO ()
 gitDiffOrigin branched dist =
   repoAction branched False (Output (const (git "diff" [distRemote branched dist]))) dist
 
+-- FIXME option only to show PVP X.Y bumps or X.Y.Z bumps
 stackageCompare :: Dist -> String -> StkgOpt -> Dist -> [Package] -> IO ()
 stackageCompare branched stream opt dist =
   repoAction branched True (Header False compareStackage) dist
