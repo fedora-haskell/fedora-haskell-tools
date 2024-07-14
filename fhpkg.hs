@@ -476,10 +476,10 @@ repoqueryHaskellPkgs branched verbose dist = do
   bin <- words <$> repoquery dist (["--repo=" ++ repo ++ "-source"] ++ ["--repo=" ++ u  ++ "-source" | u <- updates] ++ ["--qf=%{name}" ++ rqfnewline, "--whatrequires", "ghc-Cabal-*"])
   when (null bin) $ error "No packages using ghc-Cabal-devel found!"
   return $ sort $ filter (not . isGhcXY) $ nub bin
-  where
-    isGhcXY :: String -> Bool
-    isGhcXY p = let prefix = head (splitOn "-" p)
-                 in all (\c -> isDigit c || c == '.') (removePrefix "ghc" prefix)
+
+isGhcXY :: String -> Bool
+isGhcXY p = let prefix = head (splitOn "-" p)
+            in all (\c -> isDigit c || c == '.') (removePrefix "ghc" prefix)
 
 repoqueryHackages :: Dist -> Dist -> IO [Package]
 repoqueryHackages branched dist = do
@@ -498,12 +498,17 @@ repoqueryHackages branched dist = do
       when (null bin) $ error "No libHS*.so providers found!"
       return $ sort $ filter ("ghc-" `isPrefixOf`) $ nub bin
 
+pagureListGhcHaskell :: IO [String]
+pagureListGhcHaskell = do
+  ps <- cmdLines "pagure" ["list", "--namespace", "rpms", "ghc*"]
+  return $ filter (not . isGhcXY) ps
+
 newPackages :: Dist -> Dist -> IO [Package]
 newPackages branched dist = do
   ps <- repoqueryHaskellPkgs branched True dist
-  pps <- cmdLines "pagure" ["list", "--namespace", "rpms", "ghc*"]
+  pps <- pagureListGhcHaskell
   local <- listDirectory "."
-  filterM (\ d -> not <$> doesFileExist (d </> "dead.package")) $ nub (pps ++ ps) \\ (local ++ ["Agda-stdlib", "ghc", "ghc-rpm-macros", "ghc-srpm-macros", "haskell-platform"])
+  filterM (\ d -> not <$> doesFileExist (d </> "dead.package")) $ nub (pps ++ ps) \\ (local ++ ["Agda-stdlib", "ghc", "ghc-rpm-macros", "ghc-srpm-macros", "ghc-srpm-macros-epel", "haskell-platform"])
 
 haveSshKey :: IO Bool
 haveSshKey = do
