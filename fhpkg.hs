@@ -63,7 +63,7 @@ import Build (build, readBuildCmd)
 import Dist (distArg, distRemote, hackageRelease, ltsStream)
 import Koji (rpkg)
 import Paths_fedora_haskell_tools (version)
-import RPM (buildRequires, haskellSrcPkgs, Package, pkgDir,
+import RPM (buildRequires, haskellSrcPkgs, Package,
             repoquery, rpmspec, rqfnewline)
 import Utils (checkPkgsGit, withCurrentDirectory)
 
@@ -558,8 +558,7 @@ repoAction branched needsSpec action dist (pkg:rest) = do
         unless branchDir $
           withCurrentDirectory pkg $
           cmd_ (rpkg dist) ["clone", "-b", branch, pkg, branch]
-      wd <- pkgDir pkg branch ""
-      setCurrentDirectory wd
+      setCurrentDirectory pkg
       pkggit <- do
         gd <- isGitDir "."
         if gd

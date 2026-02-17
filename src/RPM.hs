@@ -18,7 +18,6 @@ module RPM (buildRequires,
             haskellSrcPkgs,
             Package,
             packageManager,
-            pkgDir,
             repoquery,
             rqfnewline,
             rpmInstall,
@@ -157,12 +156,7 @@ haskellSrcPkgs topdir dist brs = do
   ghcLibs <- do
     branched <- getLatestFedoraDist
     let branch = distBranch branched dist
-    ghcDir <- pkgDir "ghc" branch (takeDirectory topdir)
+    let ghcDir = takeDirectory topdir </> "ghc"
     map removeLibSuffix . filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (map removeLibSuffix brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
   nub <$> mapM (derefSrcPkgRelax topdir dist) hdeps
-
-pkgDir :: String -> String -> FilePath -> IO FilePath
-pkgDir dir branch top = do
-  b <- doesDirectoryExist $ top </> dir </> branch
-  return $ top </> dir </> if b then branch else ""
