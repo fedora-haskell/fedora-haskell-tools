@@ -12,8 +12,6 @@
 - "stackage" tool is broken (stackage-compare)
 - drop HTTP lib
 
-- fix fhmock shell dist
-
 - better unbranched command: pkg branches
 - warn about unpushed commit(s) without any bump
 - filter out ghc-prof & ghc-doc deps, ghc-rpm-macros removal?, ghc-srpm-macros

@@ -1,3 +1,9 @@
+# 1.2 (2026-02-17)
+- converted to fedora-releases
+- fhpkg: drop most commands available in fbrnch
+- fhpkg clone-new: filter out ghcX.Y
+- drop fhmock
+
 # 1.1 (2023-11-19)
 - Dist: F39 and lts-21
 - fhpkg update: add -k (--keep-going)

@@ -19,17 +19,12 @@ For updates built in Koji, buildroot overrides are created and waited for.
 Chain builds packages with wait-repo.
 Also checks that updated dependencies have been built first.
 
-See TODO for possible future ideas.
-
-Note that many of the generic commands provided are now available and
-better maintained in the [fbrnch](https://github.com/juhp/fbrnch) tool,
-which is packaged in Fedora and should be preferred.
+Note some of the remaining generic commands provided are available in
+the [fbrnch](https://github.com/juhp/fbrnch) tool,
+which is packaged in Fedora and better maintained.
 
 ## fhbz
 Update version update bugs in Bugzilla for Haskell packages.
-
-## fhmock
-Tool for standalone mock chroots for building and development.
 
 ## Contribute
 fedora-haskell-tools is distributed under the GPL license version 3 or later.
