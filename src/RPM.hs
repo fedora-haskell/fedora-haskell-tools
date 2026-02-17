@@ -30,15 +30,13 @@ import Control.Applicative ((<$>))
 import Control.Monad (when)
 import Data.List (isPrefixOf, isSuffixOf, nub, (\\))
 import Data.Maybe (isJust, isNothing)
+import Distribution.Fedora.Branch (Branch, branchRelease, showBranch)
+import Distribution.Fedora.Release (releaseVersion)
+import SimpleCmd (cmd, cmdN, removeStrictPrefix, removeSuffix, sudo_, warning, (+-+))
+import qualified SimpleCmd.Rpm as S
 import System.Directory (doesDirectoryExist, findExecutable)
 import System.FilePath ((</>), takeDirectory)
--- die is available in ghc-7.10 base-4.8
 import System.Exit (ExitCode (..), exitFailure, exitWith)
-
-import Dist (distTag)
-import Distribution.Fedora (Dist, distBranch, distVersion, getFedoraDists, getLatestFedoraDist)
-import SimpleCmd (cmd, removeStrictPrefix, removeSuffix, sudo_, warning, (+-+))
-import qualified SimpleCmd.Rpm as S
 
 -- @since base 4.8.0.0
 die :: String -> IO a
@@ -68,25 +66,26 @@ rpmInstall rpms = do
 -- should be \n for dnf5 repoquery workaround
 -- FIXME integrate into repoquery or add to SimpleCmd.Rpm?
 rqfnewline :: String
-rqfnewline = ""
+rqfnewline = "\n"
 
-repoquery :: Dist -> [String] -> IO String
-repoquery dist args = do
+-- FIXME use frpq
+repoquery :: Branch -> [String] -> IO String
+repoquery branch args = do
   havednf <- optionalProgram "dnf"
   let (prog, subcmd) = if havednf then ("dnf", ["repoquery", "--quiet"]) else ("repoquery", [])
-  branched <- getLatestFedoraDist
-  let releasever = ["--releasever=" ++ distVersion branched dist]
+  rel <- branchRelease branch
+  let releasever = ["--releasever=" ++ releaseVersion rel]
+  -- FIXME debug output
+  when False $
+    cmdN prog (subcmd ++ releasever ++ args)
   cmd prog (subcmd ++ releasever ++ args)
 
-repoquerySrc :: Dist -> String -> IO (Maybe String)
-repoquerySrc dist key = do
+repoquerySrc :: Branch -> String -> IO (Maybe String)
+repoquerySrc branch key = do
   havednf <- optionalProgram "dnf"
   let srcflag = if havednf then ["--qf=%{source_name}"] else ["--qf", "%{base_package_name}"]
-  dists <- getFedoraDists
-  let repo = if dist `elem` dists
-             then ["--repo=koji-buildroot", "--repofrompath", "koji-buildroot,https://kojipkgs.fedoraproject.org/repos" </> distTag dist </> "latest/x86_64/"]
-             else []
-  res <- words <$> repoquery dist (srcflag ++ repo ++ ["--whatprovides", key])
+  let repo = ["--repo=koji-buildroot", "--repofrompath", "koji-buildroot,https://kojipkgs.fedoraproject.org/repos" </> showBranch branch </> "latest/x86_64/"]
+  res <- words <$> repoquery branch (srcflag ++ repo ++ ["--whatprovides", key])
   return $ case res of
     [p] -> Just p
     ps | key `elem` ps -> Just key
@@ -104,7 +103,7 @@ buildRequires spec =
 
 type Package = String
 
-derefSrcPkg :: FilePath -> Dist -> Bool -> Package -> IO Package
+derefSrcPkg :: FilePath -> Branch -> Bool -> Package -> IO Package
 derefSrcPkg topdir dist verb pkg = do
   res <- maybeDerefSrcPkg topdir dist verb pkg
   case res of
@@ -115,14 +114,14 @@ derefSrcPkg topdir dist verb pkg = do
       when (pkg /= s && verb) $ putStrLn $ pkg +-+ "->" +-+ s
       return s
 
-derefSrcPkgRelax :: FilePath -> Dist -> Package -> IO Package
+derefSrcPkgRelax :: FilePath -> Branch -> Package -> IO Package
 derefSrcPkgRelax topdir dist pkg = do
   res <- maybeDerefSrcPkg topdir dist False pkg
   case res of
     Nothing -> return pkg
     Just s -> return s
 
-maybeDerefSrcPkg :: FilePath -> Dist -> Bool -> Package -> IO (Maybe Package)
+maybeDerefSrcPkg :: FilePath -> Branch -> Bool -> Package -> IO (Maybe Package)
 maybeDerefSrcPkg topdir dist verb pkg = do
   let lib = removeLibSuffix pkg
   -- fixme: should check branch (dir)
@@ -151,12 +150,10 @@ removeLibSuffix p | "-devel" `isSuffixOf` p = removeSuffix "-devel" p
 haskellTools :: [Package]
 haskellTools = ["alex", "cabal-install", "gtk2hs-buildtools", "happy", "hspec-discover"]
 
-haskellSrcPkgs ::  FilePath -> Dist -> [Package] -> IO [Package]
-haskellSrcPkgs topdir dist brs = do
+haskellSrcPkgs ::  FilePath -> Branch -> [Package] -> IO [Package]
+haskellSrcPkgs topdir branch brs = do
   ghcLibs <- do
-    branched <- getLatestFedoraDist
-    let branch = distBranch branched dist
     let ghcDir = takeDirectory topdir </> "ghc"
     map removeLibSuffix . filter isHaskellDevelPkg <$> rpmspec [] (Just "%{name}\n") (ghcDir </> "ghc.spec")
   let hdeps = filter (\ dp -> "ghc-" `isPrefixOf` dp || dp `elem` haskellTools) (map removeLibSuffix brs \\ (["ghc-rpm-macros", "ghc-rpm-macros-extra"] ++ ghcLibs))
-  nub <$> mapM (derefSrcPkgRelax topdir dist) hdeps
+  nub <$> mapM (derefSrcPkgRelax topdir branch) hdeps

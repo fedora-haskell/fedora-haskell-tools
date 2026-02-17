@@ -26,8 +26,7 @@ import System.Directory ({-doesFileExist, getCurrentDirectory,-} getModification
 import System.Environment (getEnv, getProgName)
 import System.FilePath ((</>))
 
-import Distribution.Fedora (Dist, getRawhideDist)
-import Koji (kojicmd)
+--import Distribution.Fedora.Branch (Branch)
 import SimpleCmd ((+-+), cmd, cmd_, cmdStdErr, removeStrictPrefix, removeSuffix)
 import SimpleCmdArgs
 
@@ -55,8 +54,7 @@ main =
 run :: Bool -> Bool -> Bool -> String -> Bool -> Bool -> [String] -> IO ()
 run force dryrun refresh state nocomment check pkgs = do
   bugs <- parseLines . lines <$> bugzillaQuery (["--bug_status=" ++ state, "--short_desc=is available", "--outputformat=%{id}\n%{component}\n%{bug_status}\n%{summary}\n%{status_whiteboard}"] ++ ["--component=" ++ intercalate "," pkgs])
-  rawhide <- getRawhideDist
-  mapM_ (checkBug rawhide force dryrun refresh nocomment check) bugs
+  mapM_ (checkBug force dryrun refresh nocomment check) bugs
 
 bugzillaQuery :: [String] -> IO String
 bugzillaQuery args = cmd "bugzilla" ("query":args)
@@ -72,8 +70,9 @@ parseLines (bid:bcomp:bst:bsum:bwh:rest) =
   BugState bid bcomp bst bsum bwh : parseLines rest
 parseLines _ = error "Bad bugzilla query output!"
 
-checkBug :: Dist -> Bool -> Bool -> Bool -> Bool -> Bool -> BugState -> IO ()
-checkBug rawhide force dryrun refresh nocomment check (BugState bid bcomp _bst bsum bwh) =
+-- FIXME closes even for older release package version?!
+checkBug :: Bool -> Bool -> Bool -> Bool -> Bool -> BugState -> IO ()
+checkBug force dryrun refresh nocomment check (BugState bid bcomp _bst bsum bwh) =
   unless (bcomp `elem` excludedPkgs) $ do
     let hkg = removeGhcPrefix bcomp
         (hkgver, state) = colon bwh
@@ -85,7 +84,7 @@ checkBug rawhide force dryrun refresh nocomment check (BugState bid bcomp _bst b
     unless (hkg `isPrefixOf` hkgver') $
       putStrLn $ "Component and Summary inconsistent!" +-+ hkg +-+ hkgver' +-+ "<" ++ "http://bugzilla.redhat.com/" ++ bid ++ ">"
     if not check
-      then closeBug rawhide dryrun bid bcomp pkgver
+      then closeBug dryrun bid bcomp pkgver
       else
       when (hkgver /= hkgver' || force || refresh) $ do
       cabalUpdate
@@ -121,9 +120,9 @@ colon ps = (nv, if null s then "" else removeStrictPrefix ":" s)
   where
     (nv, s) = break (== ':') ps
 
-closeBug :: Dist -> Bool -> String -> String -> String -> IO ()
-closeBug rawhide dryrun bid bcomp pkgver = do
-  latest <- cmd (kojicmd rawhide) ["latest-pkg", "rawhide", bcomp, "--quiet"]
+closeBug :: Bool -> String -> String -> String -> IO ()
+closeBug dryrun bid bcomp pkgver = do
+  latest <- cmd "koji" ["latest-pkg", "rawhide", bcomp, "--quiet"]
   unless (null latest) $ do
     let nvr = (head . words) latest
     let nv = removeRelease nvr
