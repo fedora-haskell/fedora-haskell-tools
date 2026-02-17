@@ -14,11 +14,9 @@
 -- the Free Software Foundation, either version 3 of the License, or
 -- (at your option) any later version.
 
-#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,13,0))
-#else
-import Control.Applicative (optional, some, (<|>)
-#if (defined(MIN_VERSION_base) && MIN_VERSION_base(4,8,0))
-#else
+#if !MIN_VERSION_base(4,13,0)
+import Control.Applicative (some, (<|>)
+#if !MIN_VERSION_base(4,8,0)
                            , pure, (<$>), (<*>)
 #endif
                            )
