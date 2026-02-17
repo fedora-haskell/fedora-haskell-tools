@@ -41,7 +41,8 @@ Executable fhpkg
                    time,
                    unix
     Hs-Source-Dirs: src, .
-    Other-modules: Build, Dist, Koji, Paths_fedora_haskell_tools, Utils
+    Other-modules: Paths_fedora_haskell_tools
+                   Utils
                    RPM
     GHC-options:   -fwarn-missing-signatures -Wall
     Default-Language: Haskell98
@@ -57,19 +58,6 @@ Executable fhbz
                    simple-cmd-args,
                    time
     Hs-Source-Dirs: src, .
-    Other-modules: Dist, Koji, RPM, Utils
-    GHC-options:   -fwarn-missing-signatures -Wall
-    Default-Language: Haskell98
-
-Executable fhmock
-    Main-is:       fhmock.hs
-    Build-depends: base < 5,
-                   fedora-dists >= 2.0,
-                   simple-cmd >= 0.2.2,
-                   simple-cmd-args >= 0.1.2
-    if impl(ghc<8.0)
-        Build-depends: semigroups
-    Hs-Source-Dirs: src, .
-    Other-modules: Dist, Paths_fedora_haskell_tools
+    Other-modules: RPM, Utils
     GHC-options:   -fwarn-missing-signatures -Wall
     Default-Language: Haskell98
